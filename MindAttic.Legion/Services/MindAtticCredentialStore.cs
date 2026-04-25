@@ -148,6 +148,50 @@ public static class MindAtticCredentialStore
     /// <summary>Provider IDs that currently have a non-empty credential on disk.</summary>
     public static List<string> ListProviders() => LoadAll().Keys.ToList();
 
+    /// <summary>True if providers.json exists at the canonical location.</summary>
+    public static bool ProvidersFileExists() => File.Exists(ProvidersFilePath);
+
+    /// <summary>
+    /// Returns providers.json as a map of providerId → the per-provider rich-JSON
+    /// object string (i.e. <c>{ "type": "...", "apiKey": "...", "model": "...", "maxTokens": ... }</c>).
+    /// Empty if the file is missing or unparseable. Use this when you need to read
+    /// or persist the full per-provider auth payload (model, maxTokens, …) — the
+    /// flat <see cref="LoadAll"/> only surfaces the apiKey.
+    /// </summary>
+    public static Dictionary<string, string> LoadAllRaw() => LoadProvidersRawSafe();
+
+    /// <summary>
+    /// Replaces the entire providers.json with the supplied map of
+    /// providerId → raw per-provider JSON object string. Does a single
+    /// pretty-printed atomic write under a lock.
+    /// </summary>
+    public static void SaveAllRaw(IDictionary<string, string> providers)
+    {
+        if (providers is null) return;
+        lock (writeLock)
+        {
+            Directory.CreateDirectory(CredentialDirectory);
+            WriteProvidersJson(providers);
+        }
+    }
+
+    /// <summary>
+    /// Upserts a single provider's raw per-provider JSON in providers.json,
+    /// preserving every other provider's entry. Use when the caller already
+    /// knows the full payload (type/apiKey/model/maxTokens) it wants written.
+    /// </summary>
+    public static void SaveRaw(string providerId, string rawProviderJson)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return;
+        lock (writeLock)
+        {
+            var providers = LoadProvidersRawSafe();
+            providers[providerId] = string.IsNullOrWhiteSpace(rawProviderJson) ? "{}" : rawProviderJson;
+            Directory.CreateDirectory(CredentialDirectory);
+            WriteProvidersJson(providers);
+        }
+    }
+
     // ── providers.json helpers ──────────────────────────────────────────────────
 
     /// <summary>
