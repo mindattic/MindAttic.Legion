@@ -183,6 +183,157 @@ public class LegionClient
     }
 
     /// <summary>
+    /// Generates embedding vectors for a batch of texts via the provider's
+    /// /embeddings endpoint. Currently supports OpenAI-compatible providers
+    /// (openai). Returns one float[] per input string, in input order.
+    /// </summary>
+    public async Task<IReadOnlyList<float[]>> EmbedAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        IReadOnlyList<string> inputs,
+        int? dimensions = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
+        if (inputs is null || inputs.Count == 0)
+            return Array.Empty<float[]>();
+
+        return await ExecuteWithResilienceAsync(providerId, async () =>
+        {
+            object payload = dimensions.HasValue
+                ? new { model, input = inputs, dimensions = dimensions.Value }
+                : new { model, input = inputs };
+
+            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+                ? "https://api.openai.com/v1/embeddings"
+                : throw new ArgumentException($"Embeddings not supported for provider '{providerId}'.");
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var res = await http.SendAsync(req, ct);
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync(ct);
+
+            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            var result = new List<float[]>(data.GetArrayLength());
+            foreach (var item in data.EnumerateArray())
+            {
+                var vec = item.GetProperty("embedding");
+                var arr = new float[vec.GetArrayLength()];
+                int i = 0;
+                foreach (var v in vec.EnumerateArray())
+                    arr[i++] = v.GetSingle();
+                result.Add(arr);
+            }
+            return (IReadOnlyList<float[]>)result;
+        }, ct);
+    }
+
+    /// <summary>
+    /// Generates an image via the provider's image-generation endpoint and
+    /// returns the raw bytes per result (using <c>response_format=b64_json</c>
+    /// so the caller doesn't have to download from a temporary URL).
+    /// Currently supports OpenAI (DALL·E).
+    /// </summary>
+    public async Task<IReadOnlyList<byte[]>> GenerateImageBytesAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        string prompt,
+        string size = "1024x1024",
+        string quality = "standard",
+        int n = 1,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new ArgumentException("Prompt is required.", nameof(prompt));
+
+        return await ExecuteWithResilienceAsync(providerId, async () =>
+        {
+            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+                ? "https://api.openai.com/v1/images/generations"
+                : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
+
+            var payload = new { model, prompt, size, quality, n, response_format = "b64_json" };
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var res = await http.SendAsync(req, ct);
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync(ct);
+
+            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            var images = new List<byte[]>(data.GetArrayLength());
+            foreach (var item in data.EnumerateArray())
+            {
+                if (item.TryGetProperty("b64_json", out var b64) && b64.ValueKind == JsonValueKind.String)
+                    images.Add(Convert.FromBase64String(b64.GetString() ?? ""));
+            }
+            return (IReadOnlyList<byte[]>)images;
+        }, ct);
+    }
+
+    /// <summary>
+    /// Generates an image via the provider's image-generation endpoint and
+    /// returns the URL(s) the provider hosts the result at. Currently supports
+    /// OpenAI-compatible providers (openai → DALL·E).
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GenerateImageAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        string prompt,
+        string size = "1024x1024",
+        int n = 1,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new ArgumentException("Prompt is required.", nameof(prompt));
+
+        return await ExecuteWithResilienceAsync(providerId, async () =>
+        {
+            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+                ? "https://api.openai.com/v1/images/generations"
+                : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
+
+            var payload = new { model, prompt, size, n };
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var res = await http.SendAsync(req, ct);
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync(ct);
+
+            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            var urls = new List<string>(data.GetArrayLength());
+            foreach (var item in data.EnumerateArray())
+            {
+                if (item.TryGetProperty("url", out var url) && url.ValueKind == JsonValueKind.String)
+                    urls.Add(url.GetString() ?? "");
+            }
+            return (IReadOnlyList<string>)urls;
+        }, ct);
+    }
+
+    /// <summary>
     /// Tries each provider in <paramref name="fallbackChain"/> in order and returns
     /// the response from the first one that succeeds (skipping providers whose
     /// breaker is open or who have no credential). Throws
@@ -217,16 +368,15 @@ public class LegionClient
 
     // ── Resilience wrapper ──────────────────────────────────────────────────────
 
-    private async Task<string> ExecuteWithResilienceAsync(
+    private async Task<T> ExecuteWithResilienceAsync<T>(
         string providerId,
-        Func<Task<string>> action,
+        Func<Task<T>> action,
         CancellationToken ct)
     {
         CircuitBreaker.ThrowIfOpen(providerId);
 
         var attempt = 0;
         var delay = options.InitialBackoff;
-        Exception? last = null;
         while (true)
         {
             try
@@ -238,7 +388,6 @@ public class LegionClient
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (IsTransient(ex))
             {
-                last = ex;
                 if (attempt >= options.MaxRetries)
                 {
                     CircuitBreaker.RecordFailure(providerId, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
