@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -9,29 +10,29 @@ namespace MindAttic.Legion;
 /// uses to call any LLM provider — Claude, OpenAI, Gemini, DeepSeek, Mistral, Grok,
 /// Groq, Together, OpenRouter, Fireworks, Cohere.
 ///
-/// Legion owns the connection scaffolding: endpoint URLs, auth headers, request
-/// shape, response parsing, model defaults, and credential resolution. Apps keep
-/// their own prompts, parsing of structured replies, and business logic — they
-/// just delegate the wire-level "send prompt, get text" work to this client.
+/// Legion owns the wire-level scaffolding: endpoint URLs, auth headers, request
+/// shape, response parsing, model defaults, credential resolution, retry policy,
+/// and circuit breaking. Apps keep their own prompts, parsing of structured
+/// replies, and business logic — they delegate the "send prompt, get text" work
+/// to this client.
 ///
-/// Usage with shared credentials (most common):
-/// <code>
-///   var text = await legion.CallAsync("claude", systemPrompt, userMessage);
-/// </code>
-///
-/// Usage with explicit key (when the app holds the key itself):
-/// <code>
-///   var text = await legion.CallAsync("openai", apiKey: myKey, model: "gpt-4.1-mini",
-///                                     systemPrompt, userMessage);
-/// </code>
+/// <para>Resilience: by default, transient failures (5xx / 429 / network errors)
+/// are retried with exponential backoff. After repeated failures the per-provider
+/// circuit breaker opens, so subsequent calls fail fast and apps can route to a
+/// different provider. Use <see cref="CallWithFallbackAsync"/> to make Legion try
+/// a chain of providers until one succeeds.</para>
 /// </summary>
 public class LegionClient
 {
     private readonly HttpClient http;
+    private readonly LegionClientOptions options;
 
-    public LegionClient(HttpClient http)
+    public LegionClient(HttpClient http) : this(http, LegionClientOptions.Default) { }
+
+    public LegionClient(HttpClient http, LegionClientOptions options)
     {
         this.http = http;
+        this.options = options;
     }
 
     /// <summary>
@@ -73,8 +74,8 @@ public class LegionClient
         !string.IsNullOrWhiteSpace(providerId) && Endpoints.ContainsKey(providerId);
 
     /// <summary>
-    /// Calls the provider with explicit credentials. Use this when the calling app
-    /// already holds the key (e.g. multi-tenant SaaS). Returns the response text.
+    /// Calls the provider with explicit credentials. Wraps the call in retry +
+    /// circuit-breaker logic per <see cref="LegionClientOptions"/>.
     /// </summary>
     public Task<string> CallAsync(
         string providerId,
@@ -95,20 +96,14 @@ public class LegionClient
             ? DefaultModels.GetValueOrDefault(providerId, "")
             : model;
 
-        return providerId.ToLowerInvariant() switch
-        {
-            "claude" => CallClaudeAsync(apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
-            "gemini" => CallGeminiAsync(apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
-            "cohere" => CallCohereAsync(apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
-            _        => CallOpenAiCompatibleAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
-        };
+        return ExecuteWithResilienceAsync(providerId,
+            () => DispatchAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
+            ct);
     }
 
     /// <summary>
     /// Calls the provider, resolving the API key from the shared MindAttic credential
-    /// store at <c>%APPDATA%/MindAttic/LLM/</c>. The model is taken from
-    /// <paramref name="modelOverride"/>, then providers.json, then <see cref="DefaultModels"/>.
-    /// Throws if no key is configured for <paramref name="providerId"/>.
+    /// store at <c>%APPDATA%/MindAttic/LLM/</c>.
     /// </summary>
     public Task<string> CallAsync(
         string providerId,
@@ -128,6 +123,95 @@ public class LegionClient
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
         return CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct);
+    }
+
+    /// <summary>
+    /// Tries each provider in <paramref name="fallbackChain"/> in order and returns
+    /// the response from the first one that succeeds (skipping providers whose
+    /// breaker is open or who have no credential). Throws
+    /// <see cref="AggregateException"/> with every error if all providers fail.
+    /// </summary>
+    public async Task<(string ProviderId, string Response)> CallWithFallbackAsync(
+        IEnumerable<string> fallbackChain,
+        string systemPrompt,
+        string userMessage,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        CancellationToken ct = default)
+    {
+        var errors = new List<Exception>();
+        foreach (var providerId in fallbackChain ?? Enumerable.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(providerId)) continue;
+            try
+            {
+                var reply = await CallAsync(providerId, systemPrompt, userMessage,
+                    maxTokens, temperature, modelOverride: null, ct: ct);
+                return (providerId, reply);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                errors.Add(new Exception($"[{providerId}] {ex.Message}", ex));
+            }
+        }
+        throw new AggregateException("All providers in fallback chain failed.", errors);
+    }
+
+    // ── Resilience wrapper ──────────────────────────────────────────────────────
+
+    private async Task<string> ExecuteWithResilienceAsync(
+        string providerId,
+        Func<Task<string>> action,
+        CancellationToken ct)
+    {
+        CircuitBreaker.ThrowIfOpen(providerId);
+
+        var attempt = 0;
+        var delay = options.InitialBackoff;
+        Exception? last = null;
+        while (true)
+        {
+            try
+            {
+                var result = await action();
+                CircuitBreaker.RecordSuccess(providerId);
+                return result;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (IsTransient(ex))
+            {
+                last = ex;
+                if (attempt >= options.MaxRetries)
+                {
+                    CircuitBreaker.RecordFailure(providerId, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
+                    throw;
+                }
+                attempt++;
+                try { await Task.Delay(delay, ct); }
+                catch (OperationCanceledException) { throw; }
+                delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * options.BackoffMultiplier);
+            }
+            catch (Exception)
+            {
+                // Non-transient (e.g. 401 auth) — record and rethrow without retry
+                CircuitBreaker.RecordFailure(providerId, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
+                throw;
+            }
+        }
+    }
+
+    private static bool IsTransient(Exception ex)
+    {
+        if (ex is HttpRequestException hre)
+        {
+            // Network errors (no status code) are transient.
+            if (hre.StatusCode is null) return true;
+            var code = (int)hre.StatusCode;
+            return code == 408 || code == 429 || code >= 500;
+        }
+        if (ex is TaskCanceledException) return true; // request timeout (not user-cancel — handled above)
+        return false;
     }
 
     private static string? ResolveModelFromStore(string providerId)
@@ -152,6 +236,16 @@ public class LegionClient
     }
 
     // ── Provider-specific dispatch ──────────────────────────────────────────────
+
+    private Task<string> DispatchAsync(string providerId, string key, string model,
+        string system, string user, int maxTokens, double temperature, CancellationToken ct)
+        => providerId.ToLowerInvariant() switch
+        {
+            "claude" => CallClaudeAsync(key, model, system, user, maxTokens, temperature, ct),
+            "gemini" => CallGeminiAsync(key, model, system, user, maxTokens, temperature, ct),
+            "cohere" => CallCohereAsync(key, model, system, user, maxTokens, temperature, ct),
+            _        => CallOpenAiCompatibleAsync(providerId, key, model, system, user, maxTokens, temperature, ct),
+        };
 
     private async Task<string> CallClaudeAsync(
         string key, string model, string system, string user,

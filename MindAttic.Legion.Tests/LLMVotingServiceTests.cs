@@ -565,6 +565,45 @@ public class PersonaLibraryTests
         var b = PersonaLibrary.Sample(20, new Random(123));
         Assert.That(a.Select(p => p.Id), Is.EqualTo(b.Select(p => p.Id)));
     }
+
+    // Enriched-persona checks (age / pronouns / signature trait)
+
+    [Test]
+    public void EveryPersona_PromptIncludesAgeBetween22And78()
+    {
+        // Age formula: 22 + ((i*7) % 57) → range [22, 78]
+        var bad = PersonaLibrary.All
+            .Select((p, i) => new { p, i, expected = 22 + ((i * 7) % 57) })
+            .Where(x => !x.p.PersonalityMarkdown.Contains($"age {x.expected}"))
+            .ToList();
+        Assert.That(bad, Is.Empty, $"persona prompts missing expected age tag: {string.Join(",", bad.Take(5).Select(b => b.i))}");
+    }
+
+    [Test]
+    public void EveryPersona_PromptIncludesOneOfThreePronounSets()
+    {
+        foreach (var p in PersonaLibrary.All)
+        {
+            var hasOne = p.PersonalityMarkdown.Contains("she/her")
+                      || p.PersonalityMarkdown.Contains("he/him")
+                      || p.PersonalityMarkdown.Contains("they/them");
+            Assert.That(hasOne, Is.True, $"{p.Id} has no recognized pronoun set");
+        }
+    }
+
+    [Test]
+    public void EveryPersona_PromptIncludesSignatureTrait()
+    {
+        foreach (var p in PersonaLibrary.All)
+            Assert.That(p.PersonalityMarkdown, Does.Contain("Signature trait:"), $"{p.Id} missing signature trait line");
+    }
+
+    [Test]
+    public void Personas_AreUniqueByPersonalityMarkdown()
+    {
+        var distinct = PersonaLibrary.All.Select(p => p.PersonalityMarkdown).Distinct().Count();
+        Assert.That(distinct, Is.EqualTo(PersonaLibrary.Count));
+    }
 }
 
 [TestFixture]
