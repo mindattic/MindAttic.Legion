@@ -27,12 +27,10 @@ public class LegionClient
     private readonly HttpClient http;
     private readonly LegionClientOptions options;
 
-    public LegionClient(HttpClient http) : this(http, LegionClientOptions.Default) { }
-
-    public LegionClient(HttpClient http, LegionClientOptions options)
+    public LegionClient(HttpClient http, LegionClientOptions? options = null)
     {
         this.http = http;
-        this.options = options;
+        this.options = options ?? LegionClientOptions.Default;
     }
 
     /// <summary>
@@ -123,6 +121,65 @@ public class LegionClient
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
         return CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct);
+    }
+
+    /// <summary>
+    /// Multi-turn chat call with explicit credentials. Each <see cref="ChatTurn"/>
+    /// has Role = "user" or "assistant"; the optional <paramref name="systemPrompt"/>
+    /// is routed to the right place per provider (separate parameter for Claude,
+    /// prepended as a system message for OpenAI-compatible providers).
+    /// </summary>
+    public Task<string> CallChatAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        IEnumerable<ChatTurn> messages,
+        string? systemPrompt = null,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
+
+        var resolvedModel = string.IsNullOrWhiteSpace(model)
+            ? DefaultModels.GetValueOrDefault(providerId, "")
+            : model;
+
+        var turns = (messages ?? Enumerable.Empty<ChatTurn>()).ToList();
+        if (turns.Count == 0)
+            throw new ArgumentException("At least one message is required.", nameof(messages));
+
+        return ExecuteWithResilienceAsync(providerId,
+            () => DispatchChatAsync(providerId, apiKey, resolvedModel, turns, systemPrompt, maxTokens, temperature, ct),
+            ct);
+    }
+
+    /// <summary>
+    /// Multi-turn chat using shared-credential lookup. Mirrors
+    /// <see cref="CallAsync(string, string, string, int, double, string?, CancellationToken)"/>
+    /// but accepts a conversation history.
+    /// </summary>
+    public Task<string> CallChatAsync(
+        string providerId,
+        IEnumerable<ChatTurn> messages,
+        string? systemPrompt = null,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        string? modelOverride = null,
+        CancellationToken ct = default)
+    {
+        var key = MindAtticCredentialStore.GetKey(providerId);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
+
+        var model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride
+                  : ResolveModelFromStore(providerId)
+                  ?? DefaultModels.GetValueOrDefault(providerId, "");
+
+        return CallChatAsync(providerId, key, model!, messages, systemPrompt, maxTokens, temperature, ct);
     }
 
     /// <summary>
@@ -239,26 +296,34 @@ public class LegionClient
 
     private Task<string> DispatchAsync(string providerId, string key, string model,
         string system, string user, int maxTokens, double temperature, CancellationToken ct)
+        => DispatchChatAsync(providerId, key, model,
+            new[] { new ChatTurn("user", user) },
+            system, maxTokens, temperature, ct);
+
+    private Task<string> DispatchChatAsync(string providerId, string key, string model,
+        IReadOnlyList<ChatTurn> messages, string? systemPrompt,
+        int maxTokens, double temperature, CancellationToken ct)
         => providerId.ToLowerInvariant() switch
         {
-            "claude" => CallClaudeAsync(key, model, system, user, maxTokens, temperature, ct),
-            "gemini" => CallGeminiAsync(key, model, system, user, maxTokens, temperature, ct),
-            "cohere" => CallCohereAsync(key, model, system, user, maxTokens, temperature, ct),
-            _        => CallOpenAiCompatibleAsync(providerId, key, model, system, user, maxTokens, temperature, ct),
+            "claude" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            "gemini" => CallGeminiChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            "cohere" => CallCohereChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            _        => CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, ct),
         };
 
-    private async Task<string> CallClaudeAsync(
-        string key, string model, string system, string user,
+    private async Task<string> CallClaudeChatAsync(
+        string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
     {
-        var payload = new
-        {
-            model,
-            max_tokens = maxTokens,
-            temperature,
-            system,
-            messages = new[] { new { role = "user", content = user } }
-        };
+        // Claude expects role = "user" or "assistant" only, with system as a separate field.
+        var apiMessages = messages
+            .Where(m => !string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase))
+            .Select(m => new { role = m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user", content = m.Content })
+            .ToArray();
+
+        object payload = string.IsNullOrWhiteSpace(systemPrompt)
+            ? new { model, max_tokens = maxTokens, temperature, messages = apiMessages }
+            : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
         req.Headers.Add("x-api-key", key);
@@ -272,17 +337,29 @@ public class LegionClient
             .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
 
-    private async Task<string> CallGeminiAsync(
-        string key, string model, string system, string user,
+    private async Task<string> CallGeminiChatAsync(
+        string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
     {
         var url = Endpoints["gemini"].Replace("{model}", model).Replace("{key}", key);
-        var payload = new
-        {
-            systemInstruction = new { parts = new[] { new { text = system } } },
-            contents = new[] { new { parts = new[] { new { text = user } } } },
-            generationConfig = new { maxOutputTokens = maxTokens, temperature }
-        };
+        // Gemini uses role="user"/"model"; convert "assistant"→"model".
+        var contents = messages
+            .Where(m => !string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase))
+            .Select(m => new
+            {
+                role = m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "model" : "user",
+                parts = new[] { new { text = m.Content } }
+            })
+            .ToArray();
+
+        object payload = string.IsNullOrWhiteSpace(systemPrompt)
+            ? new { contents, generationConfig = new { maxOutputTokens = maxTokens, temperature } }
+            : new
+            {
+                systemInstruction = new { parts = new[] { new { text = systemPrompt } } },
+                contents,
+                generationConfig = new { maxOutputTokens = maxTokens, temperature }
+            };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -296,21 +373,17 @@ public class LegionClient
             .GetProperty("text").GetString() ?? "";
     }
 
-    private async Task<string> CallCohereAsync(
-        string key, string model, string system, string user,
+    private async Task<string> CallCohereChatAsync(
+        string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
     {
-        var payload = new
-        {
-            model,
-            max_tokens = maxTokens,
-            temperature,
-            messages = new object[]
-            {
-                new { role = "system", content = system },
-                new { role = "user", content = user },
-            }
-        };
+        var apiMessages = new List<object>();
+        if (!string.IsNullOrWhiteSpace(systemPrompt))
+            apiMessages.Add(new { role = "system", content = systemPrompt });
+        foreach (var m in messages.Where(x => !string.Equals(x.Role, "system", StringComparison.OrdinalIgnoreCase)))
+            apiMessages.Add(new { role = m.Role.ToLowerInvariant(), content = m.Content });
+
+        var payload = new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["cohere"]);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
@@ -324,24 +397,20 @@ public class LegionClient
             .GetProperty("text").GetString() ?? "";
     }
 
-    private async Task<string> CallOpenAiCompatibleAsync(
-        string providerId, string key, string model, string system, string user,
-        int maxTokens, double temperature, CancellationToken ct)
+    private async Task<string> CallOpenAiCompatibleChatAsync(
+        string providerId, string key, string model, IReadOnlyList<ChatTurn> messages,
+        string? systemPrompt, int maxTokens, double temperature, CancellationToken ct)
     {
         if (!Endpoints.TryGetValue(providerId, out var endpoint))
             throw new ArgumentException($"Unknown provider: {providerId}");
 
-        var payload = new
-        {
-            model,
-            max_tokens = maxTokens,
-            temperature,
-            messages = new object[]
-            {
-                new { role = "system", content = system },
-                new { role = "user", content = user },
-            }
-        };
+        var apiMessages = new List<object>();
+        if (!string.IsNullOrWhiteSpace(systemPrompt))
+            apiMessages.Add(new { role = "system", content = systemPrompt });
+        foreach (var m in messages.Where(x => !string.Equals(x.Role, "system", StringComparison.OrdinalIgnoreCase)))
+            apiMessages.Add(new { role = m.Role.ToLowerInvariant(), content = m.Content });
+
+        var payload = new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
@@ -353,4 +422,5 @@ public class LegionClient
         return JsonDocument.Parse(json).RootElement
             .GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
     }
+
 }
