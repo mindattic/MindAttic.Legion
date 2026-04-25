@@ -45,6 +45,30 @@ public static class ServiceCollectionExtensions
             return new LlmVotingProvider(http, config);
         });
         services.AddSingleton<LLMVotingService>();
+        services.AddLegionClient();
+        return services;
+    }
+
+    /// <summary>
+    /// Register <see cref="LegionClient"/> as the universal LLM-call entry point.
+    /// Apps that don't need voting can call this directly to get the same connection
+    /// scaffolding (endpoints, auth headers, request/response shape, model defaults,
+    /// shared-credential lookup) without pulling in the voting machinery.
+    ///
+    /// Usage in any MindAttic app:
+    /// <code>
+    ///   services.AddLegionClient();
+    ///   // ...
+    ///   public class MyService(LegionClient legion) {
+    ///       public Task&lt;string&gt; AskClaude(string prompt) =&gt;
+    ///           legion.CallAsync("claude", systemPrompt: "...", userMessage: prompt);
+    ///   }
+    /// </code>
+    /// </summary>
+    public static IServiceCollection AddLegionClient(this IServiceCollection services)
+    {
+        services.AddHttpClient<LegionClient>();
+        services.AddSingleton<LlmHealthCheck>();
         return services;
     }
 
