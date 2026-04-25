@@ -15,7 +15,9 @@ public sealed record LlmHealthResult(
     string? Response,
     string? ErrorMessage,
     string DashboardUrl,
-    string KeysUrl)
+    string KeysUrl,
+    LlmHealthDiagnosis Diagnosis = LlmHealthDiagnosis.Unknown,
+    int? HttpStatusCode = null)
 {
     /// <summary>
     /// Human-readable status: "OK", "MISSING KEY", "WRONG REPLY", "ERROR: ...".
@@ -25,6 +27,13 @@ public sealed record LlmHealthResult(
         !IsHealthy            ? $"ERROR: {ErrorMessage}" :
         !RespondedCorrectly   ? $"WRONG REPLY: {Response}" :
                                 "OK";
+
+    /// <summary>
+    /// User-facing one-sentence next step for this diagnosis. Embeds the
+    /// provider's dashboard / keys URL so the message is immediately actionable.
+    /// </summary>
+    public string ActionableMessage =>
+        LlmHealthDiagnoser.ActionableMessage(Diagnosis, DisplayName, KeysUrl, DashboardUrl);
 }
 
 /// <summary>
@@ -103,7 +112,9 @@ public class LlmHealthCheck
                 Response: null,
                 ErrorMessage: "No API key configured",
                 DashboardUrl: info.DashboardUrl,
-                KeysUrl: info.KeysUrl);
+                KeysUrl: info.KeysUrl,
+                Diagnosis: LlmHealthDiagnosis.MissingCredential,
+                HttpStatusCode: null);
         }
 
         var sw = Stopwatch.StartNew();
@@ -136,11 +147,14 @@ public class LlmHealthCheck
                 Response: reply,
                 ErrorMessage: null,
                 DashboardUrl: info.DashboardUrl,
-                KeysUrl: info.KeysUrl);
+                KeysUrl: info.KeysUrl,
+                Diagnosis: LlmHealthDiagnoser.ClassifyResponseMatch(ok),
+                HttpStatusCode: 200);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            var (diag, code) = LlmHealthDiagnoser.ClassifyException(ex, ct);
             return new LlmHealthResult(
                 ProviderId: info.Id,
                 DisplayName: info.DisplayName,
@@ -151,7 +165,9 @@ public class LlmHealthCheck
                 Response: null,
                 ErrorMessage: ex.Message,
                 DashboardUrl: info.DashboardUrl,
-                KeysUrl: info.KeysUrl);
+                KeysUrl: info.KeysUrl,
+                Diagnosis: diag,
+                HttpStatusCode: code);
         }
     }
 }

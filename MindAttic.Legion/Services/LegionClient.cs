@@ -217,7 +217,7 @@ public class LegionClient
             req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var res = await http.SendAsync(req, ct);
-            res.EnsureSuccessStatusCode();
+            await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
             var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
@@ -271,7 +271,7 @@ public class LegionClient
             req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var res = await http.SendAsync(req, ct);
-            res.EnsureSuccessStatusCode();
+            await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
             var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
@@ -319,7 +319,7 @@ public class LegionClient
             req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var res = await http.SendAsync(req, ct);
-            res.EnsureSuccessStatusCode();
+            await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
             var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
@@ -480,7 +480,7 @@ public class LegionClient
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
-        res.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         return JsonDocument.Parse(json).RootElement
             .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
@@ -514,7 +514,7 @@ public class LegionClient
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
-        res.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         return JsonDocument.Parse(json).RootElement
             .GetProperty("candidates")[0]
@@ -539,7 +539,7 @@ public class LegionClient
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
-        res.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         return JsonDocument.Parse(json).RootElement
             .GetProperty("message").GetProperty("content")[0]
@@ -566,10 +566,30 @@ public class LegionClient
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
-        res.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         return JsonDocument.Parse(json).RootElement
             .GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+    }
+
+    /// <summary>
+    /// Throws <see cref="HttpRequestException"/> with the response body included
+    /// in the message — so the diagnoser can spot quota / billing markers that
+    /// providers return only in the response body. Replaces the framework's
+    /// <c>EnsureSuccessStatusCode</c>, which discards the body.
+    /// </summary>
+    private static async Task EnsureSuccessAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        if (res.IsSuccessStatusCode) return;
+
+        string body = "";
+        try { body = await res.Content.ReadAsStringAsync(ct); } catch { /* best effort */ }
+        if (body.Length > 2048) body = body[..2048];
+
+        var msg = string.IsNullOrEmpty(body)
+            ? $"{(int)res.StatusCode} {res.ReasonPhrase}"
+            : $"{(int)res.StatusCode} {res.ReasonPhrase}: {body}";
+        throw new HttpRequestException(msg, inner: null, statusCode: res.StatusCode);
     }
 
 }
