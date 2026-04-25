@@ -2,12 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>MindAttic.LLMVoting</RootNamespace>
+    <RootNamespace>MindAttic.Legion</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>MindAttic.LLMVoting</AssemblyName>
-    <Description>Portable multi-LLM consensus voting library. Wire up multiple LLM providers as voters; aggregate decisions by quorum. Supports custom personalities, character persona simulation, and multi-dimensional scoring.</Description>
-    <Version>1.0.0</Version>
+    <AssemblyName>MindAttic.Legion</AssemblyName>
+    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library and unified credentials at %APPDATA%/MindAttic/LLM, so any MindAttic application can spin up diverse multi-LLM panels with one line of code.</Description>
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

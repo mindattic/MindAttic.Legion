@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using MindAttic.LLMVoting.Providers;
+using MindAttic.Legion.Providers;
 
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// Multi-LLM consensus voting service.
@@ -152,6 +152,17 @@ public class LLMVotingService
 
     /// <summary>List provider IDs that have a configured API key.</summary>
     public List<string> GetActiveProviderIds() => config.ActiveProviderIds;
+
+    /// <summary>
+    /// Builds a panel of <paramref name="count"/> voters with unique personas, spreading
+    /// across every active provider before backfilling with <paramref name="fallbackProviderId"/>.
+    /// Convenience wrapper around <see cref="VoterFactory.GenerateUniqueVoters"/>.
+    /// </summary>
+    public IReadOnlyList<VoterProfile> CreatePanel(
+        int count,
+        string fallbackProviderId = "claude",
+        Random? rng = null)
+        => VoterFactory.GenerateUniqueVoters(count, GetActiveProviderIds(), fallbackProviderId, rng);
 
     // ── Core vote execution ─────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// Defines a single voter — an LLM provider with an optional personality overlay.

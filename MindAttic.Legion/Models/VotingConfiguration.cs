@@ -1,4 +1,4 @@
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// Configuration for the LLMVotingService.
@@ -19,12 +19,19 @@ namespace MindAttic.LLMVoting;
 public class VotingConfiguration
 {
     /// <summary>
-    /// Map of provider ID → API key.
-    /// Only providers with a non-empty key are treated as active voters.
+    /// Map of provider ID → API key. Explicit entries here win over the shared
+    /// credential store (useful for tests or app-specific overrides).
     /// Supported provider IDs: claude, openai, gemini, deepseek, mistral,
     ///   xai, groq, together, openrouter, fireworks, cohere.
     /// </summary>
     public Dictionary<string, string> ApiKeys { get; set; } = new();
+
+    /// <summary>
+    /// When true, missing keys are resolved from the shared MindAttic credential
+    /// store at <see cref="MindAtticCredentialStore.CredentialDirectory"/>.
+    /// Set to false to sandbox an app to only the keys passed in ApiKeys.
+    /// </summary>
+    public bool UseSharedCredentials { get; set; } = true;
 
     /// <summary>
     /// Optional model overrides per provider (e.g., "claude" → "claude-opus-4-6").
@@ -50,7 +57,21 @@ public class VotingConfiguration
     /// </summary>
     public string DefaultPersonalityMarkdown { get; set; } = "";
 
-    /// <summary>Returns provider IDs that have a non-empty API key.</summary>
-    public List<string> ActiveProviderIds =>
-        ApiKeys.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)).Select(kv => kv.Key).ToList();
+    /// <summary>
+    /// Returns provider IDs that have a resolvable API key — either explicit in
+    /// <see cref="ApiKeys"/> or present in the shared credential store when
+    /// <see cref="UseSharedCredentials"/> is enabled.
+    /// </summary>
+    public List<string> ActiveProviderIds
+    {
+        get
+        {
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in ApiKeys)
+                if (!string.IsNullOrWhiteSpace(kv.Value)) ids.Add(kv.Key);
+            if (UseSharedCredentials)
+                foreach (var id in MindAtticCredentialStore.ListProviders()) ids.Add(id);
+            return ids.ToList();
+        }
+    }
 }

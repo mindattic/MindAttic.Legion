@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="LLMVoting.Tests/LLMVoting.Tests.csproj" />
-  <Project Path="LLMVoting/LLMVoting.csproj" />
-</Solution>

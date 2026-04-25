@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MindAttic.LLMVoting.Providers;
+using MindAttic.Legion.Providers;
 
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// Extension methods for registering LLMVoting services in an IServiceCollection.
@@ -12,14 +12,24 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Register <see cref="LLMVotingService"/> as a singleton with the supplied configuration.
     ///
+    /// API keys are resolved in this order per provider:
+    ///   1. <see cref="VoterProfile.ApiKeyOverride"/> (per-voter)
+    ///   2. <see cref="VotingConfiguration.ApiKeys"/> (explicit config)
+    ///   3. Shared <see cref="MindAtticCredentialStore"/> folder — the default source
+    ///      shared across all MindAttic apps (%APPDATA%/MindAttic/LLM on Windows).
+    ///
+    /// Apps can leave <see cref="VotingConfiguration.ApiKeys"/> empty and rely
+    /// entirely on the shared store — set UseSharedCredentials=false to sandbox.
+    ///
     /// Usage:
     /// <code>
+    ///   // Zero-config: reads all keys from %APPDATA%/MindAttic/LLM/
+    ///   services.AddLLMVoting(new VotingConfiguration());
+    ///
+    ///   // Or mix explicit + shared:
     ///   services.AddLLMVoting(new VotingConfiguration
     ///   {
-    ///       ApiKeys = {
-    ///           ["claude"] = settings.ApiKey,
-    ///           ["openai"] = settings.OpenAiApiKey,
-    ///       }
+    ///       ApiKeys = { ["claude"] = settings.ApiKey } // overrides shared store
     ///   });
     /// </code>
     /// </summary>

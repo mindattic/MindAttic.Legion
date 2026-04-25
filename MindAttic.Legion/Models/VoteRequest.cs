@@ -1,4 +1,4 @@
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// A vote request. Covers four voting modes:

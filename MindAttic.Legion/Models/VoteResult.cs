@@ -1,4 +1,4 @@
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// A single voter's response to a vote request.

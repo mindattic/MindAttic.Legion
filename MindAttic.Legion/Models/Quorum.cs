@@ -1,4 +1,4 @@
-namespace MindAttic.LLMVoting;
+namespace MindAttic.Legion;
 
 /// <summary>
 /// How many voters must agree before a decision is binding.

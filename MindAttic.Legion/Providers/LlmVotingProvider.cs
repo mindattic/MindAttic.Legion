@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace MindAttic.LLMVoting.Providers;
+namespace MindAttic.Legion.Providers;
 
 /// <summary>
 /// Handles the actual HTTP dispatch to each LLM provider.
@@ -82,10 +82,21 @@ public class LlmVotingProvider
         };
     }
 
+    /// <summary>
+    /// Resolves the API key for a provider. Checks <see cref="VotingConfiguration.ApiKeys"/>
+    /// first (explicit config wins), then falls back to the shared MindAttic credential
+    /// store when <see cref="VotingConfiguration.UseSharedCredentials"/> is enabled.
+    /// </summary>
     public string? GetApiKey(string providerId)
     {
-        config.ApiKeys.TryGetValue(providerId, out var key);
-        return string.IsNullOrWhiteSpace(key) ? null : key;
+        if (config.ApiKeys.TryGetValue(providerId, out var explicitKey)
+            && !string.IsNullOrWhiteSpace(explicitKey))
+            return explicitKey;
+
+        if (config.UseSharedCredentials)
+            return MindAtticCredentialStore.GetKey(providerId);
+
+        return null;
     }
 
     // ── Provider-specific dispatch ──────────────────────────────────────────────

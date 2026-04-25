@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MindAttic.Legion.Tests/MindAttic.Legion.Tests.csproj" />
+  <Project Path="MindAttic.Legion/MindAttic.Legion.csproj" />
+</Solution>
