@@ -1,16 +1,21 @@
 namespace MindAttic.Legion;
 
 /// <summary>
-/// Library of 1000 baked-in voter personas. The base diversity skeleton is the
-/// cross-product of 10 archetypes × 10 worldviews × 10 cultural backgrounds;
-/// each persona is further enriched with a deterministic age, pronouns, and a
-/// signature quirk so even neighbouring entries feel like distinct people.
+/// Library of baked-in voter personas. The catalog opens with one "default"
+/// persona per LLM in <see cref="LlmProviderCatalog"/> — these are raw,
+/// instruction-free Personas (e.g. "Claude", "ChatGPT") whose
+/// <see cref="Persona.PersonalityMarkdown"/> is empty so the model speaks as
+/// itself with no overlay. Following the defaults are 1000 enriched personas
+/// built from the cross-product of 10 archetypes × 10 worldviews × 10 cultural
+/// backgrounds, each further enriched with a deterministic age, pronouns, and
+/// a signature quirk so even neighbouring entries feel like distinct people.
 ///
-/// All 1000 personas have unique ids, unique names, and unique personality
-/// prompts. <see cref="Sample(int, Random?)"/> draws WITHOUT replacement, so
-/// any panel built via <see cref="VoterFactory"/> never repeats a persona
-/// inside a single batch. The full list is materialized lazily on first use
-/// and cached for the process lifetime.
+/// Every persona in the library has a unique id and unique name. Enriched
+/// personas additionally have unique personality prompts; the defaults all
+/// share an empty prompt by design. <see cref="Sample(int, Random?)"/> draws
+/// WITHOUT replacement, so any panel built via <see cref="VoterFactory"/>
+/// never repeats a persona inside a single batch. The full list is
+/// materialized lazily on first use and cached for the process lifetime.
 /// </summary>
 public static class PersonaLibrary
 {
@@ -132,22 +137,35 @@ public static class PersonaLibrary
         "Recites poetry they wrote in high school as if it's still their best work.",
     };
 
-    /// <summary>The fixed total persona count: 10 × 10 × 10.</summary>
-    public const int Total = 1000;
+    /// <summary>The fixed enriched persona count: 10 × 10 × 10.</summary>
+    public const int EnrichedCount = 1000;
 
-    private static readonly Lazy<IReadOnlyList<Persona>> all = new(BuildAll);
+    private static readonly Lazy<IReadOnlyList<Persona>> defaults = new(BuildDefaults);
+    private static readonly Lazy<IReadOnlyList<Persona>> enriched = new(BuildEnriched);
+    private static readonly Lazy<IReadOnlyList<Persona>> all =
+        new(() => defaults.Value.Concat(enriched.Value).ToArray());
 
-    /// <summary>The full set of 1000 personas in deterministic order.</summary>
+    /// <summary>
+    /// Raw "default" personas — one per provider in <see cref="LlmProviderCatalog"/>,
+    /// in canonical order. Each has an empty <see cref="Persona.PersonalityMarkdown"/>,
+    /// meaning the LLM speaks as itself with no persona overlay.
+    /// </summary>
+    public static IReadOnlyList<Persona> Defaults => defaults.Value;
+
+    /// <summary>The 1000 enriched personas built from the diversity skeleton.</summary>
+    public static IReadOnlyList<Persona> Enriched => enriched.Value;
+
+    /// <summary>The full set of personas in deterministic order: defaults first, then enriched.</summary>
     public static IReadOnlyList<Persona> All => all.Value;
 
-    /// <summary>Number of personas in the library.</summary>
-    public static int Count => Total;
+    /// <summary>Number of personas in the library (defaults + enriched).</summary>
+    public static int Count => All.Count;
 
     /// <summary>Returns the persona at the supplied index in [0, Count).</summary>
     public static Persona Get(int index)
     {
-        if (index < 0 || index >= Total)
-            throw new ArgumentOutOfRangeException(nameof(index), $"Index must be in [0, {Total}).");
+        if (index < 0 || index >= Count)
+            throw new ArgumentOutOfRangeException(nameof(index), $"Index must be in [0, {Count}).");
         return All[index];
     }
 
@@ -160,14 +178,15 @@ public static class PersonaLibrary
     {
         if (count <= 0) return Array.Empty<Persona>();
         rng ??= Random.Shared;
-        var take = Math.Min(count, Total);
+        var total = Count;
+        var take = Math.Min(count, total);
 
         // Fisher-Yates partial shuffle on indices: O(take), no allocation per item.
-        var indices = new int[Total];
-        for (int i = 0; i < Total; i++) indices[i] = i;
+        var indices = new int[total];
+        for (int i = 0; i < total; i++) indices[i] = i;
         for (int i = 0; i < take; i++)
         {
-            int j = rng.Next(i, Total);
+            int j = rng.Next(i, total);
             (indices[i], indices[j]) = (indices[j], indices[i]);
         }
         var result = new Persona[take];
@@ -175,9 +194,17 @@ public static class PersonaLibrary
         return result;
     }
 
-    private static IReadOnlyList<Persona> BuildAll()
+    private static IReadOnlyList<Persona> BuildDefaults() =>
+        LlmProviderCatalog.All
+            .Select(p => new Persona(
+                Id: $"default-{p.Id}",
+                Name: p.DisplayName,
+                PersonalityMarkdown: ""))
+            .ToArray();
+
+    private static IReadOnlyList<Persona> BuildEnriched()
     {
-        var personas = new Persona[Total];
+        var personas = new Persona[EnrichedCount];
         int i = 0;
         for (int a = 0; a < Archetypes.Length; a++)
         for (int w = 0; w < Worldviews.Length; w++)

@@ -488,30 +488,42 @@ public class MindAtticCredentialStoreTests
 public class PersonaLibraryTests
 {
     [Test]
-    public void Count_IsExactlyOneThousand()
+    public void Count_IsDefaultsPlusEnriched()
     {
-        Assert.That(PersonaLibrary.Count, Is.EqualTo(1000));
-        Assert.That(PersonaLibrary.All, Has.Count.EqualTo(1000));
+        var expected = LlmProviderCatalog.All.Count + PersonaLibrary.EnrichedCount;
+        Assert.That(PersonaLibrary.Count, Is.EqualTo(expected));
+        Assert.That(PersonaLibrary.All, Has.Count.EqualTo(expected));
+        Assert.That(PersonaLibrary.Defaults, Has.Count.EqualTo(LlmProviderCatalog.All.Count));
+        Assert.That(PersonaLibrary.Enriched, Has.Count.EqualTo(PersonaLibrary.EnrichedCount));
+    }
+
+    [Test]
+    public void Defaults_ComeFirstInAllAndMatchProviderDisplayNames()
+    {
+        var providerNames = LlmProviderCatalog.All.Select(p => p.DisplayName).ToList();
+        var firstN = PersonaLibrary.All.Take(providerNames.Count).Select(p => p.Name).ToList();
+        Assert.That(firstN, Is.EqualTo(providerNames));
+        Assert.That(PersonaLibrary.Defaults.All(p => string.IsNullOrEmpty(p.PersonalityMarkdown)), Is.True);
     }
 
     [Test]
     public void All_PersonasHaveUniqueIds()
     {
         var ids = PersonaLibrary.All.Select(p => p.Id).ToList();
-        Assert.That(ids.Distinct().Count(), Is.EqualTo(1000));
+        Assert.That(ids.Distinct().Count(), Is.EqualTo(PersonaLibrary.Count));
     }
 
     [Test]
     public void All_PersonasHaveUniqueNames()
     {
         var names = PersonaLibrary.All.Select(p => p.Name).ToList();
-        Assert.That(names.Distinct().Count(), Is.EqualTo(1000));
+        Assert.That(names.Distinct().Count(), Is.EqualTo(PersonaLibrary.Count));
     }
 
     [Test]
-    public void All_PersonasHaveNonEmptyPersonalityMarkdown()
+    public void Enriched_PersonasHaveNonEmptyPersonalityMarkdown()
     {
-        Assert.That(PersonaLibrary.All.All(p => !string.IsNullOrWhiteSpace(p.PersonalityMarkdown)), Is.True);
+        Assert.That(PersonaLibrary.Enriched.All(p => !string.IsNullOrWhiteSpace(p.PersonalityMarkdown)), Is.True);
     }
 
     [Test]
@@ -526,7 +538,7 @@ public class PersonaLibraryTests
     public void Get_OutOfRange_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => PersonaLibrary.Get(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PersonaLibrary.Get(1000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PersonaLibrary.Get(PersonaLibrary.Count));
     }
 
     [Test]
@@ -554,8 +566,8 @@ public class PersonaLibraryTests
     public void Sample_ExcessCount_ClampsToFullLibrary()
     {
         var sample = PersonaLibrary.Sample(5000, new Random(1));
-        Assert.That(sample, Has.Count.EqualTo(1000));
-        Assert.That(sample.Select(p => p.Id).Distinct().Count(), Is.EqualTo(1000));
+        Assert.That(sample, Has.Count.EqualTo(PersonaLibrary.Count));
+        Assert.That(sample.Select(p => p.Id).Distinct().Count(), Is.EqualTo(PersonaLibrary.Count));
     }
 
     [Test]
@@ -569,10 +581,10 @@ public class PersonaLibraryTests
     // Enriched-persona checks (age / pronouns / signature trait)
 
     [Test]
-    public void EveryPersona_PromptIncludesAgeBetween22And78()
+    public void EveryEnrichedPersona_PromptIncludesAgeBetween22And78()
     {
         // Age formula: 22 + ((i*7) % 57) → range [22, 78]
-        var bad = PersonaLibrary.All
+        var bad = PersonaLibrary.Enriched
             .Select((p, i) => new { p, i, expected = 22 + ((i * 7) % 57) })
             .Where(x => !x.p.PersonalityMarkdown.Contains($"age {x.expected}"))
             .ToList();
@@ -580,9 +592,9 @@ public class PersonaLibraryTests
     }
 
     [Test]
-    public void EveryPersona_PromptIncludesOneOfThreePronounSets()
+    public void EveryEnrichedPersona_PromptIncludesOneOfThreePronounSets()
     {
-        foreach (var p in PersonaLibrary.All)
+        foreach (var p in PersonaLibrary.Enriched)
         {
             var hasOne = p.PersonalityMarkdown.Contains("she/her")
                       || p.PersonalityMarkdown.Contains("he/him")
@@ -592,17 +604,17 @@ public class PersonaLibraryTests
     }
 
     [Test]
-    public void EveryPersona_PromptIncludesSignatureTrait()
+    public void EveryEnrichedPersona_PromptIncludesSignatureTrait()
     {
-        foreach (var p in PersonaLibrary.All)
+        foreach (var p in PersonaLibrary.Enriched)
             Assert.That(p.PersonalityMarkdown, Does.Contain("Signature trait:"), $"{p.Id} missing signature trait line");
     }
 
     [Test]
-    public void Personas_AreUniqueByPersonalityMarkdown()
+    public void EnrichedPersonas_AreUniqueByPersonalityMarkdown()
     {
-        var distinct = PersonaLibrary.All.Select(p => p.PersonalityMarkdown).Distinct().Count();
-        Assert.That(distinct, Is.EqualTo(PersonaLibrary.Count));
+        var distinct = PersonaLibrary.Enriched.Select(p => p.PersonalityMarkdown).Distinct().Count();
+        Assert.That(distinct, Is.EqualTo(PersonaLibrary.EnrichedCount));
     }
 }
 
