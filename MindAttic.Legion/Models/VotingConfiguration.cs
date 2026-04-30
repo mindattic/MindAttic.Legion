@@ -58,9 +58,22 @@ public class VotingConfiguration
     public string DefaultPersonalityMarkdown { get; set; } = "";
 
     /// <summary>
+    /// Whitelist of providers eligible for voting. Empty set = no restriction
+    /// (every provider with a key is active). Default restricts to the four
+    /// production providers that meet the StreetSamurai cost/quality bar.
+    /// Failed voters in this set are refilled by <see cref="LLMVotingService"/>
+    /// using additional instances of the surviving allowed providers.
+    /// </summary>
+    public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "claude", "openai", "gemini", "deepseek",
+    };
+
+    /// <summary>
     /// Returns provider IDs that have a resolvable API key — either explicit in
     /// <see cref="ApiKeys"/> or present in the shared credential store when
-    /// <see cref="UseSharedCredentials"/> is enabled.
+    /// <see cref="UseSharedCredentials"/> is enabled — and that pass the
+    /// <see cref="AllowedProviderIds"/> whitelist when one is configured.
     /// </summary>
     public List<string> ActiveProviderIds
     {
@@ -71,6 +84,8 @@ public class VotingConfiguration
                 if (!string.IsNullOrWhiteSpace(kv.Value)) ids.Add(kv.Key);
             if (UseSharedCredentials)
                 foreach (var id in MindAtticCredentialStore.ListProviders()) ids.Add(id);
+            if (AllowedProviderIds is { Count: > 0 })
+                ids.IntersectWith(AllowedProviderIds);
             return ids.ToList();
         }
     }

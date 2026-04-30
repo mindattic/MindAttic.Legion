@@ -19,6 +19,7 @@ namespace MindAttic.Legion;
 /// </summary>
 public static class PersonaLibrary
 {
+    /// <summary>The 10 vocational archetypes — first axis of the 10×10×10 enriched-persona cube.</summary>
     private static readonly string[] Archetypes =
     {
         "retired schoolteacher",
@@ -33,6 +34,7 @@ public static class PersonaLibrary
         "former military officer",
     };
 
+    /// <summary>The 10 worldviews — second axis of the enriched-persona cube; shapes how the persona reasons.</summary>
     private static readonly string[] Worldviews =
     {
         "cautious traditionalist",
@@ -47,6 +49,7 @@ public static class PersonaLibrary
         "quietly anxious worrier",
     };
 
+    /// <summary>The 10 cultural backgrounds — third axis of the enriched-persona cube; shapes voice and references.</summary>
     private static readonly string[] Backgrounds =
     {
         "rural Midwestern",
@@ -61,8 +64,11 @@ public static class PersonaLibrary
         "Mid-Atlantic suburban",
     };
 
-    // 100 first names spanning genders, generations, and origins.
-    // Combined with 10 letter suffixes (A.-J.) below, this yields 1000 unique names.
+    /// <summary>
+    /// 100 first names spanning genders, generations, and origins. Combined
+    /// with 10 letter suffixes (A.-J.) this yields 1000 unique display names —
+    /// one per enriched persona.
+    /// </summary>
     private static readonly string[] FirstNames =
     {
         "Margaret","Paul","Elaine","Roger","Iris","Curtis","Henrietta","Vincent","Joan","Samuel",
@@ -77,12 +83,17 @@ public static class PersonaLibrary
         "Tomoko","Ranjit","Inara","Thabo","Sibel","Olufemi","Xiao","Demetri","Halimah","Zlatan",
     };
 
+    /// <summary>The pronoun sets cycled through enriched personas (one per persona, deterministic by index).</summary>
     private static readonly string[] PronounSets =
     {
         "she/her", "he/him", "they/them",
     };
 
-    // 50 signature quirks rotated through the 1000 personas (20 personas per quirk).
+    /// <summary>
+    /// 50 signature quirks rotated through the 1000 personas (20 personas per
+    /// quirk). Each persona's prompt names exactly one quirk so even adjacent
+    /// entries in the catalog read like distinct people.
+    /// </summary>
     private static readonly string[] Quirks =
     {
         "Refuses to use first names with people they don't trust.",
@@ -194,6 +205,11 @@ public static class PersonaLibrary
         return result;
     }
 
+    /// <summary>
+    /// Builds the default-persona list — one persona per provider in
+    /// <see cref="LlmProviderCatalog"/>, with an empty personality so the LLM
+    /// speaks as itself with no overlay.
+    /// </summary>
     private static IReadOnlyList<Persona> BuildDefaults() =>
         LlmProviderCatalog.All
             .Select(p => new Persona(
@@ -202,6 +218,12 @@ public static class PersonaLibrary
                 PersonalityMarkdown: ""))
             .ToArray();
 
+    /// <summary>
+    /// Materializes the 1000-persona cube: every (archetype × worldview ×
+    /// background) combination, enriched with a deterministic age, pronoun
+    /// set, and signature quirk so each persona has a unique fingerprint.
+    /// Called lazily on first access and cached for the process lifetime.
+    /// </summary>
     private static IReadOnlyList<Persona> BuildEnriched()
     {
         var personas = new Persona[EnrichedCount];

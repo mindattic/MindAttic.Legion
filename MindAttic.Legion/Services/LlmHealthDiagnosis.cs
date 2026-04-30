@@ -10,6 +10,7 @@ namespace MindAttic.Legion;
 /// </summary>
 public enum LlmHealthDiagnosis
 {
+    /// <summary>Diagnosis could not be determined from the available signals.</summary>
     Unknown = 0,
 
     /// <summary>Provider reachable, key valid, response correct.</summary>

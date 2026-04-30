@@ -27,6 +27,11 @@ public class LegionClient
     private readonly HttpClient http;
     private readonly LegionClientOptions options;
 
+    /// <summary>
+    /// Constructs a LegionClient over the supplied <see cref="HttpClient"/>.
+    /// Pass a custom <paramref name="options"/> to tune retry / circuit-breaker
+    /// behaviour; <c>null</c> uses <see cref="LegionClientOptions.Default"/>.
+    /// </summary>
     public LegionClient(HttpClient http, LegionClientOptions? options = null)
     {
         this.http = http;
@@ -368,6 +373,12 @@ public class LegionClient
 
     // ── Resilience wrapper ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Wraps the supplied action in retry + circuit-breaker policy. Throws
+    /// fast when the per-provider breaker is open; on transient failures retries
+    /// with exponential backoff up to <see cref="LegionClientOptions.MaxRetries"/>;
+    /// on non-transient failures records the failure and rethrows immediately.
+    /// </summary>
     private async Task<T> ExecuteWithResilienceAsync<T>(
         string providerId,
         Func<Task<T>> action,
@@ -407,6 +418,12 @@ public class LegionClient
         }
     }
 
+    /// <summary>
+    /// Classifies an exception as transient (worth retrying) — network errors
+    /// without an HTTP status, 408 / 429 / 5xx, and request-timeout
+    /// <see cref="TaskCanceledException"/> (user cancellations are filtered
+    /// out earlier). Everything else is treated as non-transient.
+    /// </summary>
     private static bool IsTransient(Exception ex)
     {
         if (ex is HttpRequestException hre)
@@ -420,6 +437,11 @@ public class LegionClient
         return false;
     }
 
+    /// <summary>
+    /// Reads the per-provider model from <c>providers.json</c> in the shared
+    /// credential store, if present. Returns <c>null</c> when the file is
+    /// missing, malformed, or has no model entry for the provider.
+    /// </summary>
     private static string? ResolveModelFromStore(string providerId)
     {
         try
@@ -443,12 +465,21 @@ public class LegionClient
 
     // ── Provider-specific dispatch ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Single-turn dispatch — wraps the user message in a one-element
+    /// <see cref="ChatTurn"/> list and delegates to <see cref="DispatchChatAsync"/>.
+    /// </summary>
     private Task<string> DispatchAsync(string providerId, string key, string model,
         string system, string user, int maxTokens, double temperature, CancellationToken ct)
         => DispatchChatAsync(providerId, key, model,
             new[] { new ChatTurn("user", user) },
             system, maxTokens, temperature, ct);
 
+    /// <summary>
+    /// Routes the chat call to the right provider-specific implementation —
+    /// Claude / Gemini / Cohere have bespoke wire shapes; everything else uses
+    /// the OpenAI-compatible <c>/v1/chat/completions</c> shape.
+    /// </summary>
     private Task<string> DispatchChatAsync(string providerId, string key, string model,
         IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
@@ -460,6 +491,12 @@ public class LegionClient
             _        => CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, ct),
         };
 
+    /// <summary>
+    /// Anthropic Messages API call. Sends auth via <c>x-api-key</c> +
+    /// <c>anthropic-version</c> headers; routes the system prompt to the
+    /// top-level <c>system</c> field (omitted when blank); strips any
+    /// <c>system</c>-role turns from the messages array.
+    /// </summary>
     private async Task<string> CallClaudeChatAsync(
         string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
@@ -486,6 +523,11 @@ public class LegionClient
             .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
 
+    /// <summary>
+    /// Google Gemini <c>generateContent</c> call. Auth goes in the query string
+    /// (<c>?key=...</c>), system prompt goes to <c>systemInstruction</c>, and
+    /// the assistant role is renamed from "assistant" to "model" per Gemini's schema.
+    /// </summary>
     private async Task<string> CallGeminiChatAsync(
         string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
@@ -522,6 +564,11 @@ public class LegionClient
             .GetProperty("text").GetString() ?? "";
     }
 
+    /// <summary>
+    /// Cohere v2 chat call. Bearer auth; system prompt is prepended as a
+    /// <c>system</c>-role message. Response text is read from
+    /// <c>message.content[0].text</c>.
+    /// </summary>
     private async Task<string> CallCohereChatAsync(
         string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
@@ -546,6 +593,12 @@ public class LegionClient
             .GetProperty("text").GetString() ?? "";
     }
 
+    /// <summary>
+    /// Generic OpenAI-compatible <c>/v1/chat/completions</c> call. Used by
+    /// OpenAI, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks —
+    /// everyone whose wire shape mirrors OpenAI's. Bearer auth; system prompt
+    /// is prepended as a <c>system</c>-role message.
+    /// </summary>
     private async Task<string> CallOpenAiCompatibleChatAsync(
         string providerId, string key, string model, IReadOnlyList<ChatTurn> messages,
         string? systemPrompt, int maxTokens, double temperature, CancellationToken ct)

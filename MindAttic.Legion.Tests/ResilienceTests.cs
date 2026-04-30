@@ -6,6 +6,12 @@ using NUnit.Framework;
 
 namespace MindAttic.Legion.Tests;
 
+/// <summary>
+/// Pins down the retry, circuit-breaker, and fallback-chain behaviour of
+/// <see cref="LegionClient"/>. Covers transient-vs-non-transient
+/// classification, retry exhaustion, breaker opening / resetting on success,
+/// the "no resilience" preset, and multi-provider fallback.
+/// </summary>
 [TestFixture]
 public class ResilienceTests
 {
@@ -186,10 +192,13 @@ public class ResilienceTests
 
     // ── handlers ────────────────────────────────────────────────────────────────
 
+    /// <summary>Always replies with the same status code; counts every call.</summary>
     internal sealed class RepeatingHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode code;
+        /// <summary>Number of requests this handler has received.</summary>
         public int CallCount;
+        /// <summary>Constructs a handler that always returns <paramref name="code"/>.</summary>
         public RepeatingHandler(HttpStatusCode code) => this.code = code;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken c)
         {
@@ -198,10 +207,16 @@ public class ResilienceTests
         }
     }
 
+    /// <summary>
+    /// Returns each scripted (status, body) step in order, then keeps replaying
+    /// the last step (with body "exhausted" if no steps were provided).
+    /// </summary>
     internal sealed class ScriptedHandler : HttpMessageHandler
     {
         private readonly Queue<(HttpStatusCode Code, string Body)> script;
+        /// <summary>Number of requests this handler has received.</summary>
         public int CallCount;
+        /// <summary>Constructs a handler with the supplied response sequence.</summary>
         public ScriptedHandler(params (HttpStatusCode Code, string Body)[] steps) =>
             script = new Queue<(HttpStatusCode Code, string Body)>(steps);
 
@@ -218,9 +233,14 @@ public class ResilienceTests
         }
     }
 
+    /// <summary>
+    /// Routes responses by URL substring match — lets one HttpClient simulate
+    /// multiple providers behaving differently in the same fallback chain.
+    /// </summary>
     internal sealed class ProviderAwareHandler : HttpMessageHandler
     {
         private readonly Dictionary<string, (HttpStatusCode Code, string Body)> map = new();
+        /// <summary>Configure the response when the request URI contains <paramref name="contains"/>.</summary>
         public void SetForUri(string contains, HttpStatusCode code, string body) =>
             map[contains] = (code, body);
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken c)

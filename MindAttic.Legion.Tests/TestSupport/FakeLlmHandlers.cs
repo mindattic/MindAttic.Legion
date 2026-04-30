@@ -10,12 +10,18 @@ namespace MindAttic.Legion.Tests.TestSupport;
 /// </summary>
 internal static class Bodies
 {
+    /// <summary>Claude success body whose extracted text is the probe answer "Hello World!".</summary>
     public const string ClaudeOk      = """{"content":[{"text":"Hello World!"}]}""";
+    /// <summary>OpenAI-compatible success body whose extracted text is "Hello World!".</summary>
     public const string OpenAiOk      = """{"choices":[{"message":{"content":"Hello World!"}}]}""";
+    /// <summary>Gemini success body whose extracted text is "Hello World!".</summary>
     public const string GeminiOk      = """{"candidates":[{"content":{"parts":[{"text":"Hello World!"}]}}]}""";
+    /// <summary>Cohere v2 success body whose extracted text is "Hello World!".</summary>
     public const string CohereOk      = """{"message":{"content":[{"text":"Hello World!"}]}}""";
 
+    /// <summary>Claude success body whose extracted text deliberately fails the probe match.</summary>
     public const string ClaudeWrong   = """{"content":[{"text":"goodbye"}]}""";
+    /// <summary>OpenAI success body whose extracted text deliberately fails the probe match.</summary>
     public const string OpenAiWrong   = """{"choices":[{"message":{"content":"farewell"}}]}""";
 
     /// <summary>Body OpenAI returns when the account is out of credit (insufficient_quota).</summary>
@@ -24,14 +30,19 @@ internal static class Bodies
     /// <summary>Body Anthropic returns when credit balance is too low.</summary>
     public const string ClaudeCreditLow = """{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}""";
 
+    /// <summary>Generic 401 body — provider rejects the supplied API key as invalid.</summary>
     public const string AuthInvalidBody = """{"error":{"message":"Incorrect API key provided.","type":"invalid_request_error","code":"invalid_api_key"}}""";
 
+    /// <summary>Generic 5xx body indicating the provider had an internal error.</summary>
     public const string ServerErrorBody = """{"error":{"message":"The server had an error while processing your request"}}""";
 
+    /// <summary>Body that is not valid JSON — used to assert <see cref="LlmHealthDiagnosis.BadResponse"/>.</summary>
     public const string MalformedJson = "this is not json {{ at all";
 
+    /// <summary>Empty response body — used for status-only failure scenarios.</summary>
     public const string EmptyResponse = "";
 
+    /// <summary>Valid JSON but missing the fields Legion's parser expects.</summary>
     public const string EmptyJsonObject = "{}";
 }
 
@@ -45,6 +56,7 @@ internal sealed class FixedResponseHandler : HttpMessageHandler
     private readonly HttpStatusCode code;
     private readonly string body;
 
+    /// <summary>Number of requests this handler has received.</summary>
     public int CallCount;
 
     /// <summary>Snapshots of every captured request body — read these instead of
@@ -55,6 +67,7 @@ internal sealed class FixedResponseHandler : HttpMessageHandler
     /// <summary>Captured URI / method / headers per request.</summary>
     public List<RequestSnapshot> Requests { get; } = new();
 
+    /// <summary>Constructs a handler that always returns the supplied status and body.</summary>
     public FixedResponseHandler(HttpStatusCode code, string body)
     {
         this.code = code;
@@ -76,6 +89,11 @@ internal sealed class FixedResponseHandler : HttpMessageHandler
 }
 
 /// <summary>Frozen snapshot of an outgoing request, safe to read after the request is disposed.</summary>
+/// <param name="Uri">Target URI, including query string.</param>
+/// <param name="Method">HTTP method (e.g. "GET", "POST").</param>
+/// <param name="Headers">Request headers, case-insensitive.</param>
+/// <param name="AuthScheme">Authorization scheme (e.g. "Bearer"); null if absent.</param>
+/// <param name="AuthValue">Authorization parameter (the token); null if absent.</param>
 internal sealed record RequestSnapshot(
     Uri Uri,
     string Method,
@@ -83,6 +101,7 @@ internal sealed record RequestSnapshot(
     string? AuthScheme,
     string? AuthValue)
 {
+    /// <summary>Captures the supplied <see cref="HttpRequestMessage"/> into a frozen snapshot.</summary>
     public static RequestSnapshot From(HttpRequestMessage req)
     {
         var headers = req.Headers.ToDictionary(
@@ -105,8 +124,10 @@ internal sealed record RequestSnapshot(
 internal sealed class NetworkFailureHandler : HttpMessageHandler
 {
     private readonly string message;
+    /// <summary>Number of requests this handler has received.</summary>
     public int CallCount;
 
+    /// <summary>Constructs a handler that throws with the supplied error message.</summary>
     public NetworkFailureHandler(string message = "No such host is known.") => this.message = message;
 
     protected override Task<HttpResponseMessage> SendAsync(
@@ -124,6 +145,7 @@ internal sealed class NetworkFailureHandler : HttpMessageHandler
 /// </summary>
 internal sealed class HangingHandler : HttpMessageHandler
 {
+    /// <summary>Number of requests this handler has received.</summary>
     public int CallCount;
 
     protected override async Task<HttpResponseMessage> SendAsync(
@@ -143,10 +165,14 @@ internal sealed class HangingHandler : HttpMessageHandler
 internal sealed class ScriptedHandler : HttpMessageHandler
 {
     private readonly List<(HttpStatusCode Code, string Body)> steps;
+    /// <summary>Number of requests this handler has received.</summary>
     public int CallCount;
+    /// <summary>Captured request bodies, one entry per call.</summary>
     public List<string> Bodies { get; } = new();
+    /// <summary>Captured request snapshots, one entry per call.</summary>
     public List<RequestSnapshot> Requests { get; } = new();
 
+    /// <summary>Constructs a handler with the supplied response sequence.</summary>
     public ScriptedHandler(params (HttpStatusCode Code, string Body)[] steps) =>
         this.steps = new List<(HttpStatusCode, string)>(steps);
 
@@ -173,9 +199,12 @@ internal sealed class ScriptedHandler : HttpMessageHandler
 internal sealed class ProviderAwareHandler : HttpMessageHandler
 {
     private readonly Dictionary<string, (HttpStatusCode Code, string Body)> map = new();
+    /// <summary>Number of requests this handler has received.</summary>
     public int CallCount;
+    /// <summary>Every request URI seen, in arrival order.</summary>
     public List<Uri> CalledUris { get; } = new();
 
+    /// <summary>Configure the response when the request URI contains <paramref name="uriContains"/>.</summary>
     public void SetForUri(string uriContains, HttpStatusCode code, string body) =>
         map[uriContains] = (code, body);
 
@@ -201,9 +230,14 @@ internal sealed class ProviderAwareHandler : HttpMessageHandler
 /// </summary>
 internal sealed class TempCredentialScope : IDisposable
 {
+    /// <summary>The temp directory that backs the scoped credential store.</summary>
     public string Directory { get; }
     private readonly string? prev;
 
+    /// <summary>
+    /// Creates a fresh temp directory and points <c>MINDATTIC_LLM_CREDENTIALS</c>
+    /// at it; remembers the previous value so it can be restored on dispose.
+    /// </summary>
     public TempCredentialScope()
     {
         Directory = Path.Combine(Path.GetTempPath(), "legion-test-" + Guid.NewGuid().ToString("N"));
@@ -212,9 +246,11 @@ internal sealed class TempCredentialScope : IDisposable
         Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", Directory);
     }
 
+    /// <summary>Writes a per-provider <c>.key</c> file inside the scoped directory.</summary>
     public void WriteKey(string providerId, string key) =>
         File.WriteAllText(Path.Combine(Directory, providerId + ".key"), key);
 
+    /// <summary>Restores the previous <c>MINDATTIC_LLM_CREDENTIALS</c> and deletes the temp directory.</summary>
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", prev);
@@ -228,6 +264,10 @@ internal sealed class TempCredentialScope : IDisposable
 /// </summary>
 internal static class TestOptions
 {
+    /// <summary>
+    /// Builds a <see cref="LegionClientOptions"/> with effectively no backoff,
+    /// no breaker, and the supplied retry count (default 0).
+    /// </summary>
     public static LegionClientOptions Instant(int retries = 0) => new()
     {
         MaxRetries = retries,

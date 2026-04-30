@@ -11,6 +11,11 @@ public class LlmVotingProvider
     private readonly LegionClient client;
     private readonly VotingConfiguration config;
 
+    /// <summary>
+    /// Constructs the voting provider. Sets the underlying
+    /// <see cref="HttpClient"/>'s timeout to <see cref="VotingConfiguration.ProviderTimeout"/>
+    /// and wraps the client in a <see cref="LegionClient"/>.
+    /// </summary>
     public LlmVotingProvider(HttpClient http, VotingConfiguration config)
     {
         http.Timeout = config.ProviderTimeout;

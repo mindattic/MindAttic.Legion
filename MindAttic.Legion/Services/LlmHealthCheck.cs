@@ -5,6 +5,18 @@ namespace MindAttic.Legion;
 /// <summary>
 /// Status of one provider after a health probe.
 /// </summary>
+/// <param name="ProviderId">Canonical provider id (e.g. "claude", "openai").</param>
+/// <param name="DisplayName">User-facing name (e.g. "Claude", "ChatGPT").</param>
+/// <param name="HasCredential">True if a key was found in the credential store.</param>
+/// <param name="IsHealthy">True if the probe call completed without throwing.</param>
+/// <param name="RespondedCorrectly">True if the reply matched the expected probe answer.</param>
+/// <param name="ElapsedMilliseconds">Wall time of the probe call in milliseconds.</param>
+/// <param name="Response">Raw reply text (null on failure).</param>
+/// <param name="ErrorMessage">Exception message when the probe failed.</param>
+/// <param name="DashboardUrl">Provider's usage / billing dashboard URL.</param>
+/// <param name="KeysUrl">Provider's API-keys management URL.</param>
+/// <param name="Diagnosis">Structured failure category — see <see cref="LlmHealthDiagnoser"/>.</param>
+/// <param name="HttpStatusCode">HTTP status code of the response, when known.</param>
 public sealed record LlmHealthResult(
     string ProviderId,
     string DisplayName,
@@ -52,6 +64,10 @@ public class LlmHealthCheck
 
     private readonly LegionClient client;
 
+    /// <summary>
+    /// Constructs a health check that issues probe calls through the supplied
+    /// <see cref="LegionClient"/>.
+    /// </summary>
     public LlmHealthCheck(LegionClient client)
     {
         this.client = client;

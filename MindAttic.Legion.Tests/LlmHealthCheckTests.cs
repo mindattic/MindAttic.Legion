@@ -5,6 +5,10 @@ using NUnit.Framework;
 
 namespace MindAttic.Legion.Tests;
 
+/// <summary>
+/// Behavioural tests for <see cref="LlmHealthCheck"/>: missing-key, correct /
+/// wrong reply, HTTP error, multi-provider sweep, and id deduplication.
+/// </summary>
 [TestFixture]
 public class LlmHealthCheckTests
 {

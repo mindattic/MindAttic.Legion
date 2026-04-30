@@ -221,6 +221,10 @@ public static class MindAtticCredentialStore
         return result;
     }
 
+    /// <summary>
+    /// Reads providers.json and returns the <c>apiKey</c> for
+    /// <paramref name="providerId"/>, or <c>null</c> if absent.
+    /// </summary>
     private static string? TryReadProvidersJsonKey(string providerId)
     {
         var providers = LoadProvidersRawSafe();
@@ -229,6 +233,11 @@ public static class MindAtticCredentialStore
             : null;
     }
 
+    /// <summary>
+    /// Pulls the <c>apiKey</c> string out of one provider's per-provider JSON
+    /// object. Returns <c>null</c> on missing field, malformed JSON, or any
+    /// other read failure.
+    /// </summary>
     private static string? ExtractApiKeyFromProviderJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
@@ -246,6 +255,12 @@ public static class MindAtticCredentialStore
         return null;
     }
 
+    /// <summary>
+    /// Builds the per-provider JSON object for <see cref="SetKey"/>: replaces
+    /// only the <c>apiKey</c>, preserves any existing <c>type</c> /
+    /// <c>model</c> / <c>maxTokens</c>. When no <c>type</c> is set, infers it
+    /// from the provider id (anthropic / google / bearer).
+    /// </summary>
     private static string MergeApiKeyIntoProviderJson(string? existingJson, string providerId, string apiKey)
     {
         // Preserve type/model/maxTokens; replace only apiKey.
@@ -287,6 +302,11 @@ public static class MindAtticCredentialStore
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    /// <summary>
+    /// Writes the supplied map of providerId → raw per-provider JSON to
+    /// providers.json, sorted alphabetically and pretty-printed. Reuses each
+    /// entry's existing JSON when parseable; substitutes <c>{}</c> when not.
+    /// </summary>
     private static void WriteProvidersJson(IDictionary<string, string> providers)
     {
         using var ms = new MemoryStream();
@@ -314,12 +334,18 @@ public static class MindAtticCredentialStore
 
     // ── small helpers ───────────────────────────────────────────────────────────
 
+    /// <summary>Reads a text file, swallowing any IO error and returning <c>null</c>.</summary>
     private static string? ReadFileSafe(string path)
     {
         try { return File.ReadAllText(path); }
         catch { return null; }
     }
 
+    /// <summary>
+    /// Parses the legacy flat <c>credentials.json</c> format (a top-level
+    /// providerId → key map) into a dictionary. Returns an empty dictionary on
+    /// any read or parse error.
+    /// </summary>
     private static Dictionary<string, string> ParseFlatJsonSafe(string path)
     {
         try

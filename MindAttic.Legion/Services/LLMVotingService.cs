@@ -37,6 +37,11 @@ public class LLMVotingService
     private readonly VotingConfiguration config;
     private readonly ILogger<LLMVotingService> log;
 
+    /// <summary>
+    /// Constructs the voting service. Typically registered via
+    /// <see cref="ServiceCollectionExtensions.AddLLMVoting(Microsoft.Extensions.DependencyInjection.IServiceCollection, VotingConfiguration)"/>
+    /// — apps shouldn't normally new this up directly.
+    /// </summary>
     public LLMVotingService(
         LlmVotingProvider provider,
         VotingConfiguration config,
@@ -166,6 +171,12 @@ public class LLMVotingService
 
     // ── Core vote execution ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Core orchestration for a non-scored vote: builds per-voter prompts, fires
+    /// every voter call in parallel, and tallies results via either the
+    /// choice-vote tally (when options were supplied) or the free-form tally
+    /// (which may invoke a judge LLM to synthesize narrative consensus).
+    /// </summary>
     private async Task<VotingResult> RunVoteAsync(
         VoteRequest request,
         Quorum quorum,
@@ -182,7 +193,15 @@ public class LLMVotingService
         // Build system prompt per voter (persona + task)
         var isChoice = request.Options.Count > 0;
         var tasks = voters.Select(v => CallVoterAsync(v, request, isChoice, ct)).ToList();
-        var individualVotes = await Task.WhenAll(tasks);
+        var initialVotes = await Task.WhenAll(tasks);
+
+        // Refill failed voter slots with extra instances of the providers that
+        // succeeded. A failed slot becomes a fresh dispatch to one of the
+        // surviving providers (round-robin), so quorum size is preserved when
+        // a provider is briefly unreachable. Capped at one refill pass per
+        // failed slot to avoid retry storms.
+        var individualVotes = await RefillFailedVotersAsync(
+            initialVotes, voters, request, isChoice, ct);
 
         var successful = individualVotes.Where(v => !v.IsError).ToList();
         if (successful.Count == 0)
@@ -202,6 +221,13 @@ public class LLMVotingService
         return result;
     }
 
+    /// <summary>
+    /// Core orchestration for a scored vote: every voter scores every dimension
+    /// 1-10, scores are averaged per dimension, dimensions below
+    /// <see cref="ScoredVoteRequest.FailureThreshold"/> are flagged, and a
+    /// judge LLM optionally synthesizes improvement directives from the
+    /// aggregated reasoning.
+    /// </summary>
     private async Task<ScoredVotingResult> RunScoredVoteAsync(
         ScoredVoteRequest request,
         List<VoterProfile> voters,
@@ -295,8 +321,78 @@ public class LLMVotingService
         };
     }
 
+    /// <summary>
+    /// For every error vote in <paramref name="initial"/>, dispatch a fresh
+    /// call to one of the providers that succeeded (round-robin). The refill
+    /// pool is restricted to providers in <see cref="VotingConfiguration.AllowedProviderIds"/>
+    /// — an erroring slot is never replaced by a provider outside the
+    /// whitelist. If every provider failed, returns the original results
+    /// unchanged.
+    /// </summary>
+    private async Task<VoteResult[]> RefillFailedVotersAsync(
+        VoteResult[] initial,
+        List<VoterProfile> voters,
+        VoteRequest request,
+        bool isChoice,
+        CancellationToken ct)
+    {
+        var working = initial
+            .Where(v => !v.IsError)
+            .Select(v => v.ProviderId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(id => config.AllowedProviderIds.Count == 0
+                || config.AllowedProviderIds.Contains(id))
+            .ToList();
+
+        var failedIndices = initial
+            .Select((v, i) => (v, i))
+            .Where(x => x.v.IsError)
+            .Select(x => x.i)
+            .ToList();
+
+        if (working.Count == 0 || failedIndices.Count == 0)
+            return initial;
+
+        log.LogInformation(
+            "LLMVoting: refilling {Count} failed voter slot(s) with instances of {Working}",
+            failedIndices.Count, string.Join(",", working));
+
+        var refillTasks = new List<(int slot, Task<VoteResult> task)>();
+        for (var i = 0; i < failedIndices.Count; i++)
+        {
+            var slot          = failedIndices[i];
+            var refillProvider = working[i % working.Count];
+            var refillVoter   = new VoterProfile
+            {
+                ProviderId          = refillProvider,
+                Name                = $"{voters[slot].Name}#refill-{refillProvider}",
+                PersonalityMarkdown = voters[slot].PersonalityMarkdown,
+            };
+            refillTasks.Add((slot, CallVoterAsync(refillVoter, request, isChoice, ct)));
+        }
+
+        await Task.WhenAll(refillTasks.Select(t => t.task));
+
+        var combined = initial.ToArray();
+        foreach (var (slot, task) in refillTasks)
+        {
+            var refilled = await task;
+            if (!refilled.IsError) combined[slot] = refilled;
+            // If the refill itself errors, keep the original error vote so the
+            // failure is still visible in the report.
+        }
+        return combined;
+    }
+
     // ── Individual voter calls ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Builds the per-voter prompts, makes the LLM call, and parses the JSON
+    /// reply into a <see cref="VoteResult"/>. Any exception is captured into
+    /// a <see cref="VoteResult"/> with <see cref="VoteResult.IsError"/> set so
+    /// one voter's failure doesn't abort the whole panel.
+    /// </summary>
     private async Task<VoteResult> CallVoterAsync(
         VoterProfile voter, VoteRequest request, bool isChoice, CancellationToken ct)
     {
@@ -322,6 +418,11 @@ public class LLMVotingService
         }
     }
 
+    /// <summary>
+    /// Scored variant of <see cref="CallVoterAsync"/> — builds the rubric prompt,
+    /// calls the LLM, parses the JSON reply (scores + flags + best/worst
+    /// moments), and captures any exception as an error vote.
+    /// </summary>
     private async Task<VoteResult> CallScoredVoterAsync(
         VoterProfile voter, ScoredVoteRequest request, CancellationToken ct)
     {
@@ -350,6 +451,10 @@ public class LLMVotingService
 
     // ── Prompt builders ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Builds the voter's system prompt: optional persona overlay first, then
+    /// the task instructions and a JSON output schema (choice or free-form).
+    /// </summary>
     private static string BuildVoterSystemPrompt(VoterProfile voter, VoteRequest request, bool isChoice)
     {
         var sb = new StringBuilder();
@@ -393,6 +498,10 @@ public class LLMVotingService
         return sb.ToString().Trim();
     }
 
+    /// <summary>
+    /// Builds the voter's user message — context (when supplied), the question,
+    /// and a bullet list of options (for choice votes).
+    /// </summary>
     private static string BuildVoterUserMessage(VoteRequest request, bool isChoice)
     {
         var sb = new StringBuilder();
@@ -413,6 +522,12 @@ public class LLMVotingService
         return sb.ToString().Trim();
     }
 
+    /// <summary>
+    /// Builds the scored voter's system prompt: persona overlay (if any) + the
+    /// caller's <see cref="ScoredVoteRequest.EvaluatorContext"/> domain framing,
+    /// or a generic evaluator framing when none is supplied. Always appends the
+    /// strict JSON schema the parser expects.
+    /// </summary>
     private static string BuildScoredVoterSystemPrompt(VoterProfile voter, ScoredVoteRequest request)
     {
         var sb = new StringBuilder();
@@ -453,6 +568,10 @@ public class LLMVotingService
         return sb.ToString().Trim();
     }
 
+    /// <summary>
+    /// Builds the scored voter's user message — context (when supplied) and
+    /// the topic to evaluate.
+    /// </summary>
     private static string BuildScoredVoterUserMessage(ScoredVoteRequest request)
     {
         var sb = new StringBuilder();
@@ -468,6 +587,12 @@ public class LLMVotingService
 
     // ── Response parsers ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Parses a voter's raw JSON reply into a <see cref="VoteResult"/>. For
+    /// choice votes, snaps the decision to the closest exact option (case-
+    /// insensitive). On parse failure, returns a fallback result with the raw
+    /// text truncated to 200 chars rather than erroring out the whole panel.
+    /// </summary>
     private static VoteResult ParseVoteResponse(
         VoterProfile voter, string raw, VoteRequest request, bool isChoice)
     {
@@ -500,18 +625,30 @@ public class LLMVotingService
         }
         catch
         {
-            // Fallback: use the raw response as free-form decision
+            // Fallback: the LLM returned something that doesn't match the
+            // wrapped {decision, reasoning, confidence} schema — most often a
+            // naked JSON array or markdown-fenced JSON. Preserve the full raw
+            // text in Decision so downstream consumers (fact extractor,
+            // contradiction detector) can parse arrays out of it. Capped at
+            // 100k chars to bound memory.
+            var trimmed = raw.Trim();
             return new VoteResult
             {
                 VoterId    = voter.VoterId,
                 VoterName  = voter.Name,
                 ProviderId = voter.ProviderId,
-                Decision   = raw.Trim()[..Math.Min(200, raw.Trim().Length)],
+                Decision   = trimmed.Length > 100_000 ? trimmed[..100_000] : trimmed,
                 Reasoning  = "Response parsing failed — using raw text.",
             };
         }
     }
 
+    /// <summary>
+    /// Parses a scored voter's raw JSON reply into a <see cref="VoteResult"/>:
+    /// extracts per-dimension scores (clamped to 1-10), reasoning, best/worst
+    /// moments, flags, and the improvement directive. On parse failure, the
+    /// vote is marked as an error.
+    /// </summary>
     private static VoteResult ParseScoredVoteResponse(
         VoterProfile voter, string raw, List<string> dimensions)
     {
@@ -574,6 +711,11 @@ public class LLMVotingService
 
     // ── Aggregation ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Tallies a choice vote by majority count. Computes the winner, the
+    /// fraction agreeing, whether the quorum threshold is met, and collects
+    /// each dissenter's reasoning.
+    /// </summary>
     private VotingResult TallyChoiceVote(
         VoteRequest request, Quorum quorum,
         List<VoteResult> votes, Stopwatch sw)
@@ -607,6 +749,11 @@ public class LLMVotingService
         };
     }
 
+    /// <summary>
+    /// Tallies a free-form vote by handing the individual responses to a judge
+    /// LLM that synthesizes a single consensus answer + narrative. Falls back
+    /// to the first response when there's only one voter or synthesis fails.
+    /// </summary>
     private async Task<VotingResult> TallyFreeFormVoteAsync(
         VoteRequest request, Quorum quorum,
         List<VoteResult> votes, Stopwatch sw,
@@ -661,6 +808,12 @@ public class LLMVotingService
 
     // ── Judge calls ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Calls the configured judge LLM with all individual votes and asks it to
+    /// emit a JSON object with <c>consensus</c> + <c>narrative</c> fields.
+    /// Returns the first vote's decision and an empty narrative if synthesis
+    /// fails — the caller is responsible for higher-level error handling.
+    /// </summary>
     private async Task<(string consensus, string narrative)> SynthesizeConsensusAsync(
         string question, List<VoteResult> votes, Quorum quorum, CancellationToken ct)
     {
@@ -704,6 +857,10 @@ public class LLMVotingService
         }
     }
 
+    /// <summary>
+    /// Calls the judge LLM to distil 3-5 actionable improvement directives from
+    /// the aggregated scored-voter feedback. Returns the parsed JSON array.
+    /// </summary>
     private async Task<List<string>> SynthesizeImprovementDirectivesAsync(
         string topic,
         string voteTexts,
@@ -742,6 +899,11 @@ public class LLMVotingService
             .ToList();
     }
 
+    /// <summary>
+    /// Resolves the judge provider — preferred provider from
+    /// <see cref="VotingConfiguration.JudgeProviderId"/> when its key is
+    /// available, otherwise the first active provider, otherwise "claude".
+    /// </summary>
     private string GetJudgeProviderId()
     {
         var preferred = config.JudgeProviderId;
@@ -752,6 +914,10 @@ public class LLMVotingService
 
     // ── Utilities ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Builds a "no consensus" <see cref="VotingResult"/> with the supplied
+    /// reason as the consensus text — used for the no-voters and all-voters-failed paths.
+    /// </summary>
     private static VotingResult EmptyResult(string question, Quorum quorum, TimeSpan duration, string reason) =>
         new()
         {
@@ -762,6 +928,12 @@ public class LLMVotingService
             Duration      = duration,
         };
 
+    /// <summary>
+    /// Extracts the first balanced JSON object from <paramref name="text"/> by
+    /// slicing between the outermost <c>{</c> and <c>}</c>. Tolerates LLMs that
+    /// wrap their JSON in prose preamble or backtick code fences. Returns
+    /// <c>"{}"</c> when no object is found so the caller's parser doesn't NPE.
+    /// </summary>
     private static string ExtractJson(string text)
     {
         var start = text.IndexOf('{');
@@ -769,6 +941,11 @@ public class LLMVotingService
         return start >= 0 && end > start ? text[start..(end + 1)] : "{}";
     }
 
+    /// <summary>
+    /// Same as <see cref="ExtractJson"/> but for a top-level JSON array —
+    /// slices between the outermost <c>[</c> and <c>]</c>, returning <c>"[]"</c>
+    /// on miss.
+    /// </summary>
     private static string ExtractJsonArray(string text)
     {
         var start = text.IndexOf('[');

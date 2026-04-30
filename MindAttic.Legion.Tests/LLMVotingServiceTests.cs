@@ -14,6 +14,7 @@ namespace MindAttic.Legion.Tests;
 
 // ── Model tests ───────────────────────────────────────────────────────────────
 
+/// <summary>Pins down the threshold each <see cref="Quorum"/> value reports.</summary>
 [TestFixture]
 public class QuorumTests
 {
@@ -27,6 +28,10 @@ public class QuorumTests
     public void Unanimous_HasOneHundredPercent()    => Assert.That(Quorum.Unanimous.Threshold(),      Is.EqualTo(1.00));
 }
 
+/// <summary>
+/// Verifies <see cref="VotingConfiguration.ActiveProviderIds"/> filters out
+/// blank keys and only reports providers that have a usable credential.
+/// </summary>
 [TestFixture]
 public class VotingConfigurationTests
 {
@@ -50,6 +55,10 @@ public class VotingConfigurationTests
     }
 }
 
+/// <summary>
+/// Tests <see cref="VoterProfile"/> defaults and the
+/// <see cref="VoterProfile.ForCharacter"/> persona-builder helper.
+/// </summary>
 [TestFixture]
 public class VoterProfileTests
 {
@@ -84,6 +93,10 @@ public class VoterProfileTests
     }
 }
 
+/// <summary>
+/// Tests <see cref="VotingResult"/> / <see cref="ScoredVotingResult"/> default
+/// values and derived properties (e.g. <see cref="VotingResult.SuccessfulVoters"/>).
+/// </summary>
 [TestFixture]
 public class VoteResultTests
 {
@@ -113,6 +126,10 @@ public class VoteResultTests
     }
 }
 
+/// <summary>
+/// Tests <see cref="VoteRequest"/> / <see cref="ScoredVoteRequest"/> defaults
+/// and inheritance (scored requests inherit <c>MaxTokens</c> from the base).
+/// </summary>
 [TestFixture]
 public class VoteRequestTests
 {
@@ -141,6 +158,11 @@ public class VoteRequestTests
 
 // ── Service tests with stub HTTP ──────────────────────────────────────────────
 
+/// <summary>
+/// End-to-end tests for <see cref="LLMVotingService"/> using stub HTTP handlers.
+/// Cover the active-provider list, quorum-not-reached path, choice-vote parsing,
+/// scored-vote aggregation, and persona/character voting.
+/// </summary>
 [TestFixture]
 public class LLMVotingServiceTests
 {
@@ -279,6 +301,13 @@ public class LLMVotingServiceTests
     }
 }
 
+/// <summary>
+/// Filesystem-backed tests for <see cref="MindAtticCredentialStore"/>:
+/// .key file priority, credentials.json fallback, providers.json rich format,
+/// and the resolution order that ties them all together. Each test redirects
+/// the credential directory to a temp folder via the
+/// <c>MINDATTIC_LLM_CREDENTIALS</c> env var so they can run in isolation.
+/// </summary>
 [TestFixture]
 public class MindAtticCredentialStoreTests
 {
@@ -484,6 +513,11 @@ public class MindAtticCredentialStoreTests
 
 // ── Persona library + voter factory ───────────────────────────────────────────
 
+/// <summary>
+/// Invariants for <see cref="PersonaLibrary"/>: persona count, default-vs-enriched
+/// split, unique ids/names, deterministic indexed access, sampling without
+/// replacement, and the diversity skeleton (age, pronouns, signature trait).
+/// </summary>
 [TestFixture]
 public class PersonaLibraryTests
 {
@@ -618,6 +652,12 @@ public class PersonaLibraryTests
     }
 }
 
+/// <summary>
+/// Tests <see cref="VoterFactory.GenerateUniqueVoters"/> — provider-spread
+/// strategy (each available provider before backfill), persona uniqueness
+/// across the panel, and edge cases (zero count, empty provider list,
+/// case-insensitive provider deduplication).
+/// </summary>
 [TestFixture]
 public class VoterFactoryTests
 {

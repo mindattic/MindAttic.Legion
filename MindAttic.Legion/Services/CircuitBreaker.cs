@@ -82,9 +82,19 @@ public static class CircuitBreaker
 /// </summary>
 public sealed class CircuitBreakerOpenException : Exception
 {
+    /// <summary>The provider whose breaker is currently open.</summary>
     public string ProviderId { get; }
+
+    /// <summary>
+    /// Approximate time remaining before the breaker will allow a probe call again.
+    /// Use this to back off intelligently or to decide which fallback to try first.
+    /// </summary>
     public TimeSpan TimeUntilProbe { get; }
 
+    /// <summary>
+    /// Builds a <see cref="CircuitBreakerOpenException"/> with a message that
+    /// names the provider and includes the remaining cooldown in seconds.
+    /// </summary>
     public CircuitBreakerOpenException(string providerId, TimeSpan timeUntilProbe)
         : base($"Circuit breaker open for provider '{providerId}'. Retry in ~{timeUntilProbe.TotalSeconds:F0}s or fall over to another provider.")
     {

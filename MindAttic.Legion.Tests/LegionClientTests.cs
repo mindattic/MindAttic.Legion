@@ -7,6 +7,12 @@ using NUnit.Framework;
 
 namespace MindAttic.Legion.Tests;
 
+/// <summary>
+/// Smoke tests for <see cref="LegionClient"/>. Cover provider-id support,
+/// per-provider request/response shapes, missing-key / unknown-provider error
+/// paths, and model fallback. <see cref="LegionClientWireTests"/> goes deeper
+/// on wire-level details.
+/// </summary>
 [TestFixture]
 public class LegionClientTests
 {
@@ -152,15 +158,26 @@ public class LegionClientTests
 
 // ── shared HTTP test doubles ────────────────────────────────────────────────
 
+/// <summary>
+/// Captures the most recent outgoing request (URI, body, headers, auth) and
+/// always replies with a fixed JSON body. Lets a test inspect what Legion
+/// actually sent on the wire for one call.
+/// </summary>
 internal sealed class CapturingHandler : HttpMessageHandler
 {
     private readonly string body;
+    /// <summary>URI of the last captured request.</summary>
     public Uri? LastUri { get; private set; }
+    /// <summary>Body string of the last captured request.</summary>
     public string? LastBody { get; private set; }
+    /// <summary>Headers of the last captured request (case-insensitive).</summary>
     public IDictionary<string, string>? LastHeaders { get; private set; }
+    /// <summary>Authorization scheme on the last request (e.g. "Bearer").</summary>
     public string? LastAuthScheme { get; private set; }
+    /// <summary>Authorization parameter on the last request (the token after the scheme).</summary>
     public string? LastAuthValue  { get; private set; }
 
+    /// <summary>Constructs a handler that always returns <paramref name="responseBody"/>.</summary>
     public CapturingHandler(string responseBody) => body = responseBody;
 
     protected override async Task<HttpResponseMessage> SendAsync(
@@ -178,9 +195,14 @@ internal sealed class CapturingHandler : HttpMessageHandler
     }
 }
 
+/// <summary>
+/// Always replies with the supplied <see cref="HttpStatusCode"/> and body "err".
+/// Lets tests pin down how Legion handles a specific failure status.
+/// </summary>
 internal sealed class ErrorHandler : HttpMessageHandler
 {
     private readonly HttpStatusCode code;
+    /// <summary>Constructs a handler that always returns the supplied status code.</summary>
     public ErrorHandler(HttpStatusCode code) => this.code = code;
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken) =>

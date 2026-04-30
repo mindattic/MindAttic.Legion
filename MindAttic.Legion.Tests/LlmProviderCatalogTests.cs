@@ -3,6 +3,12 @@ using NUnit.Framework;
 
 namespace MindAttic.Legion.Tests;
 
+/// <summary>
+/// Static checks on <see cref="LlmProviderCatalog"/>: provider count, lookup
+/// case sensitivity, every provider carries the metadata Legion needs (default
+/// model in the available list, https URLs, distinct dashboard/keys URLs), and
+/// model recognition is case-insensitive.
+/// </summary>
 [TestFixture]
 public class LlmProviderCatalogTests
 {
