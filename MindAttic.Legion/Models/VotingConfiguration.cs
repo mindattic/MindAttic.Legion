@@ -66,7 +66,7 @@ public class VotingConfiguration
     /// </summary>
     public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        "claude", "openai", "gemini", "deepseek",
+        "claude", "openai", "deepseek",
     };
 
     /// <summary>
