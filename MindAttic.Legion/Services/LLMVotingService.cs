@@ -127,6 +127,60 @@ public class LLMVotingService
             quorum, characterVoters, ct);
 
     /// <summary>
+    /// Make a decision: Legion picks one option from a fixed list, with reasoning
+    /// and confidence. The cleanest way to delegate a judgment call to the panel.
+    ///
+    /// Internally a <see cref="VoteAsync(VoteRequest,Quorum,CancellationToken)"/>
+    /// over <paramref name="options"/> using <see cref="Quorum.Plurality"/>
+    /// (or <paramref name="quorum"/> if you want stricter agreement). Returns a
+    /// <see cref="DecisionResult"/> distilled from the vote.
+    ///
+    /// Example:
+    /// <code>
+    ///   var d = await voting.DecideAsync(
+    ///       "Which entity field stores Kyle's primary weapon carry location?",
+    ///       new[] { "personality", "equipment[0].carry_location", "tags" },
+    ///       contextJsonOfKyleEntityFile);
+    ///   var fieldPath = d.Choice;
+    /// </code>
+    /// </summary>
+    public async Task<DecisionResult> DecideAsync(
+        string question,
+        IEnumerable<string> options,
+        string context = "",
+        Quorum quorum = Quorum.Plurality,
+        int maxTokens = 512,
+        CancellationToken ct = default)
+    {
+        var optionList = options?.ToList() ?? new List<string>();
+        if (optionList.Count == 0)
+            throw new ArgumentException("DecideAsync requires at least one option.", nameof(options));
+
+        var request = new VoteRequest
+        {
+            Question  = question,
+            Context   = context,
+            Options   = optionList,
+            MaxTokens = maxTokens,
+        };
+        var vr = await VoteAsync(request, quorum, ct);
+
+        return new DecisionResult
+        {
+            Question         = question,
+            Choice           = vr.Consensus ?? "",
+            Reasoning        = vr.NarrativeSummary ?? "",
+            Confidence       = vr.ConsensusStrength,
+            QuorumReached    = vr.QuorumReached,
+            QuorumType       = vr.QuorumType,
+            Options          = optionList,
+            IndividualVotes  = vr.IndividualVotes,
+            DissenterReasons = vr.DissenterReasons,
+            Duration         = vr.Duration,
+        };
+    }
+
+    /// <summary>
     /// Multi-dimensional scoring vote — each voter rates each dimension 1-10.
     /// Returns a <see cref="ScoredVotingResult"/> with aggregate scores, failures, and improvement directives.
     /// </summary>
