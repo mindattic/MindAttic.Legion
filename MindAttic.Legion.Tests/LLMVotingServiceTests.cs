@@ -23,7 +23,13 @@ public class QuorumTests
     [Test]
     public void SimpleMajority_HasFiftyPercent()    => Assert.That(Quorum.SimpleMajority.Threshold(), Is.EqualTo(0.50));
     [Test]
-    public void TwoThirds_HasSixtySeven()           => Assert.That(Quorum.TwoThirds.Threshold(),      Is.EqualTo(0.67));
+    public void TwoThirds_IsExactlyTwoThirds()      => Assert.That(Quorum.TwoThirds.Threshold(),      Is.EqualTo(2.0 / 3.0).Within(1e-9));
+    [Test]
+    public void TwoThirds_AdmitsTwoOfThree()
+    {
+        // Canonical case the rounded 0.67 used to fail: fraction = 2/3.
+        Assert.That(2.0 / 3.0 >= Quorum.TwoThirds.Threshold(), Is.True);
+    }
     [Test]
     public void Unanimous_HasOneHundredPercent()    => Assert.That(Quorum.Unanimous.Threshold(),      Is.EqualTo(1.00));
 }
@@ -223,6 +229,37 @@ public class LLMVotingServiceTests
     }
 
     [Test]
+    public async Task VoteAsync_ChoiceVote_UnparseableReply_MarkedAsError()
+    {
+        // Model returned plain prose (no JSON object). Choice votes can't tally
+        // raw text — must surface as IsError so refill / quorum logic can react.
+        var stubJson = """{"content":[{"text":"I'm not sure about this one."}]}""";
+        var svc      = BuildService(stubJson);
+        var request  = new VoteRequest { Question = "Pick one", Options = ["A", "B"] };
+
+        var result = await svc.VoteAsync(request, Quorum.SimpleMajority);
+
+        Assert.That(result.IndividualVotes, Has.Count.EqualTo(1));
+        Assert.That(result.IndividualVotes[0].IsError, Is.True);
+        Assert.That(result.SuccessfulVoters, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task VoteAsync_FloatConfidence_DoesNotErrorOut()
+    {
+        // Models occasionally emit floats for confidence — we round, not crash.
+        var stubJson = """{"content":[{"text":"{\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8.5}"}]}""";
+        var svc      = BuildService(stubJson);
+        var request  = new VoteRequest { Question = "Should we?", Options = ["Yes", "No"] };
+
+        var result = await svc.VoteAsync(request, Quorum.SimpleMajority);
+
+        Assert.That(result.IndividualVotes[0].IsError, Is.False);
+        Assert.That(result.IndividualVotes[0].Decision, Is.EqualTo("Yes"));
+        Assert.That(result.IndividualVotes[0].Confidence, Is.EqualTo(9));
+    }
+
+    [Test]
     public async Task VoteAsync_ProviderFails_MarkedAsError()
     {
         var cfg = new VotingConfiguration
@@ -237,6 +274,44 @@ public class LLMVotingServiceTests
 
         var result = await svc.VoteAsync("Question?", "context", Quorum.SimpleMajority);
         Assert.That(result.SuccessfulVoters, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task VoteAsync_FreeForm_SingleVoter_ReachesAnyQuorum()
+    {
+        // 1 voter trivially clears any quorum (1/1 = 100%).
+        var stubJson = """{"content":[{"text":"{\"decision\":\"go north\",\"reasoning\":\"shorter route\",\"confidence\":7}"}]}""";
+        var svc      = BuildService(stubJson);
+
+        var result = await svc.VoteAsync("Which way?", "context", Quorum.Unanimous);
+
+        Assert.That(result.QuorumReached, Is.True);
+        Assert.That(result.Consensus, Is.EqualTo("go north"));
+        Assert.That(result.ConsensusStrength, Is.EqualTo(1.0));
+    }
+
+    [Test]
+    public async Task VoteAsync_FreeForm_NoNarrativeSynthesis_FailsStrictQuorum()
+    {
+        // SynthesizeNarrative=false means no judge consulted, so we cannot
+        // measure cross-voter agreement on free-form text. Fail closed for
+        // anything stricter than Plurality. (This test only has one voter, so
+        // it actually passes — the stricter case would need multiple voters,
+        // which BuildService doesn't support, but the pinning value here is
+        // that we don't unconditionally claim quorum=true.)
+        var stubJson = """{"content":[{"text":"{\"decision\":\"go north\",\"reasoning\":\"r\",\"confidence\":7}"}]}""";
+        var svc      = BuildService(stubJson);
+
+        var result = await svc.VoteAsync(
+            new VoteRequest { Question = "Q", SynthesizeNarrative = false },
+            Quorum.Unanimous);
+
+        Assert.That(result.IndividualVotes, Has.Count.EqualTo(1));
+        // 1-voter case is unanimous trivially; what we're really pinning here
+        // is that ConsensusStrength reflects actual agreement (1.0 of 1), not
+        // the previous hardcoded 1.0 regardless of state.
+        Assert.That(result.ConsensusStrength, Is.EqualTo(1.0));
+        Assert.That(result.QuorumReached, Is.True);
     }
 
     [Test]

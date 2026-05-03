@@ -259,7 +259,7 @@ public class LLMVotingService
 
         var successful = individualVotes.Where(v => !v.IsError).ToList();
         if (successful.Count == 0)
-            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.");
+            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.", individualVotes.ToList());
 
         // Tally decisions
         VotingResult result;
@@ -657,14 +657,31 @@ public class LLMVotingService
 
             var decision   = doc.TryGetProperty("decision",   out var d) ? d.GetString() ?? "" : "";
             var reasoning  = doc.TryGetProperty("reasoning",  out var r) ? r.GetString() ?? "" : "";
-            var confidence = doc.TryGetProperty("confidence", out var c) ? c.GetInt32() : 5;
+            var confidence = doc.TryGetProperty("confidence", out var c) && TryReadInt(c, out var ci) ? ci : 5;
 
-            // Validate choice vote
+            // For choice votes, the decision MUST snap to one of the supplied
+            // options. If the model produced no JSON (ExtractJson returned the
+            // empty "{}" sentinel) or named something off-ballot, surface as an
+            // error so RefillFailedVotersAsync can reissue the slot — otherwise
+            // an empty / mismatched decision would silently skew the tally.
             if (isChoice && request.Options.Count > 0)
             {
                 var matched = request.Options.FirstOrDefault(o =>
                     o.Equals(decision, StringComparison.OrdinalIgnoreCase));
-                decision = matched ?? decision;
+                if (matched is null)
+                {
+                    return new VoteResult
+                    {
+                        VoterId      = voter.VoterId,
+                        VoterName    = voter.Name,
+                        ProviderId   = voter.ProviderId,
+                        IsError      = true,
+                        ErrorMessage = string.IsNullOrWhiteSpace(decision)
+                            ? "Choice-vote response missing 'decision' field."
+                            : $"Choice-vote decision '{decision}' did not match any supplied option.",
+                    };
+                }
+                decision = matched;
             }
 
             return new VoteResult
@@ -679,13 +696,27 @@ public class LLMVotingService
         }
         catch
         {
-            // Fallback: the LLM returned something that doesn't match the
-            // wrapped {decision, reasoning, confidence} schema — most often a
-            // naked JSON array or markdown-fenced JSON. Preserve the full raw
-            // text in Decision so downstream consumers (fact extractor,
-            // contradiction detector) can parse arrays out of it. Capped at
-            // 100k chars to bound memory.
             var trimmed = raw.Trim();
+
+            // Choice votes need to land on one of the supplied options.
+            // Returning raw text would silently lose the vote (no exact-match
+            // grouping is possible) and skew the tally — surface it as an
+            // error instead, so RefillFailedVotersAsync can reissue the slot.
+            if (isChoice)
+            {
+                return new VoteResult
+                {
+                    VoterId      = voter.VoterId,
+                    VoterName    = voter.Name,
+                    ProviderId   = voter.ProviderId,
+                    IsError      = true,
+                    ErrorMessage = "Response parsing failed for choice vote — could not extract a decision.",
+                };
+            }
+
+            // Free-form fallback: keep the raw text so downstream consumers
+            // (fact extractor, contradiction detector) can still parse it.
+            // Capped at 100k chars to bound memory.
             return new VoteResult
             {
                 VoterId    = voter.VoterId,
@@ -695,6 +726,29 @@ public class LLMVotingService
                 Reasoning  = "Response parsing failed — using raw text.",
             };
         }
+    }
+
+    /// <summary>
+    /// Tolerate models that emit confidence as a float ("8.5") or string ("8")
+    /// instead of an int. Returns false (and 0) only when the value is missing
+    /// or genuinely non-numeric.
+    /// </summary>
+    private static bool TryReadInt(JsonElement el, out int value)
+    {
+        value = 0;
+        if (el.ValueKind == JsonValueKind.Number)
+        {
+            if (el.TryGetInt32(out value)) return true;
+            if (el.TryGetDouble(out var d)) { value = (int)Math.Round(d, MidpointRounding.AwayFromZero); return true; }
+            return false;
+        }
+        if (el.ValueKind == JsonValueKind.String)
+        {
+            var s = el.GetString();
+            if (int.TryParse(s, out value)) return true;
+            if (double.TryParse(s, out var d)) { value = (int)Math.Round(d, MidpointRounding.AwayFromZero); return true; }
+        }
+        return false;
     }
 
     /// <summary>
@@ -716,8 +770,8 @@ public class LLMVotingService
             {
                 foreach (var dim in dimensions)
                 {
-                    if (scoresEl.TryGetProperty(dim, out var sv))
-                        scores[dim] = Math.Clamp(sv.GetInt32(), 1, 10);
+                    if (scoresEl.TryGetProperty(dim, out var sv) && TryReadInt(sv, out var score))
+                        scores[dim] = Math.Clamp(score, 1, 10);
                 }
             }
 
@@ -776,7 +830,7 @@ public class LLMVotingService
     {
         var successful = votes.Where(v => !v.IsError).ToList();
         if (successful.Count == 0)
-            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.");
+            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.", votes);
 
         var tally = successful
             .GroupBy(v => v.Decision, StringComparer.OrdinalIgnoreCase)
@@ -805,8 +859,11 @@ public class LLMVotingService
 
     /// <summary>
     /// Tallies a free-form vote by handing the individual responses to a judge
-    /// LLM that synthesizes a single consensus answer + narrative. Falls back
-    /// to the first response when there's only one voter or synthesis fails.
+    /// LLM that synthesizes a single consensus answer + narrative + agreement
+    /// count. The judge's <c>agreement_count</c> drives the actual quorum
+    /// check — without that signal we can't measure consensus on free-form
+    /// text, so we fall back to "1 of N agree" (the picked answer agrees with
+    /// itself only). Single-voter votes trivially clear any quorum.
     /// </summary>
     private async Task<VotingResult> TallyFreeFormVoteAsync(
         VoteRequest request, Quorum quorum,
@@ -815,45 +872,54 @@ public class LLMVotingService
     {
         var successful = votes.Where(v => !v.IsError).ToList();
         if (successful.Count == 0)
-            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.");
+            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.", votes);
 
-        // Synthesize consensus from free-form responses
-        string consensus    = "";
-        string narrative    = "";
-        double strength     = 1.0;
+        string consensus      = "";
+        string narrative      = "";
+        int    agreementCount = 1;   // at minimum, the picked answer agrees with itself
 
         if (successful.Count == 1)
         {
             consensus = successful[0].Decision;
             narrative = successful[0].Reasoning;
+            agreementCount = 1;
         }
         else if (request.SynthesizeNarrative)
         {
             try
             {
-                (consensus, narrative) = await SynthesizeConsensusAsync(
+                var synth = await SynthesizeConsensusAsync(
                     request.Question, successful, quorum, ct);
-                // For free-form, strength reflects how many voters the judge agrees with
-                strength = successful.Count > 0 ? 1.0 : 0.0;
+                consensus      = synth.consensus;
+                narrative      = synth.narrative;
+                agreementCount = Math.Clamp(synth.agreementCount, 1, successful.Count);
             }
             catch (Exception ex)
             {
                 log.LogWarning(ex, "LLMVoting: consensus synthesis failed — using first response");
                 consensus = successful[0].Decision;
+                // Judge unavailable: we cannot measure agreement.
+                agreementCount = 1;
             }
         }
         else
         {
-            consensus = successful[0].Decision;
+            // Caller opted out of judge synthesis. Pick the first answer; we
+            // can't measure cross-voter agreement without a judge.
+            consensus      = successful[0].Decision;
+            agreementCount = 1;
         }
+
+        var fraction      = (double)agreementCount / successful.Count;
+        var quorumReached = fraction >= quorum.Threshold();
 
         return new VotingResult
         {
             Question          = request.Question,
             QuorumType        = quorum,
-            QuorumReached     = true,
-            Consensus         = consensus,
-            ConsensusStrength = strength,
+            QuorumReached     = quorumReached,
+            Consensus         = quorumReached ? consensus : "",
+            ConsensusStrength = fraction,
             IndividualVotes   = votes,
             NarrativeSummary  = narrative,
             Duration          = sw.Elapsed,
@@ -864,11 +930,15 @@ public class LLMVotingService
 
     /// <summary>
     /// Calls the configured judge LLM with all individual votes and asks it to
-    /// emit a JSON object with <c>consensus</c> + <c>narrative</c> fields.
-    /// Returns the first vote's decision and an empty narrative if synthesis
-    /// fails — the caller is responsible for higher-level error handling.
+    /// emit a JSON object with <c>consensus</c> + <c>narrative</c> +
+    /// <c>agreement_count</c>. The agreement count is what the caller's quorum
+    /// check is applied against — the judge has read the prose answers and is
+    /// the only thing capable of saying "3 of 5 of these mean the same thing."
+    /// On synthesis failure, returns the first vote's decision with
+    /// <c>agreementCount = 1</c> so quorum logic fails closed instead of
+    /// silently passing.
     /// </summary>
-    private async Task<(string consensus, string narrative)> SynthesizeConsensusAsync(
+    private async Task<(string consensus, string narrative, int agreementCount)> SynthesizeConsensusAsync(
         string question, List<VoteResult> votes, Quorum quorum, CancellationToken ct)
     {
         var judgeProviderId = GetJudgeProviderId();
@@ -879,18 +949,23 @@ public class LLMVotingService
 
         var system = $$"""
             You are a consensus judge. Multiple decision-makers have answered the same question.
-            Your job is to synthesize a single consensus response.
+            Your job is to synthesize a single consensus response and report how many of the
+            {{votes.Count}} voters substantively agree with that consensus.
 
             Rules:
             - An answer must appear in at least {{threshold}}% of responses to form consensus
             - If models substantially agree, state what they agree on
             - Capture the key shared reasoning across responses
             - Note any significant dissent briefly
+            - "agreement_count" is the integer number of voters whose decision matches the
+              consensus you synthesized (0 to {{votes.Count}}); count semantic agreement,
+              not exact-string match
 
             Return ONLY a JSON object:
             {
               "consensus": "<synthesized consensus answer>",
-              "narrative": "<2-3 sentence summary of the vote outcome and key reasoning>"
+              "narrative": "<2-3 sentence summary of the vote outcome and key reasoning>",
+              "agreement_count": <int 0-{{votes.Count}}>
             }
             """;
 
@@ -903,11 +978,13 @@ public class LLMVotingService
             var doc  = JsonDocument.Parse(json).RootElement;
             var consensus = doc.TryGetProperty("consensus", out var c) ? c.GetString() ?? "" : votes[0].Decision;
             var narrative = doc.TryGetProperty("narrative", out var n) ? n.GetString() ?? "" : "";
-            return (consensus, narrative);
+            var agreement = doc.TryGetProperty("agreement_count", out var a) && TryReadInt(a, out var ai) ? ai : 1;
+            return (consensus, narrative, agreement);
         }
         catch
         {
-            return (votes[0].Decision, "");
+            // Fail closed: 1 voter agrees (the one we picked).
+            return (votes[0].Decision, "", 1);
         }
     }
 
@@ -971,15 +1048,19 @@ public class LLMVotingService
     /// <summary>
     /// Builds a "no consensus" <see cref="VotingResult"/> with the supplied
     /// reason as the consensus text — used for the no-voters and all-voters-failed paths.
+    /// Always attaches <paramref name="votes"/> when supplied so consumers can
+    /// inspect the per-voter error messages.
     /// </summary>
-    private static VotingResult EmptyResult(string question, Quorum quorum, TimeSpan duration, string reason) =>
+    private static VotingResult EmptyResult(string question, Quorum quorum, TimeSpan duration, string reason,
+        List<VoteResult>? votes = null) =>
         new()
         {
-            Question      = question,
-            QuorumType    = quorum,
-            QuorumReached = false,
-            Consensus     = reason,
-            Duration      = duration,
+            Question        = question,
+            QuorumType      = quorum,
+            QuorumReached   = false,
+            Consensus       = reason,
+            Duration        = duration,
+            IndividualVotes = votes ?? new List<VoteResult>(),
         };
 
     /// <summary>

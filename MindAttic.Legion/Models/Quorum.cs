@@ -22,12 +22,16 @@ public static class QuorumExtensions
 {
     /// <summary>
     /// Return the minimum fraction of votes required for the quorum to pass.
+    /// <para>
+    /// <see cref="Quorum.TwoThirds"/> is exactly 2/3 (≈0.6666…) so the canonical
+    /// 2-of-3 case clears its own threshold. A rounded 0.67 would fail it.
+    /// </para>
     /// </summary>
     public static double Threshold(this Quorum quorum) => quorum switch
     {
         Quorum.Plurality      => 0.0,
         Quorum.SimpleMajority => 0.50,
-        Quorum.TwoThirds      => 0.67,
+        Quorum.TwoThirds      => 2.0 / 3.0,
         Quorum.Unanimous      => 1.00,
         _                     => 0.50,
     };
