@@ -417,11 +417,16 @@ public class LLMVotingService
         {
             var slot          = failedIndices[i];
             var refillProvider = working[i % working.Count];
+            // Strip the failed voter's PersonalityMarkdown on refill: cloning
+            // it would have a surviving provider vote a second time as the
+            // same character, biasing the tally toward whatever that
+            // character would say. A persona-less raw-LLM refill is the
+            // fairest neutral substitute.
             var refillVoter   = new VoterProfile
             {
                 ProviderId          = refillProvider,
                 Name                = $"{voters[slot].Name}#refill-{refillProvider}",
-                PersonalityMarkdown = voters[slot].PersonalityMarkdown,
+                PersonalityMarkdown = "",
             };
             refillTasks.Add((slot, CallVoterAsync(refillVoter, request, isChoice, ct)));
         }

@@ -26,6 +26,7 @@ public class LegionClient
 {
     private readonly HttpClient http;
     private readonly LegionClientOptions options;
+    private readonly Func<string, string?>? keyResolver;
 
     /// <summary>
     /// Constructs a LegionClient over the supplied <see cref="HttpClient"/>.
@@ -33,9 +34,38 @@ public class LegionClient
     /// behaviour; <c>null</c> uses <see cref="LegionClientOptions.Default"/>.
     /// </summary>
     public LegionClient(HttpClient http, LegionClientOptions? options = null)
+        : this(http, options, keyResolver: null) { }
+
+    /// <summary>
+    /// Constructs a LegionClient with a custom API-key resolver. The shared-
+    /// credentials overloads (<see cref="CallAsync(string,string,string,int,double,string?,CancellationToken)"/>,
+    /// <see cref="CallChatAsync(string,IEnumerable{ChatTurn},string?,int,double,string?,CancellationToken)"/>,
+    /// and <see cref="CallWithFallbackAsync"/>) consult <paramref name="keyResolver"/>
+    /// first and fall back to <see cref="MindAtticCredentialStore.GetKey"/> when
+    /// it returns null. Lets DI hosts unify keys across <c>VotingConfiguration</c>
+    /// and direct LegionClient consumers — without a resolver, the two see
+    /// different stores.
+    /// </summary>
+    public LegionClient(HttpClient http, LegionClientOptions? options, Func<string, string?>? keyResolver)
     {
         this.http = http;
         this.options = options ?? LegionClientOptions.Default;
+        this.keyResolver = keyResolver;
+    }
+
+    /// <summary>
+    /// Resolves a provider's API key from the configured resolver (when set)
+    /// or the shared MindAttic credential store. Returns <c>null</c> when both
+    /// sources are empty.
+    /// </summary>
+    private string? ResolveKey(string providerId)
+    {
+        if (keyResolver is not null)
+        {
+            var resolved = keyResolver(providerId);
+            if (!string.IsNullOrWhiteSpace(resolved)) return resolved;
+        }
+        return MindAtticCredentialStore.GetKey(providerId);
     }
 
     /// <summary>
@@ -123,7 +153,7 @@ public class LegionClient
         CancellationToken ct = default)
     {
         var info = LlmProviderCatalog.Get(providerId);
-        var key = MindAtticCredentialStore.GetKey(providerId);
+        var key = ResolveKey(providerId);
         if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 
@@ -185,7 +215,7 @@ public class LegionClient
         CancellationToken ct = default)
     {
         var info = LlmProviderCatalog.Get(providerId);
-        var key = MindAtticCredentialStore.GetKey(providerId);
+        var key = ResolveKey(providerId);
         if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 

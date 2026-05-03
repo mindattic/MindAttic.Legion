@@ -46,6 +46,14 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<LLMVotingService>();
         services.AddLegionClient();
+        // Replace the typed-client LegionClient registration with one that
+        // also consults VotingConfiguration.ApiKeys, so direct LegionClient
+        // consumers and the voting layer see the same key set.
+        services.AddTransient<LegionClient>(sp =>
+        {
+            var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LegionClient));
+            return new LegionClient(http, options: null, keyResolver: BuildVotingKeyResolver(config));
+        });
         return services;
     }
 
@@ -68,7 +76,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLegionClient(this IServiceCollection services)
     {
         services.AddHttpClient<LegionClient>();
-        services.AddSingleton<LlmHealthCheck>();
+        // LlmHealthCheck is transient on purpose: AddHttpClient<LegionClient>()
+        // registers LegionClient as transient (typed-client default), and a
+        // singleton LlmHealthCheck would capture the first LegionClient ever
+        // resolved -- pinning its underlying HttpMessageHandler indefinitely
+        // and bypassing IHttpClientFactory's handler-rotation policy.
+        services.AddTransient<LlmHealthCheck>();
         return services;
     }
 
@@ -89,6 +102,30 @@ public static class ServiceCollectionExtensions
             return new LlmVotingProvider(http, cfg);
         });
         services.AddSingleton<LLMVotingService>();
+        // Mirror the eager-config overload: any consumer who injects
+        // LegionClient or LlmHealthCheck alongside the voting service should
+        // be able to resolve them without a second registration call.
+        services.AddLegionClient();
+        services.AddTransient<LegionClient>(sp =>
+        {
+            var cfg  = sp.GetRequiredService<VotingConfiguration>();
+            var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LegionClient));
+            return new LegionClient(http, options: null, keyResolver: BuildVotingKeyResolver(cfg));
+        });
         return services;
     }
+
+    /// <summary>
+    /// Builds the LegionClient key-resolver used when voting is registered:
+    /// VotingConfiguration.ApiKeys wins, then the shared store (when
+    /// UseSharedCredentials is on), then null. Mirrors LlmVotingProvider's
+    /// own key-resolution order so direct LegionClient consumers and the
+    /// voting layer agree on which key applies to a given provider.
+    /// </summary>
+    private static Func<string, string?> BuildVotingKeyResolver(VotingConfiguration config) => providerId =>
+    {
+        if (config.ApiKeys.TryGetValue(providerId, out var k) && !string.IsNullOrWhiteSpace(k))
+            return k;
+        return config.UseSharedCredentials ? MindAtticCredentialStore.GetKey(providerId) : null;
+    };
 }

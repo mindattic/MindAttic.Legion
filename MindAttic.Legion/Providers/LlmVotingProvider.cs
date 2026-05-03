@@ -12,13 +12,14 @@ public class LlmVotingProvider
     private readonly VotingConfiguration config;
 
     /// <summary>
-    /// Constructs the voting provider. Sets the underlying
-    /// <see cref="HttpClient"/>'s timeout to <see cref="VotingConfiguration.ProviderTimeout"/>
-    /// and wraps the client in a <see cref="LegionClient"/>.
+    /// Constructs the voting provider. Wraps <paramref name="http"/> in a
+    /// <see cref="LegionClient"/>; <see cref="VotingConfiguration.ProviderTimeout"/>
+    /// is applied per call via a linked <see cref="CancellationTokenSource"/> so
+    /// we don't mutate a shared HttpClient (its lifetime is owned by
+    /// <see cref="IHttpClientFactory"/>).
     /// </summary>
     public LlmVotingProvider(HttpClient http, VotingConfiguration config)
     {
-        http.Timeout = config.ProviderTimeout;
         this.client = new LegionClient(http);
         this.config = config;
     }
@@ -27,7 +28,7 @@ public class LlmVotingProvider
     /// Call a provider with a system prompt + user message.
     /// Uses per-voter API key and model overrides if set on the profile.
     /// </summary>
-    public Task<string> CallAsync(
+    public async Task<string> CallAsync(
         string providerId,
         string systemPrompt,
         string userMessage,
@@ -46,7 +47,9 @@ public class LlmVotingProvider
         if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}'.");
 
-        return client.CallAsync(providerId, key ?? "", model, systemPrompt, userMessage, maxTokens, temperature, ct);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(config.ProviderTimeout);
+        return await client.CallAsync(providerId, key ?? "", model, systemPrompt, userMessage, maxTokens, temperature, cts.Token);
     }
 
     /// <summary>
