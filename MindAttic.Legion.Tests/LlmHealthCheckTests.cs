@@ -90,7 +90,25 @@ public class LlmHealthCheckTests
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("{}"))));
         var all = await hc.CheckAllAsync();
         Assert.That(all, Has.Count.EqualTo(LlmProviderCatalog.All.Count));
-        Assert.That(all.All(r => !r.HasCredential), Is.True, "no keys configured, so all should be MISSING KEY");
+        Assert.That(all
+            .Where(r => LlmProviderCatalog.Get(r.ProviderId)?.RequiresApiKey != false)
+            .All(r => !r.HasCredential), Is.True, "cloud providers without keys should be MISSING KEY");
+        Assert.That(all
+            .Where(r => LlmProviderCatalog.Get(r.ProviderId)?.RequiresApiKey == false)
+            .All(r => r.HasCredential), Is.True, "local providers do not require API keys");
+    }
+
+    [Test]
+    public async Task CheckOneAsync_LocalProvider_DoesNotRequireApiKey()
+    {
+        MindAtticCredentialStore.SaveRaw("ollama", """{"model":"llama3.2"}""");
+        var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("""{"choices":[{"message":{"content":"Hello World!"}}]}"""))));
+
+        var r = await hc.CheckOneAsync("ollama");
+
+        Assert.That(r.HasCredential, Is.True);
+        Assert.That(r.IsHealthy, Is.True);
+        Assert.That(r.RespondedCorrectly, Is.True);
     }
 
     [Test]

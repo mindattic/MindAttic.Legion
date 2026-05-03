@@ -116,7 +116,8 @@ public class LlmHealthCheck
                           AvailableModels: Array.Empty<string>());
 
         var key = MindAtticCredentialStore.GetKey(providerId);
-        if (string.IsNullOrWhiteSpace(key))
+        var hasRequiredCredential = !info.RequiresApiKey || !string.IsNullOrWhiteSpace(key);
+        if (!hasRequiredCredential)
         {
             return new LlmHealthResult(
                 ProviderId: info.Id,

@@ -36,15 +36,17 @@ public class LlmVotingProvider
         VoterProfile? voterOverrides = null,
         CancellationToken ct = default)
     {
+        var info  = LlmProviderCatalog.Get(providerId);
         var key   = voterOverrides?.ApiKeyOverride ?? GetApiKey(providerId);
         var model = voterOverrides?.ModelOverride
             ?? config.ModelOverrides.GetValueOrDefault(providerId)
+            ?? LlmProviderRuntimeConfigurationResolver.GetModel(providerId)
             ?? LegionClient.DefaultModels.GetValueOrDefault(providerId, "");
 
-        if (string.IsNullOrWhiteSpace(key))
+        if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}'.");
 
-        return client.CallAsync(providerId, key, model, systemPrompt, userMessage, maxTokens, temperature, ct);
+        return client.CallAsync(providerId, key ?? "", model, systemPrompt, userMessage, maxTokens, temperature, ct);
     }
 
     /// <summary>

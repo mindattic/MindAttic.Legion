@@ -12,12 +12,12 @@ A single LLM is a single opinion. When the cost of a wrong answer is real — a 
 
 Legion is the panel:
 
-- **Multi-provider transport** — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks, Cohere, all behind one client.
+- **Multi-provider transport** — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks, Cohere, Ollama, and LM Studio, all behind one client.
 - **Voting** — call all configured providers in parallel, tally their answers, return the consensus with reasoning + dissent.
 - **Decision-making** — `DecideAsync(question, options)` picks one option from a fixed list with confidence.
 - **Scoring** — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.
 - **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1000-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote *as* them.
-- **CLI** — `legion.exe vote`, `legion.exe health`, `legion.exe panel` — same engine, no .NET app required.
+- **CLI** — `legion.exe status`, `legion.exe vote`, `legion.exe health`, `legion.exe panel` — same engine, no .NET app required.
 
 ---
 
@@ -182,7 +182,7 @@ If quorum isn't reached, `result.QuorumReached == false` and `result.Consensus =
 
 ## Providers and models
 
-Configure via `VotingConfiguration.ApiKeys`. A provider is "active" when it has a non-empty API key. `GetActiveProviderIds()` lists which providers are voting.
+Configure cloud providers via `VotingConfiguration.ApiKeys`. A cloud provider is "active" when it has a non-empty API key. A local provider is active when you opt it in with `ModelOverrides`, `ApiKeys`, or a `providers.json` entry. `GetActiveProviderIds()` lists which providers are voting.
 
 | Provider id | Vendor | Default model | Dashboard |
 |---|---|---|---|
@@ -197,6 +197,8 @@ Configure via `VotingConfiguration.ApiKeys`. A provider is "active" when it has 
 | `openrouter` | OpenRouter | (varies) | openrouter.ai |
 | `fireworks` | Fireworks AI | (varies) | fireworks.ai |
 | `cohere` | Cohere | command-r-plus | dashboard.cohere.com |
+| `ollama` | Ollama | first discovered local model, fallback `llama3.2` | local runtime |
+| `lmstudio` | LM Studio | first discovered local model, fallback `local-model` | local runtime |
 
 Use `legion.exe providers` from the CLI for the live list and dashboard URLs.
 
@@ -204,6 +206,30 @@ To override the model for a specific provider:
 
 ```csharp
 config.ModelOverrides["claude"] = "claude-sonnet-4-6";
+```
+
+Local runtimes do not need API keys. Legion looks for them at these defaults:
+
+| Provider id | Default base URL | Environment override |
+|---|---|---|
+| `ollama` | `http://localhost:11434` | `MINDATTIC_LEGION_OLLAMA_BASE_URL` |
+| `lmstudio` | `http://localhost:1234/v1` | `MINDATTIC_LEGION_LMSTUDIO_BASE_URL` |
+
+You can also put local settings in `%APPDATA%/MindAttic/LLM/providers.json`:
+
+```json
+{
+  "ollama": {
+    "type": "local",
+    "model": "llama3.2",
+    "baseUrl": "http://localhost:11434"
+  },
+  "lmstudio": {
+    "type": "local",
+    "model": "local-qwen",
+    "baseUrl": "http://localhost:1234/v1"
+  }
+}
 ```
 
 To restrict voting to a subset:
@@ -230,8 +256,11 @@ The CLI exposes the same engine for shell scripts, CI, and rapid iteration.
 
 ```bash
 # Discovery
+legion.exe status                 # model inventory, config, and connectivity
+legion.exe status --no-probe      # list live/static models without sending prompts
+legion.exe status --json          # machine-readable status output
 legion.exe providers              # list all providers + dashboard URLs
-legion.exe models <provider>      # known + live models for a provider
+legion.exe models <provider>      # catalog models for a provider
 legion.exe personas 10            # sample 10 personas from the 1000-persona library
 legion.exe panel 5                # build a 5-voter panel + show provider mix
 

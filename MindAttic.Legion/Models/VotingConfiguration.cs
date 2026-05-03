@@ -22,7 +22,10 @@ public class VotingConfiguration
     /// Map of provider ID → API key. Explicit entries here win over the shared
     /// credential store (useful for tests or app-specific overrides).
     /// Supported provider IDs: claude, openai, gemini, deepseek, mistral,
-    ///   xai, groq, together, openrouter, fireworks, cohere.
+    ///   xai, groq, together, openrouter, fireworks, cohere, ollama, lmstudio.
+    /// Local providers do not require an API key, but adding their id here or
+    /// in <see cref="ModelOverrides"/> opts them into <see cref="ActiveProviderIds"/>
+    /// when allowed by <see cref="AllowedProviderIds"/>.
     /// </summary>
     public Dictionary<string, string> ApiKeys { get; set; } = new();
 
@@ -81,9 +84,23 @@ public class VotingConfiguration
         {
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in ApiKeys)
-                if (!string.IsNullOrWhiteSpace(kv.Value)) ids.Add(kv.Key);
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value)
+                    || LlmProviderCatalog.Get(kv.Key)?.RequiresApiKey == false)
+                {
+                    ids.Add(kv.Key);
+                }
+            }
+            foreach (var kv in ModelOverrides)
+                if (LlmProviderCatalog.Get(kv.Key)?.RequiresApiKey == false)
+                    ids.Add(kv.Key);
             if (UseSharedCredentials)
+            {
                 foreach (var id in MindAtticCredentialStore.ListProviders()) ids.Add(id);
+                foreach (var id in MindAtticCredentialStore.LoadAllRaw().Keys)
+                    if (LlmProviderCatalog.Get(id)?.RequiresApiKey == false)
+                        ids.Add(id);
+            }
             if (AllowedProviderIds is { Count: > 0 })
                 ids.IntersectWith(AllowedProviderIds);
             return ids.ToList();

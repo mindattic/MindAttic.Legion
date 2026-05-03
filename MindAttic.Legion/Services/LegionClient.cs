@@ -55,6 +55,8 @@ public class LegionClient
         ["openrouter"] = "meta-llama/llama-3.1-8b-instruct:free",
         ["fireworks"]  = "accounts/fireworks/models/llama-v3p1-70b-instruct",
         ["cohere"]     = "command-r-plus",
+        ["ollama"]     = "llama3.2",
+        ["lmstudio"]   = "local-model",
     };
 
     private static readonly Dictionary<string, string> Endpoints = new(StringComparer.OrdinalIgnoreCase)
@@ -70,11 +72,13 @@ public class LegionClient
         ["openrouter"] = "https://openrouter.ai/api/v1/chat/completions",
         ["fireworks"]  = "https://api.fireworks.ai/inference/v1/chat/completions",
         ["cohere"]     = "https://api.cohere.com/v2/chat",
+        ["ollama"]     = "http://localhost:11434/v1/chat/completions",
+        ["lmstudio"]   = "http://localhost:1234/v1/chat/completions",
     };
 
     /// <summary>True if Legion knows how to talk to this provider.</summary>
     public static bool IsSupported(string providerId) =>
-        !string.IsNullOrWhiteSpace(providerId) && Endpoints.ContainsKey(providerId);
+        !string.IsNullOrWhiteSpace(providerId) && LlmProviderCatalog.IsSupported(providerId);
 
     /// <summary>
     /// Calls the provider with explicit credentials. Wraps the call in retry +
@@ -92,7 +96,8 @@ public class LegionClient
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var info = LlmProviderCatalog.Get(providerId);
+        if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
 
         var resolvedModel = string.IsNullOrWhiteSpace(model)
@@ -108,7 +113,7 @@ public class LegionClient
     /// Calls the provider, resolving the API key from the shared MindAttic credential
     /// store at <c>%APPDATA%/MindAttic/LLM/</c>.
     /// </summary>
-    public Task<string> CallAsync(
+    public async Task<string> CallAsync(
         string providerId,
         string systemPrompt,
         string userMessage,
@@ -117,15 +122,17 @@ public class LegionClient
         string? modelOverride = null,
         CancellationToken ct = default)
     {
+        var info = LlmProviderCatalog.Get(providerId);
         var key = MindAtticCredentialStore.GetKey(providerId);
-        if (string.IsNullOrWhiteSpace(key))
+        if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 
         var model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride
                   : ResolveModelFromStore(providerId)
+                  ?? await TryResolveFirstLocalModelAsync(providerId, ct)
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
-        return CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct);
+        return await CallAsync(providerId, key ?? "", model!, systemPrompt, userMessage, maxTokens, temperature, ct);
     }
 
     /// <summary>
@@ -146,7 +153,8 @@ public class LegionClient
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var info = LlmProviderCatalog.Get(providerId);
+        if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException($"No API key supplied for provider '{providerId}'.");
 
         var resolvedModel = string.IsNullOrWhiteSpace(model)
@@ -167,7 +175,7 @@ public class LegionClient
     /// <see cref="CallAsync(string, string, string, int, double, string?, CancellationToken)"/>
     /// but accepts a conversation history.
     /// </summary>
-    public Task<string> CallChatAsync(
+    public async Task<string> CallChatAsync(
         string providerId,
         IEnumerable<ChatTurn> messages,
         string? systemPrompt = null,
@@ -176,15 +184,17 @@ public class LegionClient
         string? modelOverride = null,
         CancellationToken ct = default)
     {
+        var info = LlmProviderCatalog.Get(providerId);
         var key = MindAtticCredentialStore.GetKey(providerId);
-        if (string.IsNullOrWhiteSpace(key))
+        if (info?.RequiresApiKey != false && string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 
         var model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride
                   : ResolveModelFromStore(providerId)
+                  ?? await TryResolveFirstLocalModelAsync(providerId, ct)
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
-        return CallChatAsync(providerId, key, model!, messages, systemPrompt, maxTokens, temperature, ct);
+        return await CallChatAsync(providerId, key ?? "", model!, messages, systemPrompt, maxTokens, temperature, ct);
     }
 
     /// <summary>
@@ -463,6 +473,28 @@ public class LegionClient
         return null;
     }
 
+    /// <summary>
+    /// Local runtimes do not have stable universal defaults; if no configured
+    /// model exists, ask the local runtime for its first loaded model.
+    /// </summary>
+    private async Task<string?> TryResolveFirstLocalModelAsync(string providerId, CancellationToken ct)
+    {
+        var info = LlmProviderCatalog.Get(providerId);
+        if (info?.IsLocal != true)
+            return null;
+
+        try
+        {
+            var discovery = new LlmModelDiscovery(http);
+            var result = await discovery.DiscoverOneAsync(providerId, ct: ct);
+            return result.LiveModels.FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ── Provider-specific dispatch ──────────────────────────────────────────────
 
     /// <summary>
@@ -603,7 +635,12 @@ public class LegionClient
         string providerId, string key, string model, IReadOnlyList<ChatTurn> messages,
         string? systemPrompt, int maxTokens, double temperature, CancellationToken ct)
     {
-        if (!Endpoints.TryGetValue(providerId, out var endpoint))
+        var info = LlmProviderCatalog.Get(providerId);
+        var endpoint = info?.IsLocal == true
+            ? LlmProviderRuntimeConfigurationResolver.GetChatEndpoint(info)
+            : Endpoints.GetValueOrDefault(providerId);
+
+        if (string.IsNullOrWhiteSpace(endpoint))
             throw new ArgumentException($"Unknown provider: {providerId}");
 
         var apiMessages = new List<object>();
@@ -615,7 +652,8 @@ public class LegionClient
         var payload = new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+        if (!string.IsNullOrWhiteSpace(key))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);

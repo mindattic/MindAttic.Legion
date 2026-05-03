@@ -32,6 +32,7 @@ public class LegionCli
             {
                 "health"    => await HealthAsync(args.Skip(1).ToArray()),
                 "ping"      => await PingAsync(args.Skip(1).ToArray()),
+                "status"    => await StatusAsync(args.Skip(1).ToArray()),
                 "models"    => Models(args.Skip(1).ToArray()),
                 "providers" => Providers(),
                 "personas"  => Personas(args.Skip(1).ToArray()),
@@ -68,6 +69,7 @@ public class LegionCli
         Console.WriteLine("Commands:");
         Console.WriteLine("  health                       Probe every provider with a 'Hello World!' test");
         Console.WriteLine("  ping <provider>              Probe a single provider");
+        Console.WriteLine("  status [opts] [provider...]  Show model inventory, config, and connectivity");
         Console.WriteLine("  providers                    List supported providers + dashboard URLs");
         Console.WriteLine("  models <provider>            Show known models for a provider");
         Console.WriteLine("  personas <count>             Sample N personas from the 1000-persona library");
@@ -75,6 +77,7 @@ public class LegionCli
         Console.WriteLine("  vote <question> [opts]       Multi-LLM consensus vote on a question; outputs JSON.");
         Console.WriteLine("                               Opts: --context <text>, --quorum plurality|simplemajority|twothirds|unanimous,");
         Console.WriteLine("                                     --options A,B,C, --max-tokens N, --no-narrative");
+        Console.WriteLine("  status opts: --no-probe, --json, --timeout N");
         Console.WriteLine();
         Console.WriteLine("All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.");
     }
@@ -149,6 +152,213 @@ public class LegionCli
         Console.WriteLine($"  dashboard:  {r.DashboardUrl}");
 
         return r.RespondedCorrectly ? 0 : 1;
+    }
+
+    // ── status ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Render a provider/model status board: static catalog, live model discovery,
+    /// credential/local endpoint configuration, and optional prompt-level health.
+    /// </summary>
+    private static async Task<int> StatusAsync(string[] args)
+    {
+        var runProbe = true;
+        var json = false;
+        var timeout = TimeSpan.FromSeconds(20);
+        var providerIds = new List<string>();
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i].ToLowerInvariant())
+            {
+                case "--no-probe":
+                    runProbe = false;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--timeout":
+                    if (i + 1 >= args.Length || !double.TryParse(args[++i], out var seconds) || seconds <= 0)
+                    {
+                        Console.Error.WriteLine("usage: legion status [--no-probe] [--json] [--timeout seconds] [provider...]");
+                        return 1;
+                    }
+                    timeout = TimeSpan.FromSeconds(seconds);
+                    break;
+                default:
+                    providerIds.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (providerIds.Count == 0)
+            providerIds.AddRange(LlmProviderCatalog.AllIds);
+
+        using var http = new HttpClient { Timeout = timeout + TimeSpan.FromSeconds(5) };
+        var discovery = new LlmModelDiscovery(http);
+        var inventory = await discovery.DiscoverAsync(providerIds, timeout);
+
+        IReadOnlyList<LlmHealthResult> health = Array.Empty<LlmHealthResult>();
+        if (runProbe)
+        {
+            var client = new LegionClient(http, LegionClientOptions.NoResilience);
+            health = await new LlmHealthCheck(client).CheckAsync(providerIds, timeout);
+        }
+
+        if (json)
+        {
+            WriteStatusJson(inventory, health, runProbe, timeout);
+            return runProbe && !health.Any(r => r.RespondedCorrectly) ? 1 : 0;
+        }
+
+        WriteStatusText(inventory, health, runProbe, timeout);
+        return runProbe && !health.Any(r => r.RespondedCorrectly) ? 1 : 0;
+    }
+
+    private static void WriteStatusText(
+        IReadOnlyList<LlmModelDiscoveryResult> inventory,
+        IReadOnlyList<LlmHealthResult> health,
+        bool runProbe,
+        TimeSpan timeout)
+    {
+        var healthByProvider = health.ToDictionary(r => r.ProviderId, StringComparer.OrdinalIgnoreCase);
+
+        Console.WriteLine("MindAttic.Legion model status");
+        Console.WriteLine($"Credential store: {MindAtticCredentialStore.CredentialDirectory}");
+        Console.WriteLine($"providers.json:   {MindAtticCredentialStore.ProvidersFilePath} ({(MindAtticCredentialStore.ProvidersFileExists() ? "found" : "missing")})");
+        Console.WriteLine($"Probe:            {(runProbe ? "enabled" : "disabled")} ({timeout.TotalSeconds:0}s timeout)");
+        Console.WriteLine();
+
+        Console.WriteLine($"{"ID",-12} {"KIND",-6} {"CONFIG",-13} {"LIVE",-8} {"CONNECTIVITY",-16} {"EFFECTIVE MODEL"}");
+        Console.WriteLine(new string('-', 110));
+        foreach (var item in inventory)
+        {
+            healthByProvider.TryGetValue(item.Provider.Id, out var h);
+            var config = item.RequiresApiKey
+                ? item.HasCredential ? "key ok" : "missing key"
+                : "local";
+            var live = item.LiveModelQuerySucceeded ? item.LiveModels.Count.ToString() : item.Diagnosis.ToString();
+            var connectivity = h is null
+                ? "not probed"
+                : h.RespondedCorrectly ? "OK"
+                : h.Diagnosis.ToString();
+
+            Console.WriteLine($"{item.Provider.Id,-12} {item.Provider.Kind,-6} {config,-13} {Truncate(live, 8),-8} {Truncate(connectivity, 16),-16} {Truncate(item.EffectiveModel, 44)}");
+        }
+
+        foreach (var item in inventory)
+        {
+            healthByProvider.TryGetValue(item.Provider.Id, out var h);
+            var runtime = LlmProviderRuntimeConfigurationResolver.Get(item.Provider.Id);
+
+            Console.WriteLine();
+            Console.WriteLine($"{item.Provider.DisplayName} ({item.Provider.Id})");
+            Console.WriteLine($"  vendor:          {item.Provider.Vendor}");
+            Console.WriteLine($"  kind:            {item.Provider.Kind}");
+            Console.WriteLine($"  auth:            {(item.RequiresApiKey ? item.HasCredential ? "API key configured" : "missing API key" : "not required")}");
+            if (!string.IsNullOrWhiteSpace(runtime.BaseUrl))
+                Console.WriteLine($"  base URL:        {runtime.BaseUrl} ({runtime.BaseUrlSource})");
+            if (!string.IsNullOrWhiteSpace(item.ModelsEndpoint))
+                Console.WriteLine($"  models endpoint: {item.ModelsEndpoint}");
+            if (!string.IsNullOrWhiteSpace(item.ChatEndpoint))
+                Console.WriteLine($"  chat endpoint:   {item.ChatEndpoint}");
+            if (!string.IsNullOrWhiteSpace(item.ConfiguredModel))
+                Console.WriteLine($"  configured model: {item.ConfiguredModel}");
+            Console.WriteLine($"  effective model: {item.EffectiveModel}");
+
+            if (item.LiveModelQuerySucceeded)
+                WriteModelList("live models", item.LiveModels);
+            else
+            {
+                var nextStep = item.Provider.IsLocal
+                    ? item.Provider.ConfigurationNotes
+                    : LlmHealthDiagnoser.ActionableMessage(item.Diagnosis, item.Provider.DisplayName, item.Provider.KeysUrl, item.Provider.DashboardUrl);
+                Console.WriteLine($"  model discovery: {item.Diagnosis} - {Truncate(item.ErrorMessage ?? "not queried", 120)}");
+                Console.WriteLine($"  next step:       {nextStep}");
+                WriteModelList("catalog models", item.KnownModels);
+            }
+
+            if (h is not null)
+            {
+                var status = h.RespondedCorrectly
+                    ? $"OK ({h.ElapsedMilliseconds}ms)"
+                    : $"{h.Diagnosis} ({h.ElapsedMilliseconds}ms)";
+                Console.WriteLine($"  connectivity:    {status}");
+                if (!h.RespondedCorrectly)
+                {
+                    var detail = !string.IsNullOrWhiteSpace(h.ErrorMessage) ? h.ErrorMessage : h.Response;
+                    if (!string.IsNullOrWhiteSpace(detail))
+                        Console.WriteLine($"  detail:          {Truncate(detail, 120)}");
+                    Console.WriteLine($"  next step:       {h.ActionableMessage}");
+                }
+            }
+        }
+    }
+
+    private static void WriteStatusJson(
+        IReadOnlyList<LlmModelDiscoveryResult> inventory,
+        IReadOnlyList<LlmHealthResult> health,
+        bool runProbe,
+        TimeSpan timeout)
+    {
+        var healthByProvider = health.ToDictionary(r => r.ProviderId, StringComparer.OrdinalIgnoreCase);
+        var output = new
+        {
+            credentialStore = MindAtticCredentialStore.CredentialDirectory,
+            providersJson = MindAtticCredentialStore.ProvidersFilePath,
+            providersJsonExists = MindAtticCredentialStore.ProvidersFileExists(),
+            probeEnabled = runProbe,
+            timeoutSeconds = timeout.TotalSeconds,
+            providers = inventory.Select(item =>
+            {
+                healthByProvider.TryGetValue(item.Provider.Id, out var h);
+                var runtime = LlmProviderRuntimeConfigurationResolver.Get(item.Provider.Id);
+                return new
+                {
+                    id = item.Provider.Id,
+                    displayName = item.Provider.DisplayName,
+                    vendor = item.Provider.Vendor,
+                    kind = item.Provider.Kind.ToString(),
+                    requiresApiKey = item.RequiresApiKey,
+                    hasCredential = item.HasCredential,
+                    configuredModel = item.ConfiguredModel,
+                    effectiveModel = item.EffectiveModel,
+                    baseUrl = runtime.BaseUrl,
+                    baseUrlSource = runtime.BaseUrlSource,
+                    modelsEndpoint = item.ModelsEndpoint,
+                    chatEndpoint = item.ChatEndpoint,
+                    liveModelQuerySucceeded = item.LiveModelQuerySucceeded,
+                    liveModelDiagnosis = item.Diagnosis.ToString(),
+                    liveModelError = item.ErrorMessage,
+                    liveModels = item.LiveModels,
+                    catalogModels = item.KnownModels,
+                    connectivity = h is null ? null : new
+                    {
+                        status = h.Status,
+                        diagnosis = h.Diagnosis.ToString(),
+                        httpStatusCode = h.HttpStatusCode,
+                        elapsedMilliseconds = h.ElapsedMilliseconds,
+                        respondedCorrectly = h.RespondedCorrectly,
+                        response = h.Response,
+                        error = h.ErrorMessage,
+                        nextStep = h.ActionableMessage,
+                    },
+                };
+            }),
+        };
+
+        Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        }));
+    }
+
+    private static void WriteModelList(string label, IReadOnlyList<string> models)
+    {
+        Console.WriteLine($"  {label}:     {models.Count}");
+        foreach (var model in models)
+            Console.WriteLine($"    - {model}");
     }
 
     // ── providers ──────────────────────────────────────────────────────────────
