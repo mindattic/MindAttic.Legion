@@ -32,6 +32,14 @@ using MindAttic.Legion.Providers;
 public static class AskCommand
 {
     /// <summary>
+    /// The only providers permitted to generate voters. Even when callers
+    /// pass <c>--providers</c>, the result is intersected with this set —
+    /// no untrusted provider can ever be added to the panel from the CLI.
+    /// </summary>
+    private static readonly string[] TrustedProviderIds =
+        { "claude", "openai", "gemini", "deepseek" };
+
+    /// <summary>
     /// Parse args, run the ask, and return a process exit code:
     /// <c>0</c> when quorum was reached, <c>1</c> on quorum miss or usage
     /// error, <c>2</c> on unhandled exception.
@@ -55,6 +63,7 @@ public static class AskCommand
         var emitJson          = false;
         var timeoutSeconds    = 60.0;
         var providerOverride  = new List<string>();
+        var mustAnswer        = false;
 
         for (var i = 1; i < args.Length; i++)
         {
@@ -95,24 +104,32 @@ public static class AskCommand
                     if (i + 1 < args.Length)
                         providerOverride = args[++i].Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
                     break;
+                case "--must-answer":
+                    mustAnswer = true;
+                    break;
             }
         }
 
-        // ── Build context: auto + file + inline ─────────────────────────────
-        var contextSb = new StringBuilder();
+        // ── Build context (auto + explicit), tracked separately so the
+        //    must-answer phase-2 retry can drop auto-context to fit budget.
+        var autoContextBlock     = "";
+        var explicitContextBlock = "";
+
         if (autoContext)
         {
             var auto = await CollectAutoContextAsync(projectDir);
             if (!string.IsNullOrWhiteSpace(auto))
-                contextSb.AppendLine(auto);
+                autoContextBlock = auto;
         }
+
+        var explicitSb = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(contextFile))
         {
             try
             {
                 var contents = await File.ReadAllTextAsync(contextFile);
-                contextSb.AppendLine("=== EXTRA CONTEXT (from --context-file) ===");
-                contextSb.AppendLine(contents);
+                explicitSb.AppendLine("=== EXTRA CONTEXT (from --context-file) ===");
+                explicitSb.AppendLine(contents);
             }
             catch (Exception ex)
             {
@@ -122,25 +139,36 @@ public static class AskCommand
         }
         if (!string.IsNullOrWhiteSpace(explicitContext))
         {
-            contextSb.AppendLine("=== EXTRA CONTEXT (from --context) ===");
-            contextSb.AppendLine(explicitContext);
+            explicitSb.AppendLine("=== EXTRA CONTEXT (from --context) ===");
+            explicitSb.AppendLine(explicitContext);
         }
+        explicitContextBlock = explicitSb.ToString();
+
+        var fullContext = autoContextBlock + explicitContextBlock;
 
         // ── Resolve provider panel ──────────────────────────────────────────
+        // The trust list is the source of truth: even with --providers, the
+        // panel is restricted to the intersection of the trusted set and
+        // whatever the caller asked for. An untrusted provider id is silently
+        // dropped here.
         var config = new VotingConfiguration
         {
-            ProviderTimeout  = TimeSpan.FromSeconds(timeoutSeconds),
-            DefaultMaxTokens = maxTokens,
+            ProviderTimeout    = TimeSpan.FromSeconds(timeoutSeconds),
+            DefaultMaxTokens   = maxTokens,
+            AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
         };
         if (providerOverride.Count > 0)
         {
-            config.AllowedProviderIds = new HashSet<string>(providerOverride, StringComparer.OrdinalIgnoreCase);
+            config.AllowedProviderIds.IntersectWith(providerOverride);
         }
 
         var activeIds = config.ActiveProviderIds;
         if (activeIds.Count == 0)
         {
-            Console.Error.WriteLine("error: no providers configured. Add API keys at %APPDATA%/MindAttic/LLM/ or pass --providers.");
+            Console.Error.WriteLine(
+                "error: no trusted providers available. Trusted set: "
+                + string.Join(", ", TrustedProviderIds)
+                + ". Check %APPDATA%/MindAttic/LLM/ for API keys, and ensure --providers (if used) names at least one trusted provider.");
             return 1;
         }
 
@@ -160,7 +188,7 @@ public static class AskCommand
         var request = new VoteRequest
         {
             Question            = question,
-            Context             = contextSb.ToString(),
+            Context             = fullContext,
             Options             = options,
             MaxTokens           = maxTokens,
             SynthesizeNarrative = true,
@@ -171,15 +199,180 @@ public static class AskCommand
         {
             result = await service.VoteWithProfilesAsync(request, quorum, voters);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!mustAnswer)
         {
             Console.Error.WriteLine($"error: vote failed: {ex.Message}");
             return 2;
+        }
+        catch (Exception ex)
+        {
+            // --must-answer: don't bail. Synthesize a zero-voter result so the
+            // fallback chain below has something to react to.
+            Console.Error.WriteLine($"ask: panel call threw ({ex.Message}); entering must-answer fallback.");
+            result = new VotingResult { Question = question, QuorumType = quorum };
+        }
+
+        if (mustAnswer && result.SuccessfulVoters == 0)
+        {
+            result = await RunMustAnswerFallbackAsync(
+                question:           question,
+                options:            options,
+                explicitContext:    explicitContextBlock,
+                voters:             voters,
+                quorum:             quorum,
+                originalMaxTokens:  maxTokens,
+                originalTimeoutSec: timeoutSeconds);
         }
 
         return emitJson
             ? EmitJson(result)
             : EmitPlain(result);
+    }
+
+    // ── --must-answer fallback chain ───────────────────────────────────────
+
+    /// <summary>
+    /// Three-phase rescue when the initial panel returned 0 successful
+    /// voters: (2) re-vote with budget doubled and auto-context dropped,
+    /// (3) iterate the trusted providers in order calling the bare
+    /// <see cref="LegionClient"/> directly so a stuck JSON parser or a
+    /// strict choice-vote schema can't take the whole answer down.
+    /// Returns a synthesized <see cref="VotingResult"/> on success, or the
+    /// original empty result if nothing replied.
+    /// </summary>
+    private static async Task<VotingResult> RunMustAnswerFallbackAsync(
+        string question,
+        List<string> options,
+        string explicitContext,
+        List<VoterProfile> voters,
+        Quorum quorum,
+        int originalMaxTokens,
+        double originalTimeoutSec)
+    {
+        // ── Phase 2: relaxed-budget retry ───────────────────────────────────
+        Console.Error.WriteLine(
+            "ask: panel returned 0 voters; retrying with doubled budget and no auto-context.");
+
+        var phase2MaxTokens   = originalMaxTokens * 2;
+        var phase2TimeoutSec  = originalTimeoutSec * 2;
+        var phase2Config = new VotingConfiguration
+        {
+            ProviderTimeout    = TimeSpan.FromSeconds(phase2TimeoutSec),
+            DefaultMaxTokens   = phase2MaxTokens,
+            AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
+        };
+
+        using var http2 = new HttpClient { Timeout = phase2Config.ProviderTimeout };
+        var provider2   = new LlmVotingProvider(http2, phase2Config);
+        var service2    = new LLMVotingService(provider2, phase2Config, NullLogger<LLMVotingService>.Instance);
+
+        var phase2Request = new VoteRequest
+        {
+            Question            = question,
+            Context             = explicitContext, // auto-context deliberately dropped
+            Options             = options,
+            MaxTokens           = phase2MaxTokens,
+            SynthesizeNarrative = true,
+        };
+
+        VotingResult phase2Result;
+        try
+        {
+            phase2Result = await service2.VoteWithProfilesAsync(phase2Request, quorum, voters);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"ask: phase-2 retry threw ({ex.Message}).");
+            phase2Result = new VotingResult { Question = question, QuorumType = quorum };
+        }
+
+        if (phase2Result.SuccessfulVoters > 0)
+        {
+            Console.Error.WriteLine($"ask: recovered in phase 2 ({phase2Result.SuccessfulVoters}/{voters.Count} voters).");
+            return phase2Result;
+        }
+
+        // ── Phase 3: single-provider chain, raw text, trusted order ────────
+        Console.Error.WriteLine(
+            "ask: phase 2 still empty; falling back to single-provider chain ("
+            + string.Join(" → ", TrustedProviderIds) + ").");
+
+        var systemPrompt = options.Count > 0
+            ? "You are a senior software architect. Pick exactly one of these options and reply with ONLY that option's exact text, nothing else: "
+              + string.Join(", ", options.Select(o => $"\"{o}\""))
+            : "You are a senior software architect on this project. Answer the user's question directly and concisely. No JSON, no preamble — just the answer.";
+
+        var userMessage = string.IsNullOrWhiteSpace(explicitContext)
+            ? $"QUESTION: {question}"
+            : $"CONTEXT:\n{explicitContext}\n\nQUESTION: {question}";
+
+        using var http3 = new HttpClient { Timeout = TimeSpan.FromSeconds(phase2TimeoutSec) };
+        var directClient = new LegionClient(http3);
+
+        foreach (var providerId in TrustedProviderIds)
+        {
+            try
+            {
+                var raw = await directClient.CallAsync(
+                    providerId:   providerId,
+                    systemPrompt: systemPrompt,
+                    userMessage:  userMessage,
+                    maxTokens:    phase2MaxTokens,
+                    temperature:  0.3);
+
+                var answer = raw?.Trim() ?? "";
+                if (string.IsNullOrWhiteSpace(answer))
+                {
+                    Console.Error.WriteLine($"ask: fallback {providerId} returned empty.");
+                    continue;
+                }
+
+                // For choice mode, snap the raw text to the closest exact-or-
+                // contained option. If the model went off-ballot, try the
+                // next provider rather than emitting noise.
+                if (options.Count > 0)
+                {
+                    var matched =
+                        options.FirstOrDefault(o => answer.Equals(o, StringComparison.OrdinalIgnoreCase))
+                        ?? options.FirstOrDefault(o => answer.Contains(o, StringComparison.OrdinalIgnoreCase));
+                    if (matched is null)
+                    {
+                        Console.Error.WriteLine($"ask: fallback {providerId} replied off-ballot ('{Truncate(answer, 80)}').");
+                        continue;
+                    }
+                    answer = matched;
+                }
+
+                Console.Error.WriteLine($"ask: recovered in phase 3 via {providerId}.");
+                return new VotingResult
+                {
+                    Question          = question,
+                    QuorumType        = quorum,
+                    QuorumReached     = true,
+                    Consensus         = answer,
+                    ConsensusStrength = 1.0,
+                    NarrativeSummary  = $"Fallback answer from {providerId} (panel collapsed; --must-answer single-provider chain).",
+                    IndividualVotes   = new List<VoteResult>
+                    {
+                        new()
+                        {
+                            VoterName  = $"{providerId}#fallback",
+                            ProviderId = providerId,
+                            Decision   = answer,
+                            Reasoning  = "Single-provider must-answer fallback (raw text, no JSON wrapper).",
+                            Confidence = 5,
+                        },
+                    },
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"ask: fallback {providerId} errored: {ex.Message}");
+            }
+        }
+
+        Console.Error.WriteLine("ask: every fallback exhausted — no answer available.");
+        return new VotingResult { Question = question, QuorumType = quorum };
     }
 
     // ── Output ─────────────────────────────────────────────────────────────
@@ -369,9 +562,10 @@ public static class AskCommand
     {
         Console.WriteLine("legion ask <question> [opts]");
         Console.WriteLine();
-        Console.WriteLine("  Ask a panel of LLMs (architect-framed) a single decision question.");
-        Console.WriteLine("  Stdout = bare answer; --json for full audit. Designed for piping back into a");
-        Console.WriteLine("  monitored Claude Code or Codex session that's blocking on a user prompt.");
+        Console.WriteLine("  Ask the trusted panel (Claude, ChatGPT, Gemini, DeepSeek) a single decision");
+        Console.WriteLine("  question. Architect-framed voters. Stdout = bare answer; --json for full audit.");
+        Console.WriteLine("  Designed for piping back into a monitored Claude Code or Codex session that's");
+        Console.WriteLine("  blocking on a user prompt.");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --options A,B,C        Force choice mode; voters must pick exactly one.");
@@ -382,7 +576,11 @@ public static class AskCommand
         Console.WriteLine("  --quorum <q>           plurality | simplemajority | twothirds | unanimous (default plurality).");
         Console.WriteLine("  --max-tokens N         Per-voter cap (default 1024).");
         Console.WriteLine("  --timeout S            Per-provider timeout in seconds (default 60).");
-        Console.WriteLine("  --providers a,b,c      Override the active provider whitelist.");
+        Console.WriteLine("  --providers a,b,c      Narrow the panel WITHIN the trusted set. Untrusted ids are dropped.");
+        Console.WriteLine("                         Trusted: claude, openai, gemini, deepseek.");
+        Console.WriteLine("  --must-answer          On 0/N voter failure, retry with doubled budget and no auto-context;");
+        Console.WriteLine("                         on second failure, single-provider chain (claude → openai → gemini →");
+        Console.WriteLine("                         deepseek) until one replies. Always emit an answer if any provider works.");
         Console.WriteLine("  --json                 Emit full vote audit JSON instead of bare answer.");
         Console.WriteLine();
         Console.WriteLine("Exit codes:");
