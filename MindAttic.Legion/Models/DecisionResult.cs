@@ -1,7 +1,7 @@
 namespace MindAttic.Legion;
 
 /// <summary>
-/// Result of a <see cref="LLMVotingService.DecideAsync"/> call —
+/// Result of a <see cref="LlmVotingService.DecideAsync"/> call —
 /// Legion's panel picks one option from a fixed list, with reasoning and
 /// confidence. A thin distillation of <see cref="VotingResult"/> tailored
 /// for "give me a decision" callers (e.g. an automated workflow that needs

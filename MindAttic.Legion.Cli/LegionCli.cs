@@ -219,6 +219,13 @@ public class LegionCli
         return runProbe && !health.Any(r => r.RespondedCorrectly) ? 1 : 0;
     }
 
+    /// <summary>
+    /// Render the status board as plain text: a short summary header, a
+    /// fixed-width table with one row per provider (config / live-model
+    /// count / connectivity / effective model), then a per-provider detail
+    /// section with vendor, auth state, endpoints, model lists, and the
+    /// next-step hint when discovery or connectivity failed.
+    /// </summary>
     private static void WriteStatusText(
         IReadOnlyList<LlmModelDiscoveryResult> inventory,
         IReadOnlyList<LlmHealthResult> health,
@@ -290,6 +297,11 @@ public class LegionCli
         }
     }
 
+    /// <summary>
+    /// Same status data as <see cref="WriteStatusText"/>, but as a single
+    /// pretty-printed JSON document on stdout. Designed for piping to
+    /// <c>jq</c>, dashboards, or CI scripts that need structured input.
+    /// </summary>
     private static void WriteStatusJson(
         IReadOnlyList<LlmModelDiscoveryResult> inventory,
         IReadOnlyList<LlmHealthResult> health,
@@ -343,6 +355,10 @@ public class LegionCli
         }));
     }
 
+    /// <summary>
+    /// Print a labelled bulleted list of model ids — used by the per-provider
+    /// detail block to show either live or catalog models with a count.
+    /// </summary>
     private static void WriteModelList(string label, IReadOnlyList<string> models)
     {
         Console.WriteLine($"  {label}:     {models.Count}");
@@ -551,7 +567,7 @@ public class LegionCli
 
         using var http = new HttpClient { Timeout = config.ProviderTimeout };
         var provider   = new LlmVotingProvider(http, config);
-        var service    = new LLMVotingService(provider, config, NullLogger<LLMVotingService>.Instance);
+        var service    = new LlmVotingService(provider, config, NullLogger<LlmVotingService>.Instance);
 
         var request = new VoteRequest
         {

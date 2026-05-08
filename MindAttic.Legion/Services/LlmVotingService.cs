@@ -31,21 +31,21 @@ namespace MindAttic.Legion;
 /// other MindAttic project. Configure it with a <see cref="VotingConfiguration"/>
 /// at startup.
 /// </summary>
-public class LLMVotingService
+public class LlmVotingService
 {
     private readonly LlmVotingProvider provider;
     private readonly VotingConfiguration config;
-    private readonly ILogger<LLMVotingService> log;
+    private readonly ILogger<LlmVotingService> log;
 
     /// <summary>
     /// Constructs the voting service. Typically registered via
     /// <see cref="ServiceCollectionExtensions.AddLLMVoting(Microsoft.Extensions.DependencyInjection.IServiceCollection, VotingConfiguration)"/>
     /// — apps shouldn't normally new this up directly.
     /// </summary>
-    public LLMVotingService(
+    public LlmVotingService(
         LlmVotingProvider provider,
         VotingConfiguration config,
-        ILogger<LLMVotingService> log)
+        ILogger<LlmVotingService> log)
     {
         this.provider = provider;
         this.config   = config;

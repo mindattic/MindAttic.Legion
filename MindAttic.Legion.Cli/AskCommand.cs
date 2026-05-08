@@ -199,7 +199,7 @@ public static class AskCommand
 
         using var http = new HttpClient { Timeout = config.ProviderTimeout };
         var provider   = new LlmVotingProvider(http, config);
-        var service    = new LLMVotingService(provider, config, NullLogger<LLMVotingService>.Instance);
+        var service    = new LlmVotingService(provider, config, NullLogger<LlmVotingService>.Instance);
 
         var request = new VoteRequest
         {
@@ -280,7 +280,7 @@ public static class AskCommand
 
         using var http2 = new HttpClient { Timeout = phase2Config.ProviderTimeout };
         var provider2   = new LlmVotingProvider(http2, phase2Config);
-        var service2    = new LLMVotingService(provider2, phase2Config, NullLogger<LLMVotingService>.Instance);
+        var service2    = new LlmVotingService(provider2, phase2Config, NullLogger<LlmVotingService>.Instance);
 
         var phase2Request = new VoteRequest
         {

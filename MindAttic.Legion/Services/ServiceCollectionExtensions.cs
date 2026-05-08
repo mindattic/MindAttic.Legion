@@ -10,7 +10,7 @@ namespace MindAttic.Legion;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Register <see cref="LLMVotingService"/> as a singleton with the supplied configuration.
+    /// Register <see cref="LlmVotingService"/> as a singleton with the supplied configuration.
     ///
     /// API keys are resolved in this order per provider:
     ///   1. <see cref="VoterProfile.ApiKeyOverride"/> (per-voter)
@@ -44,7 +44,7 @@ public static class ServiceCollectionExtensions
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LlmVotingProvider));
             return new LlmVotingProvider(http, config);
         });
-        services.AddSingleton<LLMVotingService>();
+        services.AddSingleton<LlmVotingService>();
         services.AddLegionClient();
         // Replace the typed-client LegionClient registration with one that
         // also consults VotingConfiguration.ApiKeys, so direct LegionClient
@@ -86,7 +86,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Register <see cref="LLMVotingService"/> with configuration resolved from the DI container at runtime.
+    /// Register <see cref="LlmVotingService"/> with configuration resolved from the DI container at runtime.
     /// Useful when the configuration is built dynamically from another service (e.g., SettingsService).
     /// </summary>
     public static IServiceCollection AddLLMVoting(
@@ -101,7 +101,7 @@ public static class ServiceCollectionExtensions
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LlmVotingProvider));
             return new LlmVotingProvider(http, cfg);
         });
-        services.AddSingleton<LLMVotingService>();
+        services.AddSingleton<LlmVotingService>();
         // Mirror the eager-config overload: any consumer who injects
         // LegionClient or LlmHealthCheck alongside the voting service should
         // be able to resolve them without a second registration call.

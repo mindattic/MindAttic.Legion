@@ -43,6 +43,12 @@ public sealed class LlmModelDiscovery
 {
     private readonly HttpClient http;
 
+    /// <summary>
+    /// Constructs a discovery service over the supplied <see cref="HttpClient"/>.
+    /// The client owns its own timeout — callers tune that via the
+    /// <c>HttpClient</c> directly or via the <c>timeout</c> parameter on
+    /// <see cref="DiscoverOneAsync"/> / <see cref="DiscoverAsync"/>.
+    /// </summary>
     public LlmModelDiscovery(HttpClient http)
     {
         this.http = http;
@@ -137,6 +143,16 @@ public sealed class LlmModelDiscovery
         }
     }
 
+    /// <summary>
+    /// Walks an arbitrary models-list JSON payload and pulls out the model ids.
+    /// Tolerates the three shapes providers use in practice: a top-level
+    /// <c>data</c> array (OpenAI-style), a top-level <c>models</c> array
+    /// (Gemini / Anthropic / Cohere), or a bare array. Each element may
+    /// expose its id under <c>id</c>, <c>name</c>, <c>model</c>, or
+    /// <c>model_id</c>; the first non-empty wins. Duplicates are filtered
+    /// case-insensitively and provider-specific normalization (e.g. trimming
+    /// Gemini's <c>models/</c> prefix) is applied.
+    /// </summary>
     internal static IReadOnlyList<string> ExtractModelIds(string providerId, string json)
     {
         var models = new List<string>();
@@ -155,6 +171,11 @@ public sealed class LlmModelDiscovery
         return models;
     }
 
+    /// <summary>
+    /// Builds the immutable discovery result with the effective-model fallback
+    /// chain applied: the per-provider configured override wins; otherwise the
+    /// first live model returned by the API; otherwise the catalog default.
+    /// </summary>
     private static LlmModelDiscoveryResult CreateResult(
         LlmProviderInfo info,
         IReadOnlyList<string> knownModels,
@@ -189,6 +210,12 @@ public sealed class LlmModelDiscovery
             ErrorMessage: error);
     }
 
+    /// <summary>
+    /// Apply provider-specific auth headers to the discovery request. Claude
+    /// uses <c>x-api-key</c> + <c>anthropic-version</c>; Gemini puts the key
+    /// in the URL (handled by <see cref="AddApiKeyToEndpoint"/>) and skips
+    /// headers; everything else uses an OAuth-style <c>Bearer</c> token.
+    /// </summary>
     private static void AddAuthHeaders(HttpRequestMessage req, LlmProviderInfo info, string? apiKey)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -205,6 +232,12 @@ public sealed class LlmModelDiscovery
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
     }
 
+    /// <summary>
+    /// Gemini's <c>/v1beta/models</c> endpoint expects the API key as a
+    /// <c>?key=</c> query parameter rather than a header. This helper appends
+    /// it (URL-escaped) for Gemini only; every other provider passes through
+    /// unchanged.
+    /// </summary>
     private static string AddApiKeyToEndpoint(LlmProviderInfo info, string endpoint, string? apiKey)
     {
         if (!info.Id.Equals("gemini", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(apiKey))
@@ -214,6 +247,13 @@ public sealed class LlmModelDiscovery
         return endpoint + separator + "key=" + Uri.EscapeDataString(apiKey);
     }
 
+    /// <summary>
+    /// Recursively walk <paramref name="element"/> collecting model ids into
+    /// <paramref name="models"/> while deduping case-insensitively via
+    /// <paramref name="seen"/>. Recurses into arrays and into the conventional
+    /// <c>data</c> / <c>models</c> wrapper properties so the same routine
+    /// works against OpenAI, Gemini, and Anthropic shapes.
+    /// </summary>
     private static void CollectModelIds(JsonElement element, string providerId, List<string> models, HashSet<string> seen)
     {
         switch (element.ValueKind)
@@ -239,6 +279,14 @@ public sealed class LlmModelDiscovery
         }
     }
 
+    /// <summary>
+    /// Try to extract a model id from a single object element. Different
+    /// providers expose it under different property names — <c>id</c>
+    /// (OpenAI / DeepSeek / Mistral), <c>name</c> (Gemini), <c>model</c>
+    /// (Cohere / Anthropic), or <c>model_id</c> — so we probe in that order
+    /// and take the first non-empty hit. Returns <c>true</c> only if the
+    /// extracted id survives provider-specific normalization.
+    /// </summary>
     private static bool TryReadModelId(JsonElement element, string providerId, out string? id)
     {
         id = ReadString(element, "id")
@@ -253,6 +301,7 @@ public sealed class LlmModelDiscovery
         return !string.IsNullOrWhiteSpace(id);
     }
 
+    /// <summary>Read a string-valued property from a JSON object, or null when missing/non-string.</summary>
     private static string? ReadString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
@@ -260,6 +309,13 @@ public sealed class LlmModelDiscovery
             : null;
     }
 
+    /// <summary>
+    /// Normalize a provider-emitted model id into the canonical form the
+    /// catalog uses. Currently only Gemini needs special handling: its
+    /// <c>/v1beta/models</c> endpoint returns ids prefixed with
+    /// <c>"models/"</c> (e.g. <c>"models/gemini-2.5-pro"</c>) and we strip
+    /// the prefix so it matches the static catalog entries.
+    /// </summary>
     private static string NormalizeModelId(string providerId, string? id)
     {
         var normalized = id?.Trim() ?? "";
@@ -272,6 +328,12 @@ public sealed class LlmModelDiscovery
         return normalized;
     }
 
+    /// <summary>
+    /// Append <paramref name="modelId"/> to <paramref name="models"/> when
+    /// non-empty and not already <paramref name="seen"/> (case-insensitive).
+    /// Preserves first-seen ordering so the discovery result mirrors the
+    /// order the provider returned.
+    /// </summary>
     private static void AddModel(string? modelId, List<string> models, HashSet<string> seen)
     {
         if (string.IsNullOrWhiteSpace(modelId))
@@ -282,6 +344,12 @@ public sealed class LlmModelDiscovery
             models.Add(trimmed);
     }
 
+    /// <summary>
+    /// Like <c>HttpResponseMessage.EnsureSuccessStatusCode</c> but includes
+    /// the response body (capped at 2 KB) in the thrown exception's message —
+    /// so the diagnoser can surface quota / billing markers that providers
+    /// only return in the body.
+    /// </summary>
     private static async Task EnsureSuccessAsync(HttpResponseMessage res, CancellationToken ct)
     {
         if (res.IsSuccessStatusCode)

@@ -59,11 +59,11 @@ services.AddSingleton(new VotingConfiguration
     JudgeProviderId = "claude",
 });
 services.AddSingleton<LlmVotingProvider>();
-services.AddSingleton<LLMVotingService>();
+services.AddSingleton<LlmVotingService>();
 var sp = services.BuildServiceProvider();
 
 // 2) Vote
-var voting = sp.GetRequiredService<LLMVotingService>();
+var voting = sp.GetRequiredService<LlmVotingService>();
 var result = await voting.VoteAsync(
     question: "Should Kyle take the contract?",
     context : "Contract details: ...",
@@ -217,7 +217,7 @@ var r = await voting.VoteAsync(req, quorum, new[] { "claude", "openai" });
 
 `VotingConfiguration.AllowedProviderIds` defaults to the four first-party frontier providers: **`claude`, `openai`, `gemini`, `deepseek`**. Every other provider is keyable and probeable but excluded from the default voting panel — they don't get a seat unless you explicitly add them.
 
-When a trusted provider errors mid-vote (network blip, rate limit, transient 5xx), `LLMVotingService.RefillFailedVotersAsync` automatically dispatches a fresh call to one of the *surviving* trusted providers (round-robin), so the panel never shrinks below quorum size. A failed Gemini slot becomes a second Claude or DeepSeek call rather than a missing vote. Refilled slots intentionally drop any persona overlay so a surviving voter doesn't get to "vote twice as the same character."
+When a trusted provider errors mid-vote (network blip, rate limit, transient 5xx), `LlmVotingService.RefillFailedVotersAsync` automatically dispatches a fresh call to one of the *surviving* trusted providers (round-robin), so the panel never shrinks below quorum size. A failed Gemini slot becomes a second Claude or DeepSeek call rather than a missing vote. Refilled slots intentionally drop any persona overlay so a surviving voter doesn't get to "vote twice as the same character."
 
 To run with a different shortlist:
 
@@ -331,7 +331,7 @@ stderr carries warnings; never parse it.
 
 ```
 ┌─ Your app
-│   └─ LLMVotingService    public API: VoteAsync / DecideAsync / ScoreAsync
+│   └─ LlmVotingService    public API: VoteAsync / DecideAsync / ScoreAsync
 │         └─ VoterFactory  builds VoterProfile lists (CreatePanel, personas)
 │         └─ LlmVotingProvider
 │               └─ LegionClient   universal LLM transport
@@ -342,13 +342,13 @@ stderr carries warnings; never parse it.
 └─ MindAtticCredentialStore (optional shared keyring at %APPDATA%/MindAttic/LLM/)
 ```
 
-`LegionClient` owns the socket pool, retry policy, and circuit breaker. `LlmVotingProvider` adds vote-specific shaping. `LLMVotingService` is the public API — you almost never need to touch the lower layers.
+`LegionClient` owns the socket pool, retry policy, and circuit breaker. `LlmVotingProvider` adds vote-specific shaping. `LlmVotingService` is the public API — you almost never need to touch the lower layers.
 
 ---
 
 ## Testing
 
-`MindAttic.Legion.Tests/` (238 tests) covers:
+`MindAttic.Legion.Tests/` (261 tests) covers:
 
 - Vote tally correctness (plurality, simple-majority, two-thirds, unanimous)
 - Quorum enforcement and threshold edge cases
@@ -359,7 +359,8 @@ stderr carries warnings; never parse it.
 - Wire-format adapters per provider (Claude / OpenAI / Gemini / Cohere / OpenAI-compatible)
 - Resilience policy: retry / circuit-breaker / fallback-chain
 - Health-check diagnosis classification (auth / quota / rate-limit / offline / wrong-reply)
-- Live model discovery + JSON shape normalization
+- Live model discovery + JSON shape normalization (every wire shape Legion has met: OpenAI `data[]`, Gemini `models[]` with `models/` prefix trim, Cohere/Anthropic variants, bare arrays, `model_id` legacy, mixed-type arrays, malformed JSON soft-failure)
+- `VotingConfiguration.ActiveProviderIds` gating: explicit keys, blank-key filtering, default trusted-set whitelist, untrusted-provider rejection, shared-credential merging, dedup
 - `AskCommand` helpers: trust-list intersection, choice-mode option snapping, auto-context assembly + caps, architect-prompt heuristics, help-flag recognition
 
 Run from the repo root:

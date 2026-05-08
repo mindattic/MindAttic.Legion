@@ -1,7 +1,7 @@
 namespace MindAttic.Legion;
 
 /// <summary>
-/// Configuration for the LLMVotingService.
+/// Configuration for the LlmVotingService.
 /// Pass this at startup — the service reads API keys and model preferences from here.
 ///
 /// Example usage in StreetSamurai:
@@ -62,7 +62,7 @@ public class VotingConfiguration
     /// (every provider with a key is active). Default restricts to the four
     /// production providers the project trusts for autonomous decisions —
     /// Claude, ChatGPT, Gemini, DeepSeek. Failed voters in this set are
-    /// refilled by <see cref="LLMVotingService"/> using additional instances
+    /// refilled by <see cref="LlmVotingService"/> using additional instances
     /// of the surviving allowed providers, so a Gemini outage doesn't shrink
     /// the panel below quorum size.
     /// </summary>

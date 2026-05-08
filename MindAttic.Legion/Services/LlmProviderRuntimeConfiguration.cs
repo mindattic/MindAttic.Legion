@@ -13,6 +13,7 @@ public sealed record LlmProviderRuntimeConfiguration(
     string? Model,
     int? MaxTokens)
 {
+    /// <summary>True when an API key is present and non-blank.</summary>
     public bool HasApiKey => !string.IsNullOrWhiteSpace(ApiKey);
 }
 
@@ -47,6 +48,12 @@ public static class LlmProviderRuntimeConfigurationResolver
     /// <summary>Returns a configured model override, if providers.json has one.</summary>
     public static string? GetModel(string providerId) => Get(providerId).Model;
 
+    /// <summary>
+    /// Parse one provider's raw JSON string and surface the optional fields.
+    /// Bad JSON is intentionally swallowed so a malformed providers.json
+    /// can't take the whole status renderer down — connectivity probes will
+    /// flag the real problem with a clearer error.
+    /// </summary>
     private static void ReadRawProviderJson(
         string json,
         out string? type,
@@ -80,6 +87,7 @@ public static class LlmProviderRuntimeConfigurationResolver
         }
     }
 
+    /// <summary>Read a string-valued property, or null when missing/non-string.</summary>
     private static string? ReadString(JsonElement root, string propertyName)
     {
         return root.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String

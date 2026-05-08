@@ -95,6 +95,14 @@ public class LegionClient
         ["cohere"]     = "command-r-plus",
     };
 
+    /// <summary>
+    /// Hard-coded chat-completions endpoint per provider. Claude and Cohere
+    /// have bespoke wire shapes (handled by <see cref="CallClaudeChatAsync"/>
+    /// and <see cref="CallCohereChatAsync"/>); Gemini's URL is parameterized
+    /// by <c>{model}</c> and <c>{key}</c>; everything else is a literal
+    /// OpenAI-compatible URL routed through <see cref="CallOpenAiCompatibleChatAsync"/>.
+    /// Lookup is case-insensitive.
+    /// </summary>
     private static readonly Dictionary<string, string> Endpoints = new(StringComparer.OrdinalIgnoreCase)
     {
         ["claude"]     = "https://api.anthropic.com/v1/messages",

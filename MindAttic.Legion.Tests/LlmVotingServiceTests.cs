@@ -8,7 +8,7 @@ using NUnit.Framework;
 namespace MindAttic.Legion.Tests;
 
 /// <summary>
-/// Unit tests for LLMVotingService.
+/// Unit tests for LlmVotingService.
 /// All tests use stub HTTP handlers — no real API calls are made.
 /// </summary>
 
@@ -34,32 +34,9 @@ public class QuorumTests
     public void Unanimous_HasOneHundredPercent()    => Assert.That(Quorum.Unanimous.Threshold(),      Is.EqualTo(1.00));
 }
 
-/// <summary>
-/// Verifies <see cref="VotingConfiguration.ActiveProviderIds"/> filters out
-/// blank keys and only reports providers that have a usable credential.
-/// </summary>
-[TestFixture]
-public class VotingConfigurationTests
-{
-    [Test]
-    public void ActiveProviders_ExcludesEmptyKeys()
-    {
-        var config = new VotingConfiguration
-        {
-            UseSharedCredentials = false,
-            ApiKeys = { ["claude"] = "real-key", ["openai"] = "", ["gemini"] = "   " }
-        };
-        Assert.That(config.ActiveProviderIds, Has.Count.EqualTo(1));
-        Assert.That(config.ActiveProviderIds[0], Is.EqualTo("claude"));
-    }
-
-    [Test]
-    public void ActiveProviders_EmptyConfig_ReturnsEmpty()
-    {
-        var config = new VotingConfiguration { UseSharedCredentials = false };
-        Assert.That(config.ActiveProviderIds, Is.Empty);
-    }
-}
+// VotingConfigurationTests moved to VotingConfigurationTests.cs — a comprehensive
+// fixture covering the AllowedProviderIds whitelist, shared-credential merging,
+// and the trusted-set defaults lives there now.
 
 /// <summary>
 /// Tests <see cref="VoterProfile"/> defaults and the
@@ -165,14 +142,14 @@ public class VoteRequestTests
 // ── Service tests with stub HTTP ──────────────────────────────────────────────
 
 /// <summary>
-/// End-to-end tests for <see cref="LLMVotingService"/> using stub HTTP handlers.
+/// End-to-end tests for <see cref="LlmVotingService"/> using stub HTTP handlers.
 /// Cover the active-provider list, quorum-not-reached path, choice-vote parsing,
 /// scored-vote aggregation, and persona/character voting.
 /// </summary>
 [TestFixture]
-public class LLMVotingServiceTests
+public class LlmVotingServiceTests
 {
-    private LLMVotingService BuildService(string stubResponse, string? apiKey = "test-key")
+    private LlmVotingService BuildService(string stubResponse, string? apiKey = "test-key")
     {
         var config = new VotingConfiguration
         {
@@ -183,7 +160,7 @@ public class LLMVotingServiceTests
         var handler = new StubHttpHandler(stubResponse);
         var http    = new HttpClient(handler);
         var prov    = new LlmVotingProvider(http, config);
-        return new LLMVotingService(prov, config, NullLogger<LLMVotingService>.Instance);
+        return new LlmVotingService(prov, config, NullLogger<LlmVotingService>.Instance);
     }
 
     [Test]
@@ -267,10 +244,10 @@ public class LLMVotingServiceTests
             UseSharedCredentials = false,
             ApiKeys = { ["claude"] = "key" }
         };
-        var svc = new LLMVotingService(
+        var svc = new LlmVotingService(
             new LlmVotingProvider(new HttpClient(new ErrorHttpHandler()), cfg),
             cfg,
-            NullLogger<LLMVotingService>.Instance);
+            NullLogger<LlmVotingService>.Instance);
 
         var result = await svc.VoteAsync("Question?", "context", Quorum.SimpleMajority);
         Assert.That(result.SuccessfulVoters, Is.EqualTo(0));
