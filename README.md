@@ -311,7 +311,8 @@ legion.exe ask <question> [opts]
 | `--quorum <q>` | `plurality` \| `simplemajority` \| `twothirds` \| `unanimous` (default `plurality`). |
 | `--max-tokens N` | Per-voter cap (default 1024). |
 | `--timeout S` | Per-provider timeout in seconds (default 60). |
-| `--providers a,b,c` | Override the trust list for this call only. |
+| `--providers a,b,c` | Narrow the panel **within** the trusted set. Untrusted ids are silently dropped — the panel can never include a non-trusted provider, even if you ask. |
+| `--must-answer` | On 0/N voter failure, retry with doubled budget and no auto-context; on second failure, fall back to a single-provider chain (claude → openai → gemini → deepseek) until one replies. Use when the calling agent can't tolerate "no answer". |
 | `--json` | Emit full vote audit JSON instead of bare answer. |
 
 Output contract:
@@ -406,7 +407,7 @@ You now have a Legion panel for hard calls. Use it instead of blocking on me.
 Legion is a multi-LLM consensus CLI at:
   D:\Projects\MindAttic\MindAttic.Legion\MindAttic.Legion.Cli\bin\Debug\net10.0\legion.exe
 
-The default panel is Claude, ChatGPT, Gemini, DeepSeek — the four providers I trust for autonomous decisions. If one is unreachable, Legion automatically refills the empty slot with another working provider so the panel never falls below quorum.
+The panel is HARDCODED to Claude, ChatGPT, Gemini, DeepSeek — the four providers I trust for autonomous decisions. No untrusted provider can ever be added, even via --providers (untrusted ids get silently dropped). If a trusted provider is unreachable, Legion automatically refills the empty slot with another working provider so the panel never falls below quorum.
 
 WHEN TO CALL IT
 Use `legion ask` whenever you would otherwise pause to ask me:
@@ -429,6 +430,7 @@ Modes:
       → stdout = the synthesized answer.
   - Audit mode: add --json to get votes, reasoning, confidence, dissent. Use this when you want to surface tradeoffs back to me.
   - Strict consensus: add --quorum twothirds to fail closed (exit 1) if the panel splits. Use for irreversible decisions.
+  - MUST-ANSWER mode: add --must-answer when you absolutely cannot tolerate "no answer" — for example, the next file you write depends on the result and you have nothing to fall back to. With --must-answer, if the panel returns 0 voters Legion auto-retries with doubled budget and no auto-context; if that's still empty it falls back to a single-provider chain (claude → openai → gemini → deepseek) calling raw text instead of the JSON-shaped voting wrapper. Always emits an answer if any one provider is reachable.
 
 Auto-context: by default `ask` reads CLAUDE.md, README.md, and `git status -s` / `git log --oneline -10` from the current working directory and prepends them so voters know the project. Pass --no-auto-context for a clean prompt, or --context-file <path> to inject a specific file (e.g. the file you're about to edit).
 
@@ -439,7 +441,7 @@ OUTPUT CONTRACT
   best-guess answer   | 1    | panel split — re-ask with more context or escalate to me
   (empty)             | 2    | unhandled error (network, etc.)
 
-stderr carries warnings; never parse it.
+With --must-answer, exit 0 also covers the recovery cases (phase-2 retry, phase-3 single-provider chain). stderr will tell you which phase delivered ("ask: recovered in phase 3 via claude") — log that line if you want a record of the degraded path. stderr carries warnings only; never parse it for the answer.
 
 EXAMPLES
   # Decide a DI lifetime
@@ -451,9 +453,12 @@ EXAMPLES
   # Conservative: only act if 2/3+ agree
   legion.exe ask "Migrate the credential store to DPAPI now?" --quorum twothirds
 
-DON'T override --providers unless I tell you to. The four-provider trust list is deliberate.
+  # I can't proceed without an answer — pull every lever
+  legion.exe ask "Pick the cache key format" --options "user:{id},u-{id},user_{id}" --must-answer
 
-If `legion ask` exits 1 (no quorum), don't silently pick its best-guess answer for a structural decision — surface the dissent (re-run with --json, summarize the disagreement, ask me).
+--providers exists but you almost never need it: it can only NARROW within the trusted four (e.g. --providers claude,openai). Passing untrusted ids is harmless (they're dropped) but pointless. Don't reach for it unless I specifically ask you to scope a vote.
+
+If `legion ask` exits 1 (no quorum) WITHOUT --must-answer, don't silently pick its best-guess answer for a structural decision — surface the dissent (re-run with --json, summarize the disagreement, ask me). If you used --must-answer and still got exit 1 or 2, the trusted panel is genuinely down — escalate to me, don't guess.
 ```
 
 ---
