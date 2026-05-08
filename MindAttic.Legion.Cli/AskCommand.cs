@@ -35,9 +35,29 @@ public static class AskCommand
     /// The only providers permitted to generate voters. Even when callers
     /// pass <c>--providers</c>, the result is intersected with this set —
     /// no untrusted provider can ever be added to the panel from the CLI.
+    /// Exposed <c>internal</c> so the test suite can verify the trust list
+    /// without duplicating its membership.
     /// </summary>
-    private static readonly string[] TrustedProviderIds =
+    internal static readonly string[] TrustedProviderIds =
         { "claude", "openai", "gemini", "deepseek" };
+
+    /// <summary>
+    /// Intersects <paramref name="requested"/> with <see cref="TrustedProviderIds"/>
+    /// (case-insensitive). Untrusted ids are silently dropped, so the panel
+    /// can never include a provider outside the trusted set. When
+    /// <paramref name="requested"/> is null or empty, returns the full trusted
+    /// set unchanged — i.e. "no narrowing requested" means "every trusted
+    /// provider is eligible."
+    /// </summary>
+    internal static HashSet<string> IntersectWithTrustedSet(IEnumerable<string>? requested)
+    {
+        var trusted = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase);
+        var list    = requested?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        if (list is null || list.Count == 0)
+            return trusted;
+        trusted.IntersectWith(list);
+        return trusted;
+    }
 
     /// <summary>
     /// Parse args, run the ask, and return a process exit code:
@@ -155,12 +175,8 @@ public static class AskCommand
         {
             ProviderTimeout    = TimeSpan.FromSeconds(timeoutSeconds),
             DefaultMaxTokens   = maxTokens,
-            AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
+            AllowedProviderIds = IntersectWithTrustedSet(providerOverride),
         };
-        if (providerOverride.Count > 0)
-        {
-            config.AllowedProviderIds.IntersectWith(providerOverride);
-        }
 
         var activeIds = config.ActiveProviderIds;
         if (activeIds.Count == 0)
@@ -332,9 +348,7 @@ public static class AskCommand
                 // next provider rather than emitting noise.
                 if (options.Count > 0)
                 {
-                    var matched =
-                        options.FirstOrDefault(o => answer.Equals(o, StringComparison.OrdinalIgnoreCase))
-                        ?? options.FirstOrDefault(o => answer.Contains(o, StringComparison.OrdinalIgnoreCase));
+                    var matched = SnapToOption(answer, options);
                     if (matched is null)
                     {
                         Console.Error.WriteLine($"ask: fallback {providerId} replied off-ballot ('{Truncate(answer, 80)}').");
@@ -375,8 +389,44 @@ public static class AskCommand
         return new VotingResult { Question = question, QuorumType = quorum };
     }
 
+    /// <summary>
+    /// Snaps a free-text answer to one of <paramref name="options"/> in choice
+    /// mode. First tries an exact case-insensitive match against the whole
+    /// answer; if none, tries to find an option name embedded in the answer
+    /// (so "I'd pick Singleton" maps to "Singleton"). Returns <c>null</c>
+    /// when the answer can't be reconciled with the ballot — callers should
+    /// treat that as off-ballot and try the next provider rather than
+    /// printing the raw text.
+    /// </summary>
+    internal static string? SnapToOption(string answer, IReadOnlyList<string> options)
+    {
+        if (string.IsNullOrWhiteSpace(answer) || options is null || options.Count == 0)
+            return null;
+
+        var trimmed = answer.Trim();
+
+        var exact = options.FirstOrDefault(o => trimmed.Equals(o, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+            return exact;
+
+        // Prefer the longest option that the answer contains, so "FirstChoiceOption"
+        // wins over "First" when both are on the ballot. Without this, a substring-
+        // ordered match could pick the shorter, more ambiguous option first.
+        return options
+            .Where(o => !string.IsNullOrWhiteSpace(o)
+                         && trimmed.Contains(o, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(o => o.Length)
+            .FirstOrDefault();
+    }
+
     // ── Output ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Emit the full vote audit blob as pretty-printed JSON on stdout.
+    /// Returns exit code 0 when quorum was reached, 1 otherwise — matching
+    /// <see cref="EmitPlain"/> so callers can swap modes without re-reading
+    /// the contract.
+    /// </summary>
     private static int EmitJson(VotingResult result)
     {
         var json = JsonSerializer.Serialize(new
@@ -409,6 +459,12 @@ public static class AskCommand
         return result.QuorumReached ? 0 : 1;
     }
 
+    /// <summary>
+    /// Emit the bare consensus answer on stdout. On a quorum miss, prints the
+    /// most-popular fallback answer (so the upstream CLI always has something
+    /// to feed back) plus a stderr warning, and returns exit code 1. Returns
+    /// 0 when quorum was reached.
+    /// </summary>
     private static int EmitPlain(VotingResult result)
     {
         if (!result.QuorumReached)
@@ -445,7 +501,7 @@ public static class AskCommand
     /// so a 200KB README can't blow the prompt budget. Missing pieces are
     /// silently skipped — this is auto-context, not a contract.
     /// </summary>
-    private static async Task<string> CollectAutoContextAsync(string projectDir)
+    internal static async Task<string> CollectAutoContextAsync(string projectDir)
     {
         var sb = new StringBuilder();
 
@@ -484,7 +540,13 @@ public static class AskCommand
         return sb.ToString();
     }
 
-    private static string? FindFirst(string dir, string[] names)
+    /// <summary>
+    /// Returns the absolute path of the first file in <paramref name="names"/>
+    /// that exists under <paramref name="dir"/>, or <c>null</c> if none of
+    /// them are present. Used by auto-context to handle case/spelling variants
+    /// of well-known files (CLAUDE.md / README.md / Readme.md / etc.).
+    /// </summary>
+    internal static string? FindFirst(string dir, string[] names)
     {
         foreach (var n in names)
         {
@@ -494,13 +556,25 @@ public static class AskCommand
         return null;
     }
 
+    /// <summary>
+    /// Reads <paramref name="path"/> into memory and truncates to <paramref name="cap"/>
+    /// characters. The cap protects the prompt budget from oversized
+    /// CLAUDE.md/README files; truncated content is marked with a footer so
+    /// voters know they're seeing only the head of the file.
+    /// </summary>
     private static async Task<string> ReadCappedAsync(string path, int cap)
     {
         var text = await File.ReadAllTextAsync(path);
         return Truncate(text, cap);
     }
 
-    private static string Truncate(string s, int cap) =>
+    /// <summary>
+    /// Returns <paramref name="s"/> unchanged when ≤ <paramref name="cap"/>,
+    /// otherwise the first <c>cap</c> characters plus a marker noting the
+    /// original size. Used both for capped auto-context pieces and for
+    /// trimming error messages so a runaway response can't blow the log.
+    /// </summary>
+    internal static string Truncate(string s, int cap) =>
         s.Length <= cap ? s : s[..cap] + $"\n…[truncated, original {s.Length} chars]";
 
     /// <summary>
@@ -556,8 +630,13 @@ public static class AskCommand
 
     // ── Help ────────────────────────────────────────────────────────────────
 
-    private static bool IsHelp(string a) => a is "-h" or "--help" or "help" or "/?";
+    /// <summary>
+    /// Recognises the help flags accepted by every Legion subcommand:
+    /// <c>-h</c>, <c>--help</c>, <c>help</c>, <c>/?</c>.
+    /// </summary>
+    internal static bool IsHelp(string a) => a is "-h" or "--help" or "help" or "/?";
 
+    /// <summary>Print the <c>legion ask</c> usage banner to stdout.</summary>
     private static void PrintUsage()
     {
         Console.WriteLine("legion ask <question> [opts]");

@@ -13,4 +13,8 @@
     <ProjectReference Include="..\MindAttic.Legion\MindAttic.Legion.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="MindAttic.Legion.Tests" />
+  </ItemGroup>
+
 </Project>

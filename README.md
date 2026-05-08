@@ -348,14 +348,19 @@ stderr carries warnings; never parse it.
 
 ## Testing
 
-`MindAttic.Legion.Tests/` covers:
+`MindAttic.Legion.Tests/` (238 tests) covers:
 
-- Vote tally correctness (plurality, majority, unanimous)
-- Quorum enforcement
+- Vote tally correctness (plurality, simple-majority, two-thirds, unanimous)
+- Quorum enforcement and threshold edge cases
 - Persona injection (system-prompt wrapping)
-- Provider failover (one voter erroring doesn't break the vote)
+- Provider failover and refill (one voter erroring doesn't break the vote; failed slots are reissued against the surviving providers)
 - Choice-option exact-match matching
 - Scored-vote dimension aggregation
+- Wire-format adapters per provider (Claude / OpenAI / Gemini / Cohere / OpenAI-compatible)
+- Resilience policy: retry / circuit-breaker / fallback-chain
+- Health-check diagnosis classification (auth / quota / rate-limit / offline / wrong-reply)
+- Live model discovery + JSON shape normalization
+- `AskCommand` helpers: trust-list intersection, choice-mode option snapping, auto-context assembly + caps, architect-prompt heuristics, help-flag recognition
 
 Run from the repo root:
 
