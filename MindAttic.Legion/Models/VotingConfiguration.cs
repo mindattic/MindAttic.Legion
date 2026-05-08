@@ -22,10 +22,7 @@ public class VotingConfiguration
     /// Map of provider ID → API key. Explicit entries here win over the shared
     /// credential store (useful for tests or app-specific overrides).
     /// Supported provider IDs: claude, openai, gemini, deepseek, mistral,
-    ///   xai, groq, together, openrouter, fireworks, cohere, ollama, lmstudio.
-    /// Local providers do not require an API key, but adding their id here or
-    /// in <see cref="ModelOverrides"/> opts them into <see cref="ActiveProviderIds"/>
-    /// when allowed by <see cref="AllowedProviderIds"/>.
+    ///   xai, groq, together, openrouter, fireworks, cohere.
     /// </summary>
     public Dictionary<string, string> ApiKeys { get; set; } = new();
 
@@ -63,13 +60,15 @@ public class VotingConfiguration
     /// <summary>
     /// Whitelist of providers eligible for voting. Empty set = no restriction
     /// (every provider with a key is active). Default restricts to the four
-    /// production providers that meet the StreetSamurai cost/quality bar.
-    /// Failed voters in this set are refilled by <see cref="LLMVotingService"/>
-    /// using additional instances of the surviving allowed providers.
+    /// production providers the project trusts for autonomous decisions —
+    /// Claude, ChatGPT, Gemini, DeepSeek. Failed voters in this set are
+    /// refilled by <see cref="LLMVotingService"/> using additional instances
+    /// of the surviving allowed providers, so a Gemini outage doesn't shrink
+    /// the panel below quorum size.
     /// </summary>
     public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        "claude", "openai", "deepseek",
+        "claude", "openai", "gemini", "deepseek",
     };
 
     /// <summary>
@@ -85,21 +84,13 @@ public class VotingConfiguration
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in ApiKeys)
             {
-                if (!string.IsNullOrWhiteSpace(kv.Value)
-                    || LlmProviderCatalog.Get(kv.Key)?.RequiresApiKey == false)
-                {
+                if (!string.IsNullOrWhiteSpace(kv.Value))
                     ids.Add(kv.Key);
-                }
             }
-            foreach (var kv in ModelOverrides)
-                if (LlmProviderCatalog.Get(kv.Key)?.RequiresApiKey == false)
-                    ids.Add(kv.Key);
             if (UseSharedCredentials)
             {
-                foreach (var id in MindAtticCredentialStore.ListProviders()) ids.Add(id);
-                foreach (var id in MindAtticCredentialStore.LoadAllRaw().Keys)
-                    if (LlmProviderCatalog.Get(id)?.RequiresApiKey == false)
-                        ids.Add(id);
+                foreach (var id in MindAtticCredentialStore.ListProviders())
+                    ids.Add(id);
             }
             if (AllowedProviderIds is { Count: > 0 })
                 ids.IntersectWith(AllowedProviderIds);

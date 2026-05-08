@@ -38,6 +38,7 @@ public class LegionCli
                 "personas"  => Personas(args.Skip(1).ToArray()),
                 "panel"     => Panel(args.Skip(1).ToArray()),
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
+                "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
                 _ => UnknownCommand(args[0]),
             };
         }
@@ -77,6 +78,9 @@ public class LegionCli
         Console.WriteLine("  vote <question> [opts]       Multi-LLM consensus vote on a question; outputs JSON.");
         Console.WriteLine("                               Opts: --context <text>, --quorum plurality|simplemajority|twothirds|unanimous,");
         Console.WriteLine("                                     --options A,B,C, --max-tokens N, --no-narrative");
+        Console.WriteLine("  ask <question> [opts]        Architect-framed decision; stdout = bare answer (or --json).");
+        Console.WriteLine("                               Auto-pulls CLAUDE.md/README/git as context. Built for piping");
+        Console.WriteLine("                               back into a Claude Code or Codex CLI that's blocking on a prompt.");
         Console.WriteLine("  status opts: --no-probe, --json, --timeout N");
         Console.WriteLine();
         Console.WriteLine("All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.");
@@ -229,39 +233,31 @@ public class LegionCli
         Console.WriteLine($"Probe:            {(runProbe ? "enabled" : "disabled")} ({timeout.TotalSeconds:0}s timeout)");
         Console.WriteLine();
 
-        Console.WriteLine($"{"ID",-12} {"KIND",-6} {"CONFIG",-13} {"LIVE",-8} {"CONNECTIVITY",-16} {"EFFECTIVE MODEL"}");
+        Console.WriteLine($"{"ID",-12} {"CONFIG",-13} {"LIVE",-8} {"CONNECTIVITY",-16} {"EFFECTIVE MODEL"}");
         Console.WriteLine(new string('-', 110));
         foreach (var item in inventory)
         {
             healthByProvider.TryGetValue(item.Provider.Id, out var h);
-            var config = item.RequiresApiKey
-                ? item.HasCredential ? "key ok" : "missing key"
-                : "local";
+            var config = item.HasCredential ? "key ok" : "missing key";
             var live = item.LiveModelQuerySucceeded ? item.LiveModels.Count.ToString() : item.Diagnosis.ToString();
             var connectivity = h is null
                 ? "not probed"
                 : h.RespondedCorrectly ? "OK"
                 : h.Diagnosis.ToString();
 
-            Console.WriteLine($"{item.Provider.Id,-12} {item.Provider.Kind,-6} {config,-13} {Truncate(live, 8),-8} {Truncate(connectivity, 16),-16} {Truncate(item.EffectiveModel, 44)}");
+            Console.WriteLine($"{item.Provider.Id,-12} {config,-13} {Truncate(live, 8),-8} {Truncate(connectivity, 16),-16} {Truncate(item.EffectiveModel, 44)}");
         }
 
         foreach (var item in inventory)
         {
             healthByProvider.TryGetValue(item.Provider.Id, out var h);
-            var runtime = LlmProviderRuntimeConfigurationResolver.Get(item.Provider.Id);
 
             Console.WriteLine();
             Console.WriteLine($"{item.Provider.DisplayName} ({item.Provider.Id})");
             Console.WriteLine($"  vendor:          {item.Provider.Vendor}");
-            Console.WriteLine($"  kind:            {item.Provider.Kind}");
-            Console.WriteLine($"  auth:            {(item.RequiresApiKey ? item.HasCredential ? "API key configured" : "missing API key" : "not required")}");
-            if (!string.IsNullOrWhiteSpace(runtime.BaseUrl))
-                Console.WriteLine($"  base URL:        {runtime.BaseUrl} ({runtime.BaseUrlSource})");
+            Console.WriteLine($"  auth:            {(item.HasCredential ? "API key configured" : "missing API key")}");
             if (!string.IsNullOrWhiteSpace(item.ModelsEndpoint))
                 Console.WriteLine($"  models endpoint: {item.ModelsEndpoint}");
-            if (!string.IsNullOrWhiteSpace(item.ChatEndpoint))
-                Console.WriteLine($"  chat endpoint:   {item.ChatEndpoint}");
             if (!string.IsNullOrWhiteSpace(item.ConfiguredModel))
                 Console.WriteLine($"  configured model: {item.ConfiguredModel}");
             Console.WriteLine($"  effective model: {item.EffectiveModel}");
@@ -270,9 +266,8 @@ public class LegionCli
                 WriteModelList("live models", item.LiveModels);
             else
             {
-                var nextStep = item.Provider.IsLocal
-                    ? item.Provider.ConfigurationNotes
-                    : LlmHealthDiagnoser.ActionableMessage(item.Diagnosis, item.Provider.DisplayName, item.Provider.KeysUrl, item.Provider.DashboardUrl);
+                var nextStep = LlmHealthDiagnoser.ActionableMessage(
+                    item.Diagnosis, item.Provider.DisplayName, item.Provider.KeysUrl, item.Provider.DashboardUrl);
                 Console.WriteLine($"  model discovery: {item.Diagnosis} - {Truncate(item.ErrorMessage ?? "not queried", 120)}");
                 Console.WriteLine($"  next step:       {nextStep}");
                 WriteModelList("catalog models", item.KnownModels);
@@ -312,21 +307,15 @@ public class LegionCli
             providers = inventory.Select(item =>
             {
                 healthByProvider.TryGetValue(item.Provider.Id, out var h);
-                var runtime = LlmProviderRuntimeConfigurationResolver.Get(item.Provider.Id);
                 return new
                 {
                     id = item.Provider.Id,
                     displayName = item.Provider.DisplayName,
                     vendor = item.Provider.Vendor,
-                    kind = item.Provider.Kind.ToString(),
-                    requiresApiKey = item.RequiresApiKey,
                     hasCredential = item.HasCredential,
                     configuredModel = item.ConfiguredModel,
                     effectiveModel = item.EffectiveModel,
-                    baseUrl = runtime.BaseUrl,
-                    baseUrlSource = runtime.BaseUrlSource,
                     modelsEndpoint = item.ModelsEndpoint,
-                    chatEndpoint = item.ChatEndpoint,
                     liveModelQuerySucceeded = item.LiveModelQuerySucceeded,
                     liveModelDiagnosis = item.Diagnosis.ToString(),
                     liveModelError = item.ErrorMessage,

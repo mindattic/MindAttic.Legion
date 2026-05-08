@@ -336,12 +336,7 @@ public class LlmHealthCheckDiagnosticsTests
     {
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
         var all = await hc.CheckAllAsync();
-        Assert.That(all
-            .Where(r => LlmProviderCatalog.Get(r.ProviderId)?.RequiresApiKey != false)
-            .All(r => r.Diagnosis == LlmHealthDiagnosis.MissingCredential), Is.True);
-        Assert.That(all
-            .Where(r => LlmProviderCatalog.Get(r.ProviderId)?.RequiresApiKey == false)
-            .All(r => r.Diagnosis != LlmHealthDiagnosis.MissingCredential), Is.True);
+        Assert.That(all.All(r => r.Diagnosis == LlmHealthDiagnosis.MissingCredential), Is.True);
     }
 
     [Test]

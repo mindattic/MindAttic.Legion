@@ -12,12 +12,13 @@ A single LLM is a single opinion. When the cost of a wrong answer is real — a 
 
 Legion is the panel:
 
-- **Multi-provider transport** — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks, Cohere, Ollama, and LM Studio, all behind one client.
+- **Multi-provider transport** — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks, and Cohere, all behind one client.
 - **Voting** — call all configured providers in parallel, tally their answers, return the consensus with reasoning + dissent.
 - **Decision-making** — `DecideAsync(question, options)` picks one option from a fixed list with confidence.
 - **Scoring** — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.
 - **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1000-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote *as* them.
-- **CLI** — `legion.exe status`, `legion.exe vote`, `legion.exe health`, `legion.exe panel` — same engine, no .NET app required.
+- **Autonomous architectural decisions** — `legion.exe ask` is purpose-built for the loop where another coding CLI (Claude Code, Codex) blocks on a user prompt: an outer monitor pipes the question to `ask`, the panel deliberates, and the bare answer flows back to the blocked CLI. Architect-framed voters, auto-pulls `CLAUDE.md`/`README`/git as context, default panel is the four-provider trust list with automatic refill on outages.
+- **CLI** — `legion.exe status`, `legion.exe vote`, `legion.exe ask`, `legion.exe health`, `legion.exe panel` — same engine, no .NET app required.
 
 ---
 
@@ -182,7 +183,7 @@ If quorum isn't reached, `result.QuorumReached == false` and `result.Consensus =
 
 ## Providers and models
 
-Configure cloud providers via `VotingConfiguration.ApiKeys`. A cloud provider is "active" when it has a non-empty API key. A local provider is active when you opt it in with `ModelOverrides`, `ApiKeys`, or a `providers.json` entry. `GetActiveProviderIds()` lists which providers are voting.
+Configure providers via `VotingConfiguration.ApiKeys`. A provider is "active" when it has a non-empty API key. `GetActiveProviderIds()` lists which providers are voting.
 
 | Provider id | Vendor | Default model | Dashboard |
 |---|---|---|---|
@@ -197,8 +198,6 @@ Configure cloud providers via `VotingConfiguration.ApiKeys`. A cloud provider is
 | `openrouter` | OpenRouter | (varies) | openrouter.ai |
 | `fireworks` | Fireworks AI | (varies) | fireworks.ai |
 | `cohere` | Cohere | command-r-plus | dashboard.cohere.com |
-| `ollama` | Ollama | first discovered local model, fallback `llama3.2` | local runtime |
-| `lmstudio` | LM Studio | first discovered local model, fallback `local-model` | local runtime |
 
 Use `legion.exe providers` from the CLI for the live list and dashboard URLs.
 
@@ -208,35 +207,31 @@ To override the model for a specific provider:
 config.ModelOverrides["claude"] = "claude-sonnet-4-6";
 ```
 
-Local runtimes do not need API keys. Legion looks for them at these defaults:
-
-| Provider id | Default base URL | Environment override |
-|---|---|---|
-| `ollama` | `http://localhost:11434` | `MINDATTIC_LEGION_OLLAMA_BASE_URL` |
-| `lmstudio` | `http://localhost:1234/v1` | `MINDATTIC_LEGION_LMSTUDIO_BASE_URL` |
-
-You can also put local settings in `%APPDATA%/MindAttic/LLM/providers.json`:
-
-```json
-{
-  "ollama": {
-    "type": "local",
-    "model": "llama3.2",
-    "baseUrl": "http://localhost:11434"
-  },
-  "lmstudio": {
-    "type": "local",
-    "model": "local-qwen",
-    "baseUrl": "http://localhost:1234/v1"
-  }
-}
-```
-
 To restrict voting to a subset:
 
 ```csharp
 var r = await voting.VoteAsync(req, quorum, new[] { "claude", "openai" });
 ```
+
+### Default trust list
+
+`VotingConfiguration.AllowedProviderIds` defaults to the four first-party frontier providers: **`claude`, `openai`, `gemini`, `deepseek`**. Every other provider is keyable and probeable but excluded from the default voting panel — they don't get a seat unless you explicitly add them.
+
+When a trusted provider errors mid-vote (network blip, rate limit, transient 5xx), `LLMVotingService.RefillFailedVotersAsync` automatically dispatches a fresh call to one of the *surviving* trusted providers (round-robin), so the panel never shrinks below quorum size. A failed Gemini slot becomes a second Claude or DeepSeek call rather than a missing vote. Refilled slots intentionally drop any persona overlay so a surviving voter doesn't get to "vote twice as the same character."
+
+To run with a different shortlist:
+
+```csharp
+config.AllowedProviderIds = new(StringComparer.OrdinalIgnoreCase) { "claude", "openai" };
+```
+
+Or via the CLI:
+
+```bash
+legion.exe ask "..." --providers claude,openai,gemini,deepseek
+```
+
+Set `AllowedProviderIds` to an empty set to disable filtering and let every provider with a key vote.
 
 ---
 
@@ -275,6 +270,13 @@ legion.exe vote "Is the sky blue today?" \
     --options yes,no,unclear \
     --max-tokens 256 \
     --no-narrative
+
+# Ask (architect-framed; stdout = bare answer, --json for full audit)
+legion.exe ask "Which DI lifetime for the new HttpClient wrapper?" \
+    --options "Singleton,Scoped,Transient"
+# → Singleton
+
+legion.exe ask "Best way to stream LLM tokens through SignalR without buffering?" --json
 ```
 
 Exit codes:
@@ -283,6 +285,44 @@ Exit codes:
 - `2` — pipeline error
 
 The JSON shape on stdout matches `VotingResult`/`ScoredVotingResult`, so other languages can parse it directly.
+
+### `legion.exe ask` — autonomous decisions for monitored agents
+
+`ask` is the variant tuned for the loop where you want a panel-voted answer to flow back into another coding CLI without a human in between.
+
+Differences from `vote`:
+
+- **Stdout = bare answer by default.** Choice mode prints exactly the picked option. Free-form mode prints the synthesized consensus prose. Add `--json` to get the full audit blob (votes, reasoning, confidence, dissent).
+- **Architect-framed voters.** Each voter is told to act as a senior software architect on this project: be decisive, prefer the boring/reversible/conventional choice, flag irreversible decisions, optimize for the developer's next 30 minutes.
+- **Auto-context.** When invoked inside a repo, `ask` prepends `CLAUDE.md`, `README.md`, and `git status -s` / `git log --oneline -10` to every voter's context so the panel sees the project shape. Disable with `--no-auto-context`. Each piece is independently capped (8 KB / 8 KB / 4 KB / 1 KB) so a 200 KB README can't blow the prompt budget.
+- **Default quorum is `Plurality`.** `ask` always emits *some* answer rather than blocking. Raise the bar with `--quorum twothirds` when dissent should fail closed.
+
+```bash
+legion.exe ask <question> [opts]
+```
+
+| Option | Meaning |
+|---|---|
+| `--options A,B,C` | Force choice mode; voters must pick exactly one. |
+| `--context <text>` | Extra context appended after auto-context. |
+| `--context-file <path>` | Read extra context from a file (e.g. the file you're about to edit). |
+| `--project-dir <path>` | Where to look for `CLAUDE.md`/`README`/git (default: cwd). |
+| `--no-auto-context` | Skip the auto-include. |
+| `--quorum <q>` | `plurality` \| `simplemajority` \| `twothirds` \| `unanimous` (default `plurality`). |
+| `--max-tokens N` | Per-voter cap (default 1024). |
+| `--timeout S` | Per-provider timeout in seconds (default 60). |
+| `--providers a,b,c` | Override the trust list for this call only. |
+| `--json` | Emit full vote audit JSON instead of bare answer. |
+
+Output contract:
+
+| stdout | exit | meaning |
+|---|---|---|
+| answer | `0` | panel agrees, act on it |
+| best-guess answer | `1` | panel split — re-ask with more context or escalate |
+| (empty) | `2` | unhandled error (network, etc.) |
+
+stderr carries warnings; never parse it.
 
 ---
 
@@ -353,6 +393,68 @@ IReadOnlyList<VoterProfile>      CreatePanel(int count, string fallbackProviderI
 ## License
 
 Internal MindAttic library.
+
+---
+
+## Briefing another coding agent
+
+When you want another LLM-driven CLI (Claude Code, Codex, Cursor agent, etc.) to reach for Legion instead of blocking on you, paste the block below into its memory or system prompt. It's self-contained and assumes nothing about the host except that it can run a `.exe`.
+
+```
+You now have a Legion panel for hard calls. Use it instead of blocking on me.
+
+Legion is a multi-LLM consensus CLI at:
+  D:\Projects\MindAttic\MindAttic.Legion\MindAttic.Legion.Cli\bin\Debug\net10.0\legion.exe
+
+The default panel is Claude, ChatGPT, Gemini, DeepSeek — the four providers I trust for autonomous decisions. If one is unreachable, Legion automatically refills the empty slot with another working provider so the panel never falls below quorum.
+
+WHEN TO CALL IT
+Use `legion ask` whenever you would otherwise pause to ask me:
+  - An architectural choice (DI lifetime, library pick, schema shape, layering decision).
+  - A breaking-change tradeoff (rename now vs. soft-deprecate, migrate now vs. shim).
+  - An ambiguous spec where two reasonable readings exist and the next file you write depends on which one is right.
+  - Anything hard to reverse.
+
+Don't call it for mechanical edits, formatting, or things where you already know the answer — each call costs ~3-5s and four LLM-API requests.
+
+HOW TO CALL IT
+  legion.exe ask "<question>" [opts]
+
+Modes:
+  - Choice (recommended when possible):
+      legion.exe ask "Pick the JSON serializer" --options "System.Text.Json,Newtonsoft.Json"
+      → stdout = exactly one option, exit 0 on quorum.
+  - Free-form:
+      legion.exe ask "Best way to stream LLM tokens through SignalR without buffering?"
+      → stdout = the synthesized answer.
+  - Audit mode: add --json to get votes, reasoning, confidence, dissent. Use this when you want to surface tradeoffs back to me.
+  - Strict consensus: add --quorum twothirds to fail closed (exit 1) if the panel splits. Use for irreversible decisions.
+
+Auto-context: by default `ask` reads CLAUDE.md, README.md, and `git status -s` / `git log --oneline -10` from the current working directory and prepends them so voters know the project. Pass --no-auto-context for a clean prompt, or --context-file <path> to inject a specific file (e.g. the file you're about to edit).
+
+OUTPUT CONTRACT
+  stdout              | exit | meaning
+  ------------------- | ---- | -------------------------------------------------------
+  answer              | 0    | panel agrees, act on it
+  best-guess answer   | 1    | panel split — re-ask with more context or escalate to me
+  (empty)             | 2    | unhandled error (network, etc.)
+
+stderr carries warnings; never parse it.
+
+EXAMPLES
+  # Decide a DI lifetime
+  legion.exe ask "Which DI lifetime for the new HttpClient wrapper?" --options "Singleton,Scoped,Transient"
+
+  # Pick between two refactors with full reasoning
+  legion.exe ask "Should we extract Persona-rendering into a separate service?" --json
+
+  # Conservative: only act if 2/3+ agree
+  legion.exe ask "Migrate the credential store to DPAPI now?" --quorum twothirds
+
+DON'T override --providers unless I tell you to. The four-provider trust list is deliberate.
+
+If `legion ask` exits 1 (no quorum), don't silently pick its best-guess answer for a structural decision — surface the dissent (re-run with --json, summarize the disagreement, ask me).
+```
 
 ---
 

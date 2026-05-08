@@ -14,8 +14,6 @@ public sealed record LlmModelDiscoveryResult(
     string? ConfiguredModel,
     string EffectiveModel,
     string? ModelsEndpoint,
-    string? ChatEndpoint,
-    bool RequiresApiKey,
     bool HasCredential,
     bool CanQueryLiveModels,
     bool LiveModelQuerySucceeded,
@@ -36,8 +34,8 @@ public sealed record LlmModelDiscoveryResult(
 }
 
 /// <summary>
-/// Queries cloud and local model-list endpoints and normalizes their response
-/// shapes into simple model ids. This is intentionally independent from
+/// Queries cloud model-list endpoints and normalizes their response shapes into
+/// simple model ids. This is intentionally independent from
 /// <see cref="LegionClient"/> so apps can build settings/status screens without
 /// sending a prompt to every provider.
 /// </summary>
@@ -86,22 +84,21 @@ public sealed class LlmModelDiscovery
                        AvailableModels: Array.Empty<string>());
 
         var runtime = LlmProviderRuntimeConfigurationResolver.Get(info.Id);
-        var hasCredential = !info.RequiresApiKey || !string.IsNullOrWhiteSpace(runtime.ApiKey);
+        var hasCredential = !string.IsNullOrWhiteSpace(runtime.ApiKey);
         var knownModels = info.AvailableModels.ToArray();
-        var endpoint = LlmProviderRuntimeConfigurationResolver.GetModelsEndpoint(info);
-        var chatEndpoint = LlmProviderRuntimeConfigurationResolver.GetChatEndpoint(info);
+        var endpoint = info.ModelsApiEndpoint;
 
         if (string.IsNullOrWhiteSpace(endpoint))
         {
-            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint, chatEndpoint,
+            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint,
                 hasCredential, canQuery: false, succeeded: false, elapsedMs: 0,
                 diagnosis: LlmHealthDiagnosis.Unknown, statusCode: null,
                 error: "No model-list endpoint is configured.");
         }
 
-        if (info.RequiresApiKey && string.IsNullOrWhiteSpace(runtime.ApiKey))
+        if (string.IsNullOrWhiteSpace(runtime.ApiKey))
         {
-            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint, chatEndpoint,
+            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint,
                 hasCredential: false, canQuery: false, succeeded: false, elapsedMs: 0,
                 diagnosis: LlmHealthDiagnosis.MissingCredential, statusCode: null,
                 error: "No API key configured.");
@@ -126,7 +123,7 @@ public sealed class LlmModelDiscovery
             var liveModels = ExtractModelIds(info.Id, json);
             sw.Stop();
 
-            return CreateResult(info, knownModels, liveModels, runtime, endpoint, chatEndpoint,
+            return CreateResult(info, knownModels, liveModels, runtime, endpoint,
                 hasCredential, canQuery: true, succeeded: true, elapsedMs: sw.ElapsedMilliseconds,
                 diagnosis: LlmHealthDiagnosis.Healthy, statusCode: 200, error: null);
         }
@@ -134,7 +131,7 @@ public sealed class LlmModelDiscovery
         {
             sw.Stop();
             var (diagnosis, statusCode) = LlmHealthDiagnoser.ClassifyException(ex, ct);
-            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint, chatEndpoint,
+            return CreateResult(info, knownModels, Array.Empty<string>(), runtime, endpoint,
                 hasCredential, canQuery: true, succeeded: false, elapsedMs: sw.ElapsedMilliseconds,
                 diagnosis: diagnosis, statusCode: statusCode, error: ex.Message);
         }
@@ -164,7 +161,6 @@ public sealed class LlmModelDiscovery
         IReadOnlyList<string> liveModels,
         LlmProviderRuntimeConfiguration runtime,
         string? endpoint,
-        string? chatEndpoint,
         bool hasCredential,
         bool canQuery,
         bool succeeded,
@@ -184,8 +180,6 @@ public sealed class LlmModelDiscovery
             ConfiguredModel: runtime.Model,
             EffectiveModel: effectiveModel,
             ModelsEndpoint: endpoint,
-            ChatEndpoint: chatEndpoint,
-            RequiresApiKey: info.RequiresApiKey,
             HasCredential: hasCredential,
             CanQueryLiveModels: canQuery,
             LiveModelQuerySucceeded: succeeded,
@@ -197,7 +191,7 @@ public sealed class LlmModelDiscovery
 
     private static void AddAuthHeaders(HttpRequestMessage req, LlmProviderInfo info, string? apiKey)
     {
-        if (!info.RequiresApiKey || string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(apiKey))
             return;
 
         if (info.Id.Equals("claude", StringComparison.OrdinalIgnoreCase))

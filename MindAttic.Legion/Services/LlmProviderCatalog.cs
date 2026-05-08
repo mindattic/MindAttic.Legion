@@ -1,16 +1,6 @@
 namespace MindAttic.Legion;
 
 /// <summary>
-/// Broad provider category. Cloud providers require remote credentials; local
-/// providers are runtimes running on the user's machine or LAN.
-/// </summary>
-public enum LlmProviderKind
-{
-    Cloud,
-    Local,
-}
-
-/// <summary>
 /// Metadata for one LLM provider Legion can talk to.
 /// <see cref="DashboardUrl"/> is where users monitor usage; <see cref="KeysUrl"/>
 /// is where they mint new API keys; <see cref="AvailableModels"/> lists the models
@@ -26,17 +16,7 @@ public sealed record LlmProviderInfo(
     string DashboardUrl,
     string KeysUrl,
     IReadOnlyList<string> AvailableModels,
-    string? ModelsApiEndpoint = null,
-    LlmProviderKind Kind = LlmProviderKind.Cloud,
-    bool RequiresApiKey = true,
-    string? ChatCompletionsEndpoint = null,
-    string? DefaultBaseUrl = null,
-    string? BaseUrlEnvironmentVariable = null,
-    string? ConfigurationNotes = null)
-{
-    /// <summary>True for local runtimes such as Ollama and LM Studio.</summary>
-    public bool IsLocal => Kind == LlmProviderKind.Local;
-}
+    string? ModelsApiEndpoint = null);
 
 /// <summary>
 /// Static catalog of every LLM provider Legion supports — display name, vendor,
@@ -215,43 +195,6 @@ public static class LlmProviderCatalog
                 "command-light",
             },
             ModelsApiEndpoint: "https://api.cohere.com/v1/models"),
-
-        new("ollama", "Ollama", "Ollama",
-            DefaultModel: "llama3.2",
-            DashboardUrl: "https://ollama.com/",
-            KeysUrl: "https://ollama.com/library",
-            AvailableModels: new[]
-            {
-                "llama3.2",
-                "llama3.1",
-                "mistral",
-                "qwen2.5-coder",
-                "phi4",
-                "gemma3",
-            },
-            ModelsApiEndpoint: "http://localhost:11434/api/tags",
-            Kind: LlmProviderKind.Local,
-            RequiresApiKey: false,
-            ChatCompletionsEndpoint: "http://localhost:11434/v1/chat/completions",
-            DefaultBaseUrl: "http://localhost:11434",
-            BaseUrlEnvironmentVariable: "MINDATTIC_LEGION_OLLAMA_BASE_URL",
-            ConfigurationNotes: "Run 'ollama serve' and pull at least one model, for example 'ollama pull llama3.2'."),
-
-        new("lmstudio", "LM Studio", "LM Studio",
-            DefaultModel: "local-model",
-            DashboardUrl: "https://lmstudio.ai/",
-            KeysUrl: "https://lmstudio.ai/docs/app/api",
-            AvailableModels: new[]
-            {
-                "local-model",
-            },
-            ModelsApiEndpoint: "http://localhost:1234/v1/models",
-            Kind: LlmProviderKind.Local,
-            RequiresApiKey: false,
-            ChatCompletionsEndpoint: "http://localhost:1234/v1/chat/completions",
-            DefaultBaseUrl: "http://localhost:1234/v1",
-            BaseUrlEnvironmentVariable: "MINDATTIC_LEGION_LMSTUDIO_BASE_URL",
-            ConfigurationNotes: "Start the LM Studio local server and load a chat model before probing."),
     };
 
     /// <summary>Every supported provider in canonical order.</summary>
@@ -259,6 +202,28 @@ public static class LlmProviderCatalog
 
     /// <summary>Provider IDs only (lowercase).</summary>
     public static IEnumerable<string> AllIds => providers.Select(p => p.Id);
+
+    private static readonly string[] defaultIds = { "claude", "openai", "deepseek", "gemini" };
+
+    /// <summary>
+    /// First-party frontier-lab provider set surfaced in app UIs by default.
+    /// Broader providers (Mistral, Grok, Groq, Together, OpenRouter, Fireworks,
+    /// Cohere) live in <see cref="All"/> and must be opted into explicitly by
+    /// the caller.
+    /// </summary>
+    public static IReadOnlyList<LlmProviderInfo> Default
+        => defaultIds.Select(id => providers.First(p => p.Id == id)).ToArray();
+
+    /// <summary>Default provider IDs only (lowercase). See <see cref="Default"/>.</summary>
+    public static IEnumerable<string> DefaultIds => defaultIds;
+
+    /// <summary>True if <paramref name="providerId"/> is in the default first-party set.</summary>
+    public static bool IsDefault(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return false;
+        var id = providerId.Trim().ToLowerInvariant();
+        return defaultIds.Contains(id);
+    }
 
     /// <summary>
     /// Look up a provider by its canonical id. Returns null if Legion doesn't

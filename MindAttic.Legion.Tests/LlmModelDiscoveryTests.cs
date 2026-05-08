@@ -23,7 +23,7 @@ public class LlmModelDiscoveryTests
     }
 
     [Test]
-    public async Task DiscoverOne_CloudProviderWithoutKey_ReturnsMissingCredentialAndCatalogModels()
+    public async Task DiscoverOne_WithoutKey_ReturnsMissingCredentialAndCatalogModels()
     {
         var handler = new FixedResponseHandler(HttpStatusCode.OK, """{"data":[{"id":"gpt-4.1-mini"}]}""");
         var discovery = new LlmModelDiscovery(new HttpClient(handler));
@@ -38,7 +38,7 @@ public class LlmModelDiscoveryTests
     }
 
     [Test]
-    public async Task DiscoverOne_CloudProviderWithKey_ParsesOpenAiCompatibleModelList()
+    public async Task DiscoverOne_WithKey_ParsesOpenAiCompatibleModelList()
     {
         creds.WriteKey("openai", "sk-test");
         var handler = new FixedResponseHandler(HttpStatusCode.OK,
@@ -51,48 +51,6 @@ public class LlmModelDiscoveryTests
         Assert.That(result.LiveModels, Is.EqualTo(new[] { "gpt-4.1-mini", "gpt-4.1" }));
         Assert.That(handler.Requests.Single().AuthScheme, Is.EqualTo("Bearer"));
         Assert.That(handler.Requests.Single().AuthValue, Is.EqualTo("sk-test"));
-    }
-
-    [Test]
-    public async Task DiscoverOne_Ollama_DoesNotRequireKeyAndParsesTags()
-    {
-        var handler = new FixedResponseHandler(HttpStatusCode.OK,
-            """{"models":[{"name":"llama3.2:latest"},{"name":"mistral:latest"}]}""");
-        var discovery = new LlmModelDiscovery(new HttpClient(handler));
-
-        var result = await discovery.DiscoverOneAsync("ollama");
-
-        Assert.That(result.RequiresApiKey, Is.False);
-        Assert.That(result.HasCredential, Is.True);
-        Assert.That(result.LiveModelQuerySucceeded, Is.True);
-        Assert.That(result.ModelsEndpoint, Is.EqualTo("http://localhost:11434/api/tags"));
-        Assert.That(result.ChatEndpoint, Is.EqualTo("http://localhost:11434/v1/chat/completions"));
-        Assert.That(result.LiveModels, Is.EqualTo(new[] { "llama3.2:latest", "mistral:latest" }));
-        Assert.That(handler.Requests.Single().AuthScheme, Is.Null);
-    }
-
-    [Test]
-    public async Task DiscoverOne_LmStudio_UsesConfiguredBaseUrlAndParsesModels()
-    {
-        var previous = Environment.GetEnvironmentVariable("MINDATTIC_LEGION_LMSTUDIO_BASE_URL");
-        Environment.SetEnvironmentVariable("MINDATTIC_LEGION_LMSTUDIO_BASE_URL", "http://localhost:4321");
-        try
-        {
-            var handler = new FixedResponseHandler(HttpStatusCode.OK,
-                """{"data":[{"id":"local-qwen"},{"id":"local-llama"}]}""");
-            var discovery = new LlmModelDiscovery(new HttpClient(handler));
-
-            var result = await discovery.DiscoverOneAsync("lmstudio");
-
-            Assert.That(result.LiveModelQuerySucceeded, Is.True);
-            Assert.That(result.ModelsEndpoint, Is.EqualTo("http://localhost:4321/v1/models"));
-            Assert.That(result.ChatEndpoint, Is.EqualTo("http://localhost:4321/v1/chat/completions"));
-            Assert.That(result.LiveModels, Is.EqualTo(new[] { "local-qwen", "local-llama" }));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("MINDATTIC_LEGION_LMSTUDIO_BASE_URL", previous);
-        }
     }
 
     [Test]
