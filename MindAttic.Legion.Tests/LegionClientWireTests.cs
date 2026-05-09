@@ -79,6 +79,57 @@ public class LegionClientWireTests
         Assert.That(doc.RootElement.GetProperty("temperature").GetDouble(), Is.EqualTo(0.42).Within(0.0001));
     }
 
+    [Test]
+    public async Task Claude_Opus47_OmitsTemperatureFromPayload()
+    {
+        // Opus 4.7 returns 400 invalid_request_error if `temperature` is present
+        // in the payload. The wire builder strips it for opus-4-7 family ids;
+        // this test pins that behavior so a future "always include temperature"
+        // refactor can't silently re-break every Opus call.
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("claude", "sk", "claude-opus-4-7", "s", "u",
+            maxTokens: 1234, temperature: 0.42);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.GetProperty("max_tokens").GetInt32(), Is.EqualTo(1234));
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.False,
+            "Opus 4.7 deprecates temperature; payload must omit the field.");
+    }
+
+    [Test]
+    public async Task Claude_Opus47LongContext_OmitsTemperatureFromPayload()
+    {
+        // The [1m] long-context Opus 4.7 variant has the same temperature
+        // restriction as the base model — the StartsWith match in
+        // ClaudeModelDeprecatesTemperature covers both ids.
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("claude", "sk", "claude-opus-4-7[1m]", "s", "u",
+            maxTokens: 1234, temperature: 0.42);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.False);
+    }
+
+    [Test]
+    public void ClaudeModelDeprecatesTemperature_PinsTheModelFamilyExactly()
+    {
+        // Belt-and-braces: assert the helper directly so a typo in the model
+        // prefix is caught even if the wire test fixtures change. Older Claude
+        // models still accept temperature and must NOT be stripped.
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-7"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-7[1m]"),   Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("CLAUDE-OPUS-4-7"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-6"),       Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-sonnet-4-6"),     Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-haiku-4-5-20251001"), Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature(""),                      Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature(null),                    Is.False);
+    }
+
     // ── OpenAI-compatible wire shape ────────────────────────────────────────────
 
     [Test]

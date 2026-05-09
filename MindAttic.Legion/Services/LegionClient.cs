@@ -553,9 +553,24 @@ public class LegionClient
             .Select(m => new { role = m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user", content = m.Content })
             .ToArray();
 
-        object payload = string.IsNullOrWhiteSpace(systemPrompt)
-            ? new { model, max_tokens = maxTokens, temperature, messages = apiMessages }
-            : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
+        // Opus 4.7 (and its [1m] long-context variant) deprecate the
+        // `temperature` parameter — passing it returns 400 invalid_request_error.
+        // Older Claude models still accept it, so strip it only for Opus 4.7+.
+        var omitTemperature = ClaudeModelDeprecatesTemperature(model);
+
+        object payload;
+        if (omitTemperature)
+        {
+            payload = string.IsNullOrWhiteSpace(systemPrompt)
+                ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
+                : new { model, max_tokens = maxTokens, system = systemPrompt, messages = apiMessages };
+        }
+        else
+        {
+            payload = string.IsNullOrWhiteSpace(systemPrompt)
+                ? new { model, max_tokens = maxTokens, temperature, messages = apiMessages } as object
+                : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
         req.Headers.Add("x-api-key", key);
@@ -568,6 +583,19 @@ public class LegionClient
         return JsonDocument.Parse(json).RootElement
             .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
+
+    /// <summary>
+    /// True when the Claude model id is one that rejects the
+    /// <c>temperature</c> parameter — currently the Opus 4.7 family
+    /// (including the <c>[1m]</c> long-context variant). Sending
+    /// <c>temperature</c> to these returns 400 invalid_request_error
+    /// ("`temperature` is deprecated for this model"), so the payload
+    /// builder strips the field for matching ids and leaves it for older
+    /// Claude models that still accept it.
+    /// </summary>
+    internal static bool ClaudeModelDeprecatesTemperature(string? model)
+        => !string.IsNullOrWhiteSpace(model)
+           && model!.StartsWith("claude-opus-4-7", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Google Gemini <c>generateContent</c> call. Auth goes in the query string

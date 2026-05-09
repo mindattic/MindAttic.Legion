@@ -71,6 +71,48 @@ public class AskCommandTests
         Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
     }
 
+    // ── BuildHighTierModelOverrides ────────────────────────────────────────
+
+    [Test]
+    public void BuildHighTierModelOverrides_PinsClaudeToOpus47()
+    {
+        // The whole reason this helper exists: `legion ask` must run Claude on
+        // Opus 4.7 (the High tier), not the Sonnet default that LegionClient
+        // would otherwise pick. If this assertion ever flips, every ask vote
+        // silently downgrades to Sonnet — fail loud.
+        var overrides = AskCommand.BuildHighTierModelOverrides();
+        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-4-7"));
+    }
+
+    [Test]
+    public void BuildHighTierModelOverrides_PinsAllFourTrustedVotersToHighTier()
+    {
+        var overrides = AskCommand.BuildHighTierModelOverrides();
+        Assert.That(overrides["claude"],   Is.EqualTo("claude-opus-4-7"));
+        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1"));
+        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-pro"));
+        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-reasoner"));
+    }
+
+    [Test]
+    public void BuildHighTierModelOverrides_HasOneEntryPerTrustedProvider()
+    {
+        var overrides = AskCommand.BuildHighTierModelOverrides();
+        Assert.That(overrides.Keys, Is.EquivalentTo(AskCommand.TrustedProviderIds));
+    }
+
+    [Test]
+    public void BuildHighTierModelOverrides_IsCaseInsensitive()
+    {
+        // VotingConfiguration.ModelOverrides is keyed case-insensitively in the
+        // resolution chain, so a "Claude" lookup must hit the same entry as
+        // "claude". Without an OrdinalIgnoreCase comparer the override would
+        // miss when callers use mixed case.
+        var overrides = AskCommand.BuildHighTierModelOverrides();
+        Assert.That(overrides.ContainsKey("CLAUDE"), Is.True);
+        Assert.That(overrides.ContainsKey("Claude"), Is.True);
+    }
+
     // ── SnapToOption ───────────────────────────────────────────────────────
 
     [Test]

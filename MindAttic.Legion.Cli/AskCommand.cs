@@ -27,6 +27,10 @@ using MindAttic.Legion.Providers;
 ///     <item>Default quorum is <see cref="Quorum.Plurality"/> — always emit
 ///       <em>some</em> answer; raise the bar with <c>--quorum twothirds</c>
 ///       when dissent should fail closed.</item>
+///     <item>Every voter is pinned to its <see cref="ModelTier.High"/> model
+///       via <see cref="BuildHighTierModelOverrides"/> (claude-opus-4-7,
+///       gpt-4.1, gemini-2.5-pro, deepseek-reasoner) — architecture calls
+///       run on flagship reasoning, not each provider's cheap default.</item>
 ///   </list>
 /// </summary>
 public static class AskCommand
@@ -57,6 +61,30 @@ public static class AskCommand
             return trusted;
         trusted.IntersectWith(list);
         return trusted;
+    }
+
+    /// <summary>
+    /// Per-provider model overrides pinning every trusted voter to its
+    /// <see cref="ModelTier.High"/> model from <see cref="LlmProviderCatalog"/>.
+    /// `legion ask` is for architectural / CLI-shape decisions, so the panel
+    /// runs at the strong tier (claude-opus-4-7, gpt-4.1, gemini-2.5-pro,
+    /// deepseek-reasoner) rather than each provider's cheap default. Without
+    /// this, <see cref="Providers.LlmVotingProvider.CallAsync"/> would fall
+    /// through to <see cref="LegionClient.DefaultModels"/>, which hands Claude
+    /// a Sonnet-tier model — the wrong tool for an architecture call.
+    /// Returned dictionary is keyed case-insensitively to match
+    /// <see cref="VotingConfiguration.ModelOverrides"/>.
+    /// </summary>
+    internal static Dictionary<string, string> BuildHighTierModelOverrides()
+    {
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in TrustedProviderIds)
+        {
+            var model = LlmProviderCatalog.GetTieredModel(id, ModelTier.High);
+            if (!string.IsNullOrWhiteSpace(model))
+                overrides[id] = model!;
+        }
+        return overrides;
     }
 
     /// <summary>
@@ -176,6 +204,7 @@ public static class AskCommand
             ProviderTimeout    = TimeSpan.FromSeconds(timeoutSeconds),
             DefaultMaxTokens   = maxTokens,
             AllowedProviderIds = IntersectWithTrustedSet(providerOverride),
+            ModelOverrides     = BuildHighTierModelOverrides(),
         };
 
         var activeIds = config.ActiveProviderIds;
@@ -276,6 +305,7 @@ public static class AskCommand
             ProviderTimeout    = TimeSpan.FromSeconds(phase2TimeoutSec),
             DefaultMaxTokens   = phase2MaxTokens,
             AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
+            ModelOverrides     = BuildHighTierModelOverrides(),
         };
 
         using var http2 = new HttpClient { Timeout = phase2Config.ProviderTimeout };
@@ -330,11 +360,12 @@ public static class AskCommand
             try
             {
                 var raw = await directClient.CallAsync(
-                    providerId:   providerId,
-                    systemPrompt: systemPrompt,
-                    userMessage:  userMessage,
-                    maxTokens:    phase2MaxTokens,
-                    temperature:  0.3);
+                    providerId:    providerId,
+                    systemPrompt:  systemPrompt,
+                    userMessage:   userMessage,
+                    maxTokens:     phase2MaxTokens,
+                    temperature:   0.3,
+                    modelOverride: LlmProviderCatalog.GetTieredModel(providerId, ModelTier.High));
 
                 var answer = raw?.Trim() ?? "";
                 if (string.IsNullOrWhiteSpace(answer))
