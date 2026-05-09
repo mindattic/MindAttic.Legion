@@ -40,6 +40,7 @@ public class LegionCli
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
                 "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
                 "poll"      => await PollCommand.RunAsync(args.Skip(1).ToArray()),
+                "generate"  => await GenerateCommand.RunAsync(args.Skip(1).ToArray()),
                 "tiers"     => await TiersCommand.RunAsync(args.Skip(1).ToArray()),
                 _ => UnknownCommand(args[0]),
             };
@@ -88,6 +89,10 @@ public class LegionCli
         Console.WriteLine("                               at a chosen tier. Outputs distribution + plurality winner.");
         Console.WriteLine("                               Opts: --count N (default 10), --tier (default low), --options,");
         Console.WriteLine("                                     --concurrency N, --timeout S, --json");
+        Console.WriteLine("  generate <prompt> [opts]     Bulk creative output: N distinct items via one batched call");
+        Console.WriteLine("                               per provider, deduped, newline-separated to stdout.");
+        Console.WriteLine("                               Opts: --count N (default 10), --tier (default medium),");
+        Console.WriteLine("                                     --temperature T, --no-dedup, --providers, --json");
         Console.WriteLine("  tiers [opts]                 Probe trusted providers × tier mapping (Low/Medium/High).");
         Console.WriteLine("                               Opts: --providers a,b,c, --tiers low,medium,high, --all-tiers,");
         Console.WriteLine("                                     --json, --timeout SECONDS, --max-tokens N");
