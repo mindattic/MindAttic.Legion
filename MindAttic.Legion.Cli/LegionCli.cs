@@ -39,6 +39,7 @@ public class LegionCli
                 "panel"     => Panel(args.Skip(1).ToArray()),
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
                 "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
+                "poll"      => await PollCommand.RunAsync(args.Skip(1).ToArray()),
                 "tiers"     => await TiersCommand.RunAsync(args.Skip(1).ToArray()),
                 _ => UnknownCommand(args[0]),
             };
@@ -82,6 +83,11 @@ public class LegionCli
         Console.WriteLine("  ask <question> [opts]        Architect-framed decision; stdout = bare answer (or --json).");
         Console.WriteLine("                               Auto-pulls CLAUDE.md/README/git as context. Built for piping");
         Console.WriteLine("                               back into a Claude Code or Codex CLI that's blocking on a prompt.");
+        Console.WriteLine("                               Opts: --tier low|medium|high (default high), --options, --quorum, etc.");
+        Console.WriteLine("  poll <question> [opts]       Bulk vote: N voters round-robined across trusted providers");
+        Console.WriteLine("                               at a chosen tier. Outputs distribution + plurality winner.");
+        Console.WriteLine("                               Opts: --count N (default 10), --tier (default low), --options,");
+        Console.WriteLine("                                     --concurrency N, --timeout S, --json");
         Console.WriteLine("  tiers [opts]                 Probe trusted providers × tier mapping (Low/Medium/High).");
         Console.WriteLine("                               Opts: --providers a,b,c, --tiers low,medium,high, --all-tiers,");
         Console.WriteLine("                                     --json, --timeout SECONDS, --max-tokens N");
