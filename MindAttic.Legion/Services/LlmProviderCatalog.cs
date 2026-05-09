@@ -246,4 +246,83 @@ public static class LlmProviderCatalog
         if (p is null || string.IsNullOrWhiteSpace(modelId)) return false;
         return p.AvailableModels.Any(m => string.Equals(m, modelId, StringComparison.OrdinalIgnoreCase));
     }
+
+    // ── Tiered model selection ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Per-provider tier → model assignments. When a provider isn't listed,
+    /// <see cref="GetTieredModel"/> falls back to the provider's DefaultModel.
+    /// When a tier isn't listed for a provider, GetTieredModel walks down to
+    /// the closest available tier (Highest → Higher → High → Medium → Low).
+    ///
+    /// Trusted four are explicitly mapped because they're the ones every
+    /// production call uses. Other providers can be added incrementally.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<ModelTier, string>> tieredModels =
+        new Dictionary<string, IReadOnlyDictionary<ModelTier, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["claude"] = new Dictionary<ModelTier, string>
+            {
+                [ModelTier.Low]     = "claude-haiku-4-5-20251001",
+                [ModelTier.Medium]  = "claude-sonnet-4-6",
+                [ModelTier.High]    = "claude-opus-4-7",
+                [ModelTier.Higher]  = "claude-opus-4-7[1m]",
+                [ModelTier.Highest] = "claude-opus-4-7[1m]",
+            },
+            ["openai"] = new Dictionary<ModelTier, string>
+            {
+                [ModelTier.Low]     = "gpt-4.1-nano",
+                [ModelTier.Medium]  = "gpt-4.1-mini",
+                [ModelTier.High]    = "gpt-4.1",
+                [ModelTier.Higher]  = "o1",
+                [ModelTier.Highest] = "o1",
+            },
+            ["gemini"] = new Dictionary<ModelTier, string>
+            {
+                [ModelTier.Low]     = "gemini-2.0-flash",
+                [ModelTier.Medium]  = "gemini-2.5-flash",
+                [ModelTier.High]    = "gemini-2.5-pro",
+                [ModelTier.Higher]  = "gemini-2.5-pro",
+                [ModelTier.Highest] = "gemini-2.5-pro",
+            },
+            ["deepseek"] = new Dictionary<ModelTier, string>
+            {
+                // DeepSeek only has two production models — collapse Low/Medium
+                // onto chat and High+ onto reasoner.
+                [ModelTier.Low]     = "deepseek-chat",
+                [ModelTier.Medium]  = "deepseek-chat",
+                [ModelTier.High]    = "deepseek-reasoner",
+                [ModelTier.Higher]  = "deepseek-reasoner",
+                [ModelTier.Highest] = "deepseek-reasoner",
+            },
+        };
+
+    /// <summary>
+    /// Resolve a tier-appropriate model for the given provider. Falls back from
+    /// the requested tier downward when that exact tier isn't mapped — so a
+    /// caller asking for <see cref="ModelTier.Highest"/> against a provider
+    /// that only registers Low/Medium/High will receive the High model. When
+    /// the provider has no tier mapping at all, returns the provider's
+    /// DefaultModel; when the provider is unknown, returns null.
+    /// </summary>
+    public static string? GetTieredModel(string providerId, ModelTier tier)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return null;
+        var info = Get(providerId);
+        if (info is null) return null;
+
+        if (tieredModels.TryGetValue(providerId, out var tiers))
+        {
+            // Walk down from the requested tier — Highest → Higher → ... → Low.
+            for (int t = (int)tier; t >= 0; t--)
+                if (tiers.TryGetValue((ModelTier)t, out var model) && !string.IsNullOrWhiteSpace(model))
+                    return model;
+            // Walk back up if the requested tier was somehow below every entry.
+            for (int t = (int)tier + 1; t <= (int)ModelTier.Highest; t++)
+                if (tiers.TryGetValue((ModelTier)t, out var model) && !string.IsNullOrWhiteSpace(model))
+                    return model;
+        }
+
+        return info.DefaultModel;
+    }
 }
