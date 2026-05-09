@@ -27,10 +27,12 @@ using MindAttic.Legion.Providers;
 ///     <item>Default quorum is <see cref="Quorum.Plurality"/> — always emit
 ///       <em>some</em> answer; raise the bar with <c>--quorum twothirds</c>
 ///       when dissent should fail closed.</item>
-///     <item>Every voter is pinned to its <see cref="ModelTier.High"/> model
-///       via <see cref="BuildHighTierModelOverrides"/> (claude-opus-4-7,
-///       gpt-4.1, gemini-2.5-pro, deepseek-reasoner) — architecture calls
-///       run on flagship reasoning, not each provider's cheap default.</item>
+///     <item>Every voter is pinned to <see cref="DefaultTier"/> = High
+///       (claude-opus-4-7, gpt-4.1, gemini-2.5-pro, deepseek-reasoner) so
+///       architecture calls run on flagship reasoning rather than each
+///       provider's cheap default. Override with <c>--tier low|medium|
+///       high|higher|highest</c> when a cheaper or longer-context tier
+///       fits the question better.</item>
 ///   </list>
 /// </summary>
 public static class AskCommand
@@ -64,28 +66,44 @@ public static class AskCommand
     }
 
     /// <summary>
-    /// Per-provider model overrides pinning every trusted voter to its
-    /// <see cref="ModelTier.High"/> model from <see cref="LlmProviderCatalog"/>.
-    /// `legion ask` is for architectural / CLI-shape decisions, so the panel
-    /// runs at the strong tier (claude-opus-4-7, gpt-4.1, gemini-2.5-pro,
-    /// deepseek-reasoner) rather than each provider's cheap default. Without
-    /// this, <see cref="Providers.LlmVotingProvider.CallAsync"/> would fall
-    /// through to <see cref="LegionClient.DefaultModels"/>, which hands Claude
-    /// a Sonnet-tier model — the wrong tool for an architecture call.
-    /// Returned dictionary is keyed case-insensitively to match
-    /// <see cref="VotingConfiguration.ModelOverrides"/>.
+    /// Default tier used by <c>legion ask</c> when <c>--tier</c> is not
+    /// supplied. High = flagship reasoning models (claude-opus-4-7,
+    /// gpt-4.1, gemini-2.5-pro, deepseek-reasoner) — the right tool for
+    /// architectural / CLI-shape decisions. Cheaper tiers can be chosen
+    /// explicitly with <c>--tier low|medium|high|higher|highest</c>.
     /// </summary>
-    internal static Dictionary<string, string> BuildHighTierModelOverrides()
+    internal const ModelTier DefaultTier = ModelTier.High;
+
+    /// <summary>
+    /// Per-provider model overrides pinning every trusted voter to the
+    /// supplied <paramref name="tier"/> via
+    /// <see cref="LlmProviderCatalog.GetTieredModel"/>. Without this,
+    /// <see cref="Providers.LlmVotingProvider.CallAsync"/> would fall
+    /// through to <see cref="LegionClient.DefaultModels"/>, which hands
+    /// Claude a Sonnet-tier model — fine for tonal calls, the wrong tool
+    /// for an architecture call. Returned dictionary is keyed
+    /// case-insensitively to match <see cref="VotingConfiguration.ModelOverrides"/>.
+    /// </summary>
+    internal static Dictionary<string, string> BuildTierModelOverrides(ModelTier tier)
     {
         var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var id in TrustedProviderIds)
         {
-            var model = LlmProviderCatalog.GetTieredModel(id, ModelTier.High);
+            var model = LlmProviderCatalog.GetTieredModel(id, tier);
             if (!string.IsNullOrWhiteSpace(model))
                 overrides[id] = model!;
         }
         return overrides;
     }
+
+    /// <summary>
+    /// Back-compat shim — a hard pin to High tier. Delegates to
+    /// <see cref="BuildTierModelOverrides"/>; kept so any caller that took
+    /// a dependency on the old name doesn't break. Prefer
+    /// <c>BuildTierModelOverrides(ModelTier.High)</c> in new code.
+    /// </summary>
+    internal static Dictionary<string, string> BuildHighTierModelOverrides()
+        => BuildTierModelOverrides(ModelTier.High);
 
     /// <summary>
     /// Parse args, run the ask, and return a process exit code:
@@ -112,11 +130,16 @@ public static class AskCommand
         var timeoutSeconds    = 60.0;
         var providerOverride  = new List<string>();
         var mustAnswer        = false;
+        var tier              = DefaultTier;
 
         for (var i = 1; i < args.Length; i++)
         {
             switch (args[i].ToLowerInvariant())
             {
+                case "--tier":
+                    if (i + 1 < args.Length && Enum.TryParse<ModelTier>(args[++i], ignoreCase: true, out var parsedTier))
+                        tier = parsedTier;
+                    break;
                 case "--options":
                     if (i + 1 < args.Length)
                         options = args[++i].Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
@@ -204,7 +227,7 @@ public static class AskCommand
             ProviderTimeout    = TimeSpan.FromSeconds(timeoutSeconds),
             DefaultMaxTokens   = maxTokens,
             AllowedProviderIds = IntersectWithTrustedSet(providerOverride),
-            ModelOverrides     = BuildHighTierModelOverrides(),
+            ModelOverrides     = BuildTierModelOverrides(tier),
         };
 
         var activeIds = config.ActiveProviderIds;
@@ -266,7 +289,8 @@ public static class AskCommand
                 voters:             voters,
                 quorum:             quorum,
                 originalMaxTokens:  maxTokens,
-                originalTimeoutSec: timeoutSeconds);
+                originalTimeoutSec: timeoutSeconds,
+                tier:               tier);
         }
 
         return emitJson
@@ -292,7 +316,8 @@ public static class AskCommand
         List<VoterProfile> voters,
         Quorum quorum,
         int originalMaxTokens,
-        double originalTimeoutSec)
+        double originalTimeoutSec,
+        ModelTier tier)
     {
         // ── Phase 2: relaxed-budget retry ───────────────────────────────────
         Console.Error.WriteLine(
@@ -305,7 +330,7 @@ public static class AskCommand
             ProviderTimeout    = TimeSpan.FromSeconds(phase2TimeoutSec),
             DefaultMaxTokens   = phase2MaxTokens,
             AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
-            ModelOverrides     = BuildHighTierModelOverrides(),
+            ModelOverrides     = BuildTierModelOverrides(tier),
         };
 
         using var http2 = new HttpClient { Timeout = phase2Config.ProviderTimeout };
@@ -365,7 +390,7 @@ public static class AskCommand
                     userMessage:   userMessage,
                     maxTokens:     phase2MaxTokens,
                     temperature:   0.3,
-                    modelOverride: LlmProviderCatalog.GetTieredModel(providerId, ModelTier.High));
+                    modelOverride: LlmProviderCatalog.GetTieredModel(providerId, tier));
 
                 var answer = raw?.Trim() ?? "";
                 if (string.IsNullOrWhiteSpace(answer))
@@ -688,6 +713,9 @@ public static class AskCommand
         Console.WriteLine("  --timeout S            Per-provider timeout in seconds (default 60).");
         Console.WriteLine("  --providers a,b,c      Narrow the panel WITHIN the trusted set. Untrusted ids are dropped.");
         Console.WriteLine("                         Trusted: claude, openai, gemini, deepseek.");
+        Console.WriteLine("  --tier <t>             low | medium | high | higher | highest (default high).");
+        Console.WriteLine("                         High = flagship reasoning (Opus 4.7, GPT-4.1, Gemini 2.5 Pro,");
+        Console.WriteLine("                         DeepSeek Reasoner). Drop tier for cheaper/faster decisions.");
         Console.WriteLine("  --must-answer          On 0/N voter failure, retry with doubled budget and no auto-context;");
         Console.WriteLine("                         on second failure, single-provider chain (claude → openai → gemini →");
         Console.WriteLine("                         deepseek) until one replies. Always emit an answer if any provider works.");

@@ -113,6 +113,57 @@ public class AskCommandTests
         Assert.That(overrides.ContainsKey("Claude"), Is.True);
     }
 
+    [Test]
+    public void DefaultTier_IsHigh()
+    {
+        // Architecture decisions are the default ask shape; if the default
+        // ever flips to Medium/Low it'd silently downgrade every legion-ask
+        // call that doesn't pass --tier. Pin it.
+        Assert.That(AskCommand.DefaultTier, Is.EqualTo(ModelTier.High));
+    }
+
+    [Test]
+    public void BuildTierModelOverrides_Low_PinsCheapModels()
+    {
+        var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Low);
+        Assert.That(overrides["claude"],   Is.EqualTo("claude-haiku-4-5-20251001"));
+        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1-nano"));
+        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-flash-lite"));
+        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-chat"));
+    }
+
+    [Test]
+    public void BuildTierModelOverrides_Medium_PinsBalancedModels()
+    {
+        var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Medium);
+        Assert.That(overrides["claude"],   Is.EqualTo("claude-sonnet-4-6"));
+        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1-mini"));
+        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-flash"));
+        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-chat"));
+    }
+
+    [Test]
+    public void BuildTierModelOverrides_HighMatchesBackCompatShim()
+    {
+        // BuildHighTierModelOverrides is kept as a delegate to BuildTierModelOverrides(High).
+        // Asserting equivalence stops a future refactor that drops the shim from
+        // also accidentally diverging the High mapping.
+        var viaShim    = AskCommand.BuildHighTierModelOverrides();
+        var viaGeneric = AskCommand.BuildTierModelOverrides(ModelTier.High);
+        Assert.That(viaGeneric, Is.EquivalentTo(viaShim));
+    }
+
+    [Test]
+    public void BuildTierModelOverrides_Higher_FallsBackToHighWhenNotMappedDirectly()
+    {
+        // Higher tier walks down to High when not explicitly mapped — the
+        // catalog GetTieredModel guarantees this, but pin it here too so a
+        // refactor that strips the walk-down behavior breaks the test.
+        var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Higher);
+        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-4-7[1m]"));
+        Assert.That(overrides["openai"], Is.EqualTo("o1"));
+    }
+
     // ── SnapToOption ───────────────────────────────────────────────────────
 
     [Test]
