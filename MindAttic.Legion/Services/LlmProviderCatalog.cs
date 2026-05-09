@@ -64,17 +64,15 @@ public static class LlmProviderCatalog
             ModelsApiEndpoint: "https://api.openai.com/v1/models"),
 
         new("gemini", "Gemini", "Google",
-            DefaultModel: "gemini-2.0-flash",
+            DefaultModel: "gemini-2.5-flash",
             DashboardUrl: "https://aistudio.google.com/",
             KeysUrl: "https://aistudio.google.com/app/apikey",
             AvailableModels: new[]
             {
-                "gemini-2.5-flash",
                 "gemini-2.5-pro",
-                "gemini-2.0-flash",
-                "gemini-2.0-flash-thinking-exp",
-                "gemini-1.5-pro",
-                "gemini-1.5-flash",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-flash-latest",
             },
             ModelsApiEndpoint: "https://generativelanguage.googleapis.com/v1beta/models"),
 
@@ -279,7 +277,7 @@ public static class LlmProviderCatalog
             },
             ["gemini"] = new Dictionary<ModelTier, string>
             {
-                [ModelTier.Low]     = "gemini-2.0-flash",
+                [ModelTier.Low]     = "gemini-2.5-flash-lite",
                 [ModelTier.Medium]  = "gemini-2.5-flash",
                 [ModelTier.High]    = "gemini-2.5-pro",
                 [ModelTier.Higher]  = "gemini-2.5-pro",
