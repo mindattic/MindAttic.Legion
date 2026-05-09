@@ -87,12 +87,12 @@ public class LegionClientTests
 
         var reply = await client.CallAsync("gemini",
             apiKey: "google-key",
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             systemPrompt: "be brief",
             userMessage: "hi");
 
         Assert.That(reply, Is.EqualTo("hi from gemini"));
-        Assert.That(capture.LastUri!.ToString(), Does.Contain("models/gemini-2.0-flash:generateContent"));
+        Assert.That(capture.LastUri!.ToString(), Does.Contain("models/gemini-2.5-flash:generateContent"));
         Assert.That(capture.LastUri!.Query, Does.Contain("key=google-key"));
     }
 

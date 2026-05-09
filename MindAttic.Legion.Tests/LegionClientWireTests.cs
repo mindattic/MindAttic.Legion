@@ -190,13 +190,13 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.GeminiOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("gemini", "AIzaXYZ", "gemini-2.0-flash", "s", "u");
+        await client.CallAsync("gemini", "AIzaXYZ", "gemini-2.5-flash", "s", "u");
 
         var req = handler.Requests.Single();
         Assert.That(req.AuthScheme, Is.Null);
         Assert.That(req.Uri.Query, Does.Contain("key=AIzaXYZ"));
         Assert.That(req.Uri.AbsoluteUri,
-            Does.Contain("models/gemini-2.0-flash:generateContent"));
+            Does.Contain("models/gemini-2.5-flash:generateContent"));
     }
 
     [Test]
@@ -205,7 +205,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.GeminiOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("gemini", "k", "gemini-2.0-flash", "You are Gemini.", "hi");
+        await client.CallAsync("gemini", "k", "gemini-2.5-flash", "You are Gemini.", "hi");
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
         Assert.That(
@@ -262,7 +262,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.GeminiOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallChatAsync("gemini", "k", "gemini-2.0-flash", new[]
+        await client.CallChatAsync("gemini", "k", "gemini-2.5-flash", new[]
         {
             new ChatTurn("user",      "first"),
             new ChatTurn("assistant", "reply"),

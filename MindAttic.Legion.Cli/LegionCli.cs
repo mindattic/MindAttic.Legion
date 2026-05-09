@@ -39,6 +39,7 @@ public class LegionCli
                 "panel"     => Panel(args.Skip(1).ToArray()),
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
                 "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
+                "tiers"     => await TiersCommand.RunAsync(args.Skip(1).ToArray()),
                 _ => UnknownCommand(args[0]),
             };
         }
@@ -81,6 +82,9 @@ public class LegionCli
         Console.WriteLine("  ask <question> [opts]        Architect-framed decision; stdout = bare answer (or --json).");
         Console.WriteLine("                               Auto-pulls CLAUDE.md/README/git as context. Built for piping");
         Console.WriteLine("                               back into a Claude Code or Codex CLI that's blocking on a prompt.");
+        Console.WriteLine("  tiers [opts]                 Probe trusted providers × tier mapping (Low/Medium/High).");
+        Console.WriteLine("                               Opts: --providers a,b,c, --tiers low,medium,high, --all-tiers,");
+        Console.WriteLine("                                     --json, --timeout SECONDS, --max-tokens N");
         Console.WriteLine("  status opts: --no-probe, --json, --timeout N");
         Console.WriteLine();
         Console.WriteLine("All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.");
