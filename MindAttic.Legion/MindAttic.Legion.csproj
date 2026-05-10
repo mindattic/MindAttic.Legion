@@ -6,11 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library and unified credentials at %APPDATA%/MindAttic/LLM, so any MindAttic application can spin up diverse multi-LLM panels with one line of code.</Description>
-    <Version>2.0.0</Version>
+    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library. Credential resolution now flows through MindAttic.Vault: User Secrets / App Service Application Settings / Azure Key Vault in the cloud-native chain, with the legacy %APPDATA%/MindAttic/LLM file as a backward-compat fallback.</Description>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
