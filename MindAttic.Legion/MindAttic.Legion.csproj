@@ -6,9 +6,29 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library. Credential resolution now flows through MindAttic.Vault: User Secrets / App Service Application Settings / Azure Key Vault in the cloud-native chain, with the legacy %APPDATA%/MindAttic/LLM file as a backward-compat fallback.</Description>
     <Version>2.1.0</Version>
+    <PackageId>MindAttic.Legion</PackageId>
+    <Title>MindAttic.Legion</Title>
+    <Authors>MindAttic</Authors>
+    <Company>MindAttic</Company>
+    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library. Credential resolution flows through MindAttic.Vault: User Secrets / App Service Application Settings / Azure Key Vault in the cloud-native chain, with the legacy %APPDATA%/MindAttic/LLM file as a backward-compat fallback.</Description>
+    <PackageTags>mindattic;legion;llm;anthropic;openai;voting;multi-llm;ai;agents</PackageTags>
+    <PackageProjectUrl>https://github.com/mindattic/MindAttic.Legion</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mindattic/MindAttic.Legion.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright (c) 2026 MindAttic</Copyright>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE"   Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
