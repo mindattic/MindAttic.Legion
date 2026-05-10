@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Version>2.2.0</Version>
+    <Version>2.3.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
