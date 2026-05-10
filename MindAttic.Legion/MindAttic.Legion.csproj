@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Version>2.1.0</Version>
+    <Version>2.2.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
     <Company>MindAttic</Company>
-    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library. Credential resolution flows through MindAttic.Vault: User Secrets / App Service Application Settings / Azure Key Vault in the cloud-native chain, with the legacy %APPDATA%/MindAttic/LLM file as a backward-compat fallback.</Description>
+    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1000-persona library. Credential resolution flows through MindAttic.Vault: hosts call MindAtticCredentialStore.UseConfiguration(IConfiguration) to consume User Secrets / App Service Application Settings / Azure Key Vault, with the legacy %APPDATA%/MindAttic/LLM file kept as a backward-compat fallback. The bundled CLI wires this automatically.</Description>
     <PackageTags>mindattic;legion;llm;anthropic;openai;voting;multi-llm;ai;agents</PackageTags>
     <PackageProjectUrl>https://github.com/mindattic/MindAttic.Legion</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mindattic/MindAttic.Legion.git</RepositoryUrl>

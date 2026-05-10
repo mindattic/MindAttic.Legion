@@ -1,9 +1,11 @@
 namespace MindAttic.Legion.Cli;
 
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using MindAttic.Legion;
 using MindAttic.Legion.Providers;
+using MindAttic.Vault.Configuration;
 
 /// <summary>
 /// Command-line entry point for the <c>legion</c> tool. Dispatches the first
@@ -25,6 +27,11 @@ public class LegionCli
             PrintUsage();
             return 0;
         }
+
+        // Wire User Secrets + env vars into the Vault credential chain. Reads
+        // now consult MindAttic:Vault:LLM:* in IConfiguration first, with the
+        // %APPDATA%/MindAttic/LLM/providers.json file as fallback.
+        MindAtticCredentialStore.UseConfiguration(BuildConfiguration());
 
         try
         {
@@ -51,6 +58,17 @@ public class LegionCli
             return 2;
         }
     }
+
+    /// <summary>
+    /// Build the credential-source chain handed to <see cref="MindAtticCredentialStore.UseConfiguration"/>.
+    /// User Secrets at <c>mindattic-vault-shared</c> + environment variables (incl. the
+    /// <c>MindAttic__Vault__LLM__claude__apiKey</c> form for App Service / containers).
+    /// </summary>
+    private static IConfiguration BuildConfiguration() =>
+        new ConfigurationBuilder()
+            .AddUserSecrets(VaultConfigurationKeys.SharedUserSecretsId, reloadOnChange: false)
+            .AddEnvironmentVariables()
+            .Build();
 
     /// <summary>True when the argument is one of the help flags.</summary>
     private static bool IsHelp(string a) =>

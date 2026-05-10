@@ -15,6 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- UserSecrets pulls in IConfigurationBuilder and the JSON provider so the
+         CLI can compose User Secrets / env vars and hand the result to
+         MindAtticCredentialStore.UseConfiguration. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="MindAttic.Legion.Tests" />
   </ItemGroup>
 
