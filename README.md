@@ -1,8 +1,10 @@
 # MindAttic.Legion
 
-Multi-LLM consensus engine for any .NET app. One client to talk to every major LLM provider, plus a voting layer that turns a panel of LLMs into a single answer with quorum, reasoning, and confidence.
+**Multi-LLM consensus engine for .NET 10.** Turn a panel of frontier models — Claude, GPT, Gemini, DeepSeek, and seven more — into a single trustworthy answer with quorum, reasoning, and confidence. Vote, decide, score, poll, generate, or persona-wear. One panel for the calls you can't afford to get wrong.
 
-Portable: Legion has no dependency on any specific MindAttic project. Drop it into a `csproj`, register it via DI, give it API keys, and you have the panel.
+One LLM is one opinion. When a contradiction, a misclassification, or a bad route is expensive, you don't want a single model that bluffs — you want a panel that votes. Legion is the panel: unified transport across every major provider, a voting layer with quorum and dissent, tiered model selection that survives version drift, automatic failover when a provider blips, a 1000-persona library, and a CLI (`legion.exe`) that lets shell scripts, CI jobs, and other coding agents call the panel directly.
+
+Portable: Legion has no dependency on any specific MindAttic project. Drop it into a `csproj`, register it via DI, hand it your API keys, and you have the panel.
 
 ---
 
