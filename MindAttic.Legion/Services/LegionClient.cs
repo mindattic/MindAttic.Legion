@@ -99,15 +99,16 @@ public class LegionClient
     /// Hard-coded chat-completions endpoint per provider. Claude and Cohere
     /// have bespoke wire shapes (handled by <see cref="CallClaudeChatAsync"/>
     /// and <see cref="CallCohereChatAsync"/>); Gemini's URL is parameterized
-    /// by <c>{model}</c> and <c>{key}</c>; everything else is a literal
-    /// OpenAI-compatible URL routed through <see cref="CallOpenAiCompatibleChatAsync"/>.
-    /// Lookup is case-insensitive.
+    /// by <c>{model}</c> (auth goes via the <c>x-goog-api-key</c> header so the
+    /// key never appears in URL exception messages); everything else is a
+    /// literal OpenAI-compatible URL routed through
+    /// <see cref="CallOpenAiCompatibleChatAsync"/>. Lookup is case-insensitive.
     /// </summary>
     private static readonly Dictionary<string, string> Endpoints = new(StringComparer.OrdinalIgnoreCase)
     {
         ["claude"]     = "https://api.anthropic.com/v1/messages",
         ["openai"]     = "https://api.openai.com/v1/chat/completions",
-        ["gemini"]     = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+        ["gemini"]     = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         ["deepseek"]   = "https://api.deepseek.com/chat/completions",
         ["mistral"]    = "https://api.mistral.ai/v1/chat/completions",
         ["xai"]        = "https://api.x.ai/v1/chat/completions",
@@ -271,7 +272,8 @@ public class LegionClient
             await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
-            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            using var doc = JsonDocument.Parse(json);
+            var data = doc.RootElement.GetProperty("data");
             var result = new List<float[]>(data.GetArrayLength());
             foreach (var item in data.EnumerateArray())
             {
@@ -325,7 +327,8 @@ public class LegionClient
             await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
-            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            using var doc = JsonDocument.Parse(json);
+            var data = doc.RootElement.GetProperty("data");
             var images = new List<byte[]>(data.GetArrayLength());
             foreach (var item in data.EnumerateArray())
             {
@@ -373,7 +376,8 @@ public class LegionClient
             await EnsureSuccessAsync(res, ct);
             var json = await res.Content.ReadAsStringAsync(ct);
 
-            var data = JsonDocument.Parse(json).RootElement.GetProperty("data");
+            using var doc = JsonDocument.Parse(json);
+            var data = doc.RootElement.GetProperty("data");
             var urls = new List<string>(data.GetArrayLength());
             foreach (var item in data.EnumerateArray())
             {
@@ -408,7 +412,14 @@ public class LegionClient
                     maxTokens, temperature, modelOverride: null, ct: ct);
                 return (providerId, reply);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            // Only propagate cancellation when the user's token is what fired.
+            // An inner per-call timeout (its own linked CTS) surfaces as an
+            // OperationCanceledException too — treat that as a provider failure
+            // and try the next entry in the chain rather than aborting the
+            // whole fallback. Matching on the exception's CancellationToken is
+            // precise; ct.IsCancellationRequested would conflate the two when
+            // user cancels mid-request.
+            catch (OperationCanceledException oce) when (oce.CancellationToken == ct && ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 errors.Add(new Exception($"[{providerId}] {ex.Message}", ex));
@@ -430,12 +441,16 @@ public class LegionClient
         Func<Task<T>> action,
         CancellationToken ct)
     {
-        CircuitBreaker.ThrowIfOpen(providerId);
-
         var attempt = 0;
         var delay = options.InitialBackoff;
         while (true)
         {
+            // Re-check the breaker on every iteration so a parallel call that
+            // tripped the threshold mid-retry causes this call to fail fast
+            // instead of sleeping out the full backoff against a now-open
+            // breaker — saves wall-clock for fallback chains.
+            CircuitBreaker.ThrowIfOpen(providerId);
+
             try
             {
                 var result = await action();
@@ -580,7 +595,8 @@ public class LegionClient
         var res = await http.SendAsync(req, ct);
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
-        return JsonDocument.Parse(json).RootElement
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
             .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
 
@@ -598,15 +614,17 @@ public class LegionClient
            && model!.StartsWith("claude-opus-4-7", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Google Gemini <c>generateContent</c> call. Auth goes in the query string
-    /// (<c>?key=...</c>), system prompt goes to <c>systemInstruction</c>, and
-    /// the assistant role is renamed from "assistant" to "model" per Gemini's schema.
+    /// Google Gemini <c>generateContent</c> call. Auth goes in the
+    /// <c>x-goog-api-key</c> header (so the key isn't echoed back in
+    /// <c>HttpRequestException.Message</c> on transport failures), system
+    /// prompt goes to <c>systemInstruction</c>, and the assistant role is
+    /// renamed from "assistant" to "model" per Gemini's schema.
     /// </summary>
     private async Task<string> CallGeminiChatAsync(
         string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
         int maxTokens, double temperature, CancellationToken ct)
     {
-        var url = Endpoints["gemini"].Replace("{model}", model).Replace("{key}", key);
+        var url = Endpoints["gemini"].Replace("{model}", model);
         // Gemini uses role="user"/"model"; convert "assistant"→"model".
         var contents = messages
             .Where(m => !string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase))
@@ -627,12 +645,14 @@ public class LegionClient
             };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
+        req.Headers.Add("x-goog-api-key", key);
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
-        return JsonDocument.Parse(json).RootElement
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
             .GetProperty("candidates")[0]
             .GetProperty("content").GetProperty("parts")[0]
             .GetProperty("text").GetString() ?? "";
@@ -662,7 +682,8 @@ public class LegionClient
         var res = await http.SendAsync(req, ct);
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
-        return JsonDocument.Parse(json).RootElement
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
             .GetProperty("message").GetProperty("content")[0]
             .GetProperty("text").GetString() ?? "";
     }
@@ -696,7 +717,8 @@ public class LegionClient
         var res = await http.SendAsync(req, ct);
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
-        return JsonDocument.Parse(json).RootElement
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
             .GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
     }
 

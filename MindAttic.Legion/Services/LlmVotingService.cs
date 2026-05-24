@@ -237,12 +237,20 @@ public class LlmVotingService
         List<VoterProfile> voters,
         CancellationToken ct)
     {
+        // Defend against a null Question reaching the log-slice / prompt
+        // builders: the VoteAsync(string,...) overload passes the caller's
+        // value straight through, and a null question must not NRE the panel.
+        // VoteRequest.Question is init-only, so we work with a local rather
+        // than reassign.
+        var question = request.Question ?? "";
+
         var sw = Stopwatch.StartNew();
+        var questionForLog = question.Length > 80 ? question[..80] : question;
         log.LogInformation("LLMVoting: starting vote — question='{Question}', voters={Count}, quorum={Quorum}",
-            request.Question[..Math.Min(80, request.Question.Length)], voters.Count, quorum);
+            questionForLog, voters.Count, quorum);
 
         if (voters.Count == 0)
-            return EmptyResult(request.Question, quorum, sw.Elapsed, "No voters configured.");
+            return EmptyResult(question, quorum, sw.Elapsed, "No voters configured.");
 
         // Build system prompt per voter (persona + task)
         var isChoice = request.Options.Count > 0;
@@ -259,7 +267,7 @@ public class LlmVotingService
 
         var successful = individualVotes.Where(v => !v.IsError).ToList();
         if (successful.Count == 0)
-            return EmptyResult(request.Question, quorum, sw.Elapsed, "All voters failed.", individualVotes.ToList());
+            return EmptyResult(question, quorum, sw.Elapsed, "All voters failed.", individualVotes.ToList());
 
         // Tally decisions
         VotingResult result;
@@ -268,9 +276,10 @@ public class LlmVotingService
         else
             result = await TallyFreeFormVoteAsync(request, quorum, individualVotes.ToList(), sw, ct);
 
+        var consensusForLog = result.Consensus ?? "";
+        if (consensusForLog.Length > 60) consensusForLog = consensusForLog[..60];
         log.LogInformation("LLMVoting: vote complete — consensus='{Consensus}', strength={Strength:P0}, quorumReached={Reached}, duration={Duration}",
-            result.Consensus[..Math.Min(60, result.Consensus.Length)],
-            result.ConsensusStrength, result.QuorumReached, sw.Elapsed);
+            consensusForLog, result.ConsensusStrength, result.QuorumReached, sw.Elapsed);
 
         return result;
     }
@@ -412,11 +421,28 @@ public class LlmVotingService
             "LLMVoting: refilling {Count} failed voter slot(s) with instances of {Working}",
             failedIndices.Count, string.Join(",", working));
 
+        // Track round-robin position per provider-pool so we don't all land on
+        // the same surviving provider when multiple slots are refilled.
         var refillTasks = new List<(int slot, Task<VoteResult> task)>();
+        var poolCursor  = 0;
         for (var i = 0; i < failedIndices.Count; i++)
         {
-            var slot          = failedIndices[i];
-            var refillProvider = working[i % working.Count];
+            var slot           = failedIndices[i];
+            var failedProvider = voters[slot].ProviderId ?? "";
+
+            // Prefer providers OTHER than the one that just failed for this
+            // slot — rate-limits and 5xx tend to be provider-wide, so routing
+            // the refill back to the same vendor (even a sibling slot that
+            // succeeded moments ago) usually hits the same condition. Fall
+            // back to the full working set only when every other provider is
+            // exhausted (single-vendor panels, mostly).
+            var pool = working
+                .Where(p => !p.Equals(failedProvider, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (pool.Count == 0) pool = working;
+
+            var refillProvider = pool[poolCursor++ % pool.Count];
+
             // Strip the failed voter's PersonalityMarkdown on refill: cloning
             // it would have a surviving provider vote a second time as the
             // same character, biasing the tally toward whatever that
@@ -658,7 +684,8 @@ public class LlmVotingService
         try
         {
             var json = ExtractJson(raw);
-            var doc  = JsonDocument.Parse(json).RootElement;
+            using var jdoc = JsonDocument.Parse(json);
+            var doc = jdoc.RootElement;
 
             var decision   = doc.TryGetProperty("decision",   out var d) ? d.GetString() ?? "" : "";
             var reasoning  = doc.TryGetProperty("reasoning",  out var r) ? r.GetString() ?? "" : "";
@@ -768,7 +795,8 @@ public class LlmVotingService
         try
         {
             var json = ExtractJson(raw);
-            var doc  = JsonDocument.Parse(json).RootElement;
+            using var jdoc = JsonDocument.Parse(json);
+            var doc = jdoc.RootElement;
 
             var scores = new Dictionary<string, int>();
             if (doc.TryGetProperty("scores", out var scoresEl))
@@ -980,7 +1008,8 @@ public class LlmVotingService
         {
             var raw  = await provider.CallAsync(judgeProviderId, system, user, 1024, 0.2, null, ct);
             var json = ExtractJson(raw);
-            var doc  = JsonDocument.Parse(json).RootElement;
+            using var jdoc = JsonDocument.Parse(json);
+            var doc = jdoc.RootElement;
             var consensus = doc.TryGetProperty("consensus", out var c) ? c.GetString() ?? "" : votes[0].Decision;
             var narrative = doc.TryGetProperty("narrative", out var n) ? n.GetString() ?? "" : "";
             var agreement = doc.TryGetProperty("agreement_count", out var a) && TryReadInt(a, out var ai) ? ai : 1;
@@ -1028,7 +1057,8 @@ public class LlmVotingService
 
         var raw  = await provider.CallAsync(judgeProviderId, system, user, 512, 0.3, null, ct);
         var json = ExtractJsonArray(raw);
-        return JsonDocument.Parse(json).RootElement
+        using var jdoc = JsonDocument.Parse(json);
+        return jdoc.RootElement
             .EnumerateArray()
             .Select(e => e.GetString() ?? "")
             .Where(s => s.Length > 0)
@@ -1039,12 +1069,22 @@ public class LlmVotingService
     /// Resolves the judge provider — preferred provider from
     /// <see cref="VotingConfiguration.JudgeProviderId"/> when its key is
     /// available, otherwise the first active provider, otherwise "claude".
+    /// Both <see cref="VotingConfiguration.ApiKeys"/> (app-provided) and the
+    /// shared credential store (via <see cref="LlmVotingProvider.GetApiKey"/>)
+    /// count as "available" — the ApiKeys-direct probe is redundant with the
+    /// provider chain but keeps intent self-evident at the call site.
     /// </summary>
     private string GetJudgeProviderId()
     {
         var preferred = config.JudgeProviderId;
-        if (!string.IsNullOrWhiteSpace(preferred) && provider.GetApiKey(preferred) != null)
-            return preferred;
+        if (!string.IsNullOrWhiteSpace(preferred))
+        {
+            if (config.ApiKeys.TryGetValue(preferred, out var explicitKey)
+                && !string.IsNullOrWhiteSpace(explicitKey))
+                return preferred;
+            if (!string.IsNullOrWhiteSpace(provider.GetApiKey(preferred)))
+                return preferred;
+        }
         return config.ActiveProviderIds.FirstOrDefault() ?? "claude";
     }
 

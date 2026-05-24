@@ -93,7 +93,10 @@ public class LegionClientTests
 
         Assert.That(reply, Is.EqualTo("hi from gemini"));
         Assert.That(capture.LastUri!.ToString(), Does.Contain("models/gemini-2.5-flash:generateContent"));
-        Assert.That(capture.LastUri!.Query, Does.Contain("key=google-key"));
+        // Key must travel in the x-goog-api-key header, never the URL — a URL-
+        // borne key leaks via HttpRequestException.Message on transport errors.
+        Assert.That(capture.LastUri!.Query, Does.Not.Contain("google-key"));
+        Assert.That(capture.LastHeaders!["x-goog-api-key"], Is.EqualTo("google-key"));
     }
 
     [Test]

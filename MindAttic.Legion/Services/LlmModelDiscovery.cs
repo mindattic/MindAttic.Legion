@@ -129,6 +129,11 @@ public sealed class LlmModelDiscovery
             var liveModels = ExtractModelIds(info.Id, json);
             sw.Stop();
 
+            // Unschedule the timeout timer now that the call has completed —
+            // dispose at scope end would also do this, but doing it eagerly
+            // releases the ThreadPool timer slot promptly under heavy fan-out.
+            cts?.CancelAfter(Timeout.InfiniteTimeSpan);
+
             return CreateResult(info, knownModels, liveModels, runtime, endpoint,
                 hasCredential, canQuery: true, succeeded: true, elapsedMs: sw.ElapsedMilliseconds,
                 diagnosis: LlmHealthDiagnosis.Healthy, statusCode: 200, error: null);

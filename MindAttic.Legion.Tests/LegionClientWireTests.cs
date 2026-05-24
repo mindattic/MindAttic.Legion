@@ -185,7 +185,7 @@ public class LegionClientWireTests
     // ── Gemini wire shape ──────────────────────────────────────────────────────
 
     [Test]
-    public async Task Gemini_PutsApiKeyInQueryString_NotHeader()
+    public async Task Gemini_PutsApiKeyInHeader_NotQueryString()
     {
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.GeminiOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
@@ -193,8 +193,11 @@ public class LegionClientWireTests
         await client.CallAsync("gemini", "AIzaXYZ", "gemini-2.5-flash", "s", "u");
 
         var req = handler.Requests.Single();
+        // Auth must NOT leak into the URL — HttpRequestException would echo it
+        // back via .Message on transport failure, exposing the key in logs.
         Assert.That(req.AuthScheme, Is.Null);
-        Assert.That(req.Uri.Query, Does.Contain("key=AIzaXYZ"));
+        Assert.That(req.Uri.Query, Does.Not.Contain("AIzaXYZ"));
+        Assert.That(req.Headers["x-goog-api-key"], Is.EqualTo("AIzaXYZ"));
         Assert.That(req.Uri.AbsoluteUri,
             Does.Contain("models/gemini-2.5-flash:generateContent"));
     }

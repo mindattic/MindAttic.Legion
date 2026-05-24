@@ -15,8 +15,11 @@ public static class CircuitBreaker
 {
     private sealed class State
     {
+        // OpenUntilTicks holds DateTimeOffset.UtcNow.UtcTicks for the next
+        // probe-eligible instant. Stored as a long so reads/writes can use
+        // Interlocked and stay coherent under concurrent fan-out.
         public int ConsecutiveFailures;
-        public DateTimeOffset OpenUntil = DateTimeOffset.MinValue;
+        public long OpenUntilTicks;
     }
 
     private static readonly ConcurrentDictionary<string, State> states =
@@ -30,21 +33,26 @@ public static class CircuitBreaker
     public static void ThrowIfOpen(string providerId)
     {
         if (!states.TryGetValue(providerId, out var s)) return;
-        if (s.OpenUntil > DateTimeOffset.UtcNow)
-            throw new CircuitBreakerOpenException(providerId, s.OpenUntil - DateTimeOffset.UtcNow);
+        var openUntil = new DateTimeOffset(Interlocked.Read(ref s.OpenUntilTicks), TimeSpan.Zero);
+        if (openUntil > DateTimeOffset.UtcNow)
+            throw new CircuitBreakerOpenException(providerId, openUntil - DateTimeOffset.UtcNow);
     }
 
     /// <summary>True if the breaker for this provider is currently open.</summary>
-    public static bool IsOpen(string providerId) =>
-        states.TryGetValue(providerId, out var s) && s.OpenUntil > DateTimeOffset.UtcNow;
+    public static bool IsOpen(string providerId)
+    {
+        if (!states.TryGetValue(providerId, out var s)) return false;
+        var openUntil = new DateTimeOffset(Interlocked.Read(ref s.OpenUntilTicks), TimeSpan.Zero);
+        return openUntil > DateTimeOffset.UtcNow;
+    }
 
     /// <summary>Reset failure count after a successful call.</summary>
     public static void RecordSuccess(string providerId)
     {
         if (states.TryGetValue(providerId, out var s))
         {
-            s.ConsecutiveFailures = 0;
-            s.OpenUntil = DateTimeOffset.MinValue;
+            Interlocked.Exchange(ref s.ConsecutiveFailures, 0);
+            Interlocked.Exchange(ref s.OpenUntilTicks, 0L);
         }
     }
 
@@ -57,7 +65,7 @@ public static class CircuitBreaker
         var s = states.GetOrAdd(providerId, _ => new State());
         var failures = Interlocked.Increment(ref s.ConsecutiveFailures);
         if (failures >= threshold)
-            s.OpenUntil = DateTimeOffset.UtcNow.Add(cooldown);
+            Interlocked.Exchange(ref s.OpenUntilTicks, DateTimeOffset.UtcNow.Add(cooldown).UtcTicks);
         return failures;
     }
 
@@ -69,8 +77,8 @@ public static class CircuitBreaker
     {
         if (states.TryGetValue(providerId, out var s))
         {
-            s.ConsecutiveFailures = 0;
-            s.OpenUntil = DateTimeOffset.MinValue;
+            Interlocked.Exchange(ref s.ConsecutiveFailures, 0);
+            Interlocked.Exchange(ref s.OpenUntilTicks, 0L);
         }
     }
 }

@@ -590,7 +590,12 @@ public class LegionCli
             }
         }
 
-        var config       = new VotingConfiguration();
+        var config = new VotingConfiguration();
+        // Honor the per-project legion.json (voters/judge/models/apiKeys)
+        // discovered by walking up from the current directory. Without this
+        // the CLI's `vote` subcommand bypassed every project-local panel
+        // declaration and used the default trusted four instead.
+        LegionConfig.LoadFromDirectory()?.ApplyTo(config);
         var activeIds    = config.ActiveProviderIds;
         if (activeIds.Count == 0)
         {
