@@ -136,7 +136,7 @@ public sealed class LlmModelDiscovery
 
             return CreateResult(info, knownModels, liveModels, runtime, endpoint,
                 hasCredential, canQuery: true, succeeded: true, elapsedMs: sw.ElapsedMilliseconds,
-                diagnosis: LlmHealthDiagnosis.Healthy, statusCode: 200, error: null);
+                diagnosis: LlmHealthDiagnosis.Healthy, statusCode: (int)res.StatusCode, error: null);
         }
         catch (Exception ex)
         {
@@ -269,13 +269,25 @@ public sealed class LlmModelDiscovery
                 break;
 
             case JsonValueKind.Object:
-                if (TryReadModelId(element, providerId, out var id))
+                // A model-list "wrapper" is an object that carries the list under a
+                // data/models ARRAY and may itself have a name/id (a default-model
+                // pointer or paging metadata) that is NOT a model id. Skip harvesting
+                // such a wrapper's own id — but only when the data/models child is an
+                // array. A leaf model entry that merely happens to carry a scalar or
+                // object field named "data"/"models" still yields its own id.
+                var hasDataArray   = element.TryGetProperty("data", out var data)
+                                     && data.ValueKind == JsonValueKind.Array;
+                var hasModelsArray = element.TryGetProperty("models", out var nestedModels)
+                                     && nestedModels.ValueKind == JsonValueKind.Array;
+                if (!hasDataArray && !hasModelsArray && TryReadModelId(element, providerId, out var id))
                     AddModel(id, models, seen);
 
-                if (element.TryGetProperty("data", out var data))
-                    CollectModelIds(data, providerId, models, seen);
-                if (element.TryGetProperty("models", out var nestedModels))
-                    CollectModelIds(nestedModels, providerId, models, seen);
+                // Recurse into data/models regardless of shape (an object wrapper may
+                // nest the array one level deeper), so coverage is unchanged.
+                if (element.TryGetProperty("data", out var dataChild))
+                    CollectModelIds(dataChild, providerId, models, seen);
+                if (element.TryGetProperty("models", out var modelsChild))
+                    CollectModelIds(modelsChild, providerId, models, seen);
                 break;
 
             case JsonValueKind.String:

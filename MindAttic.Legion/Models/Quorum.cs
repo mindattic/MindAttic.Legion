@@ -35,4 +35,25 @@ public static class QuorumExtensions
         Quorum.Unanimous      => 1.00,
         _                     => 0.50,
     };
+
+    /// <summary>
+    /// True when <paramref name="agree"/> of <paramref name="total"/> voters
+    /// satisfy this quorum. Uses integer arithmetic so the boundaries are exact:
+    /// <list type="bullet">
+    ///   <item>Plurality — any agreement (≥1).</item>
+    ///   <item>SimpleMajority — strictly MORE than half (so a 2-of-4 tie fails,
+    ///     matching the documented "&gt;50%"; a naive <c>fraction &gt;= 0.50</c>
+    ///     would wrongly admit the tie).</item>
+    ///   <item>TwoThirds — at least two-thirds (2-of-3 clears it).</item>
+    ///   <item>Unanimous — every voter agrees.</item>
+    /// </list>
+    /// </summary>
+    public static bool IsSatisfiedBy(this Quorum quorum, int agree, int total) => total > 0 && quorum switch
+    {
+        Quorum.Plurality      => agree > 0,
+        Quorum.SimpleMajority => agree * 2 > total,
+        Quorum.TwoThirds      => agree * 3 >= total * 2,
+        Quorum.Unanimous      => agree >= total,
+        _                     => agree * 2 > total,
+    };
 }

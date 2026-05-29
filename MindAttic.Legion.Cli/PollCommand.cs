@@ -288,11 +288,32 @@ public static class PollCommand
         var exact   = options.FirstOrDefault(o => trimmed.Equals(o, StringComparison.OrdinalIgnoreCase));
         if (exact is not null) return exact;
 
+        // Whole-token contains match (longest wins). Using a token boundary rather
+        // than raw substring stops a short option ("No", "A", "cat") from matching
+        // inside an unrelated word ("Notify", "communicate") and skewing the poll.
         return options
-            .Where(o => !string.IsNullOrWhiteSpace(o)
-                         && trimmed.Contains(o, StringComparison.OrdinalIgnoreCase))
+            .Where(o => !string.IsNullOrWhiteSpace(o) && ContainsWholeToken(trimmed, o))
             .OrderByDescending(o => o.Length)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// True when <paramref name="option"/> occurs in <paramref name="haystack"/>
+    /// as a whole token — not embedded inside a larger alphanumeric word.
+    /// Mirrors <see cref="AskCommand"/>'s matching contract. Case-insensitive.
+    /// </summary>
+    private static bool ContainsWholeToken(string haystack, string option)
+    {
+        var idx = 0;
+        while ((idx = haystack.IndexOf(option, idx, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            var beforeOk = idx == 0 || !char.IsLetterOrDigit(haystack[idx - 1]);
+            var after    = idx + option.Length;
+            var afterOk  = after >= haystack.Length || !char.IsLetterOrDigit(haystack[after]);
+            if (beforeOk && afterOk) return true;
+            idx++;
+        }
+        return false;
     }
 
     /// <summary>

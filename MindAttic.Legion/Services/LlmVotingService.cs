@@ -335,12 +335,20 @@ public class LlmVotingService
             ? aggregateScores.OrderBy(kv => kv.Value).First().Key
             : "";
 
-        // Aggregate flags
-        var allFlags    = successful.SelectMany(v => v.Flags).ToList();
-        var flagCounts  = allFlags.GroupBy(f => f).ToDictionary(g => g.Key, g => g.Count());
+        // Aggregate flags — keep polarity. A "strength" is a POSITIVE observation
+        // (flags_good) shared by at least half the panel; a "failure" is a
+        // NEGATIVE observation (flags_bad) shared by at least half. Reading the
+        // merged Flags list and splitting by frequency alone would mislabel a
+        // widely-agreed failure as a strength (and a one-off strength as a failure).
         var minConsensus = Math.Max(2, (int)Math.Ceiling(successful.Count * 0.5));
-        var consensusStrengths = flagCounts.Where(kv => kv.Value >= minConsensus).Select(kv => kv.Key).ToList();
-        var consensusFailures  = allFlags.Distinct().Except(consensusStrengths).Take(10).ToList();
+        var goodCounts = successful.SelectMany(v => v.FlagsGood)
+            .GroupBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var badCounts = successful.SelectMany(v => v.FlagsBad)
+            .GroupBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var consensusStrengths = goodCounts.Where(kv => kv.Value >= minConsensus).Select(kv => kv.Key).ToList();
+        var consensusFailures  = badCounts.Where(kv => kv.Value >= minConsensus).Select(kv => kv.Key).Take(10).ToList();
 
         // Synthesize improvement directives via judge if narrative synthesis is on
         var directives = new List<string>();
@@ -813,11 +821,16 @@ public class LlmVotingService
             var bestMoment  = doc.TryGetProperty("best_moment",           out var bm) ? bm.GetString() ?? "" : "";
             var worstMoment = doc.TryGetProperty("worst_moment",          out var wm) ? wm.GetString() ?? "" : "";
 
-            var flags = new List<string>();
+            var flagsGood = new List<string>();
             if (doc.TryGetProperty("flags_good", out var fg))
-                flags.AddRange(fg.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0));
+                flagsGood.AddRange(fg.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0));
+            var flagsBad = new List<string>();
             if (doc.TryGetProperty("flags_bad", out var fb))
-                flags.AddRange(fb.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0));
+                flagsBad.AddRange(fb.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0));
+
+            // Flat union preserves the legacy polarity-less Flags contract.
+            var flags = new List<string>(flagsGood);
+            flags.AddRange(flagsBad);
             if (!string.IsNullOrWhiteSpace(directive))
                 flags.Add(directive);
 
@@ -832,6 +845,8 @@ public class LlmVotingService
                 Reasoning   = reasoning,
                 Scores      = scores,
                 Flags       = flags,
+                FlagsGood   = flagsGood,
+                FlagsBad    = flagsBad,
                 BestMoment  = bestMoment,
                 WorstMoment = worstMoment,
                 Confidence  = overallScore,
@@ -873,7 +888,7 @@ public class LlmVotingService
         var winner           = tally[0].Key;
         var winCount         = tally[0].Count();
         var fraction         = (double)winCount / successful.Count;
-        var quorumReached    = fraction >= quorum.Threshold() || quorum == Quorum.Plurality && winCount > 0;
+        var quorumReached    = quorum.IsSatisfiedBy(winCount, successful.Count);
         var dissenters       = successful.Where(v => !v.Decision.Equals(winner, StringComparison.OrdinalIgnoreCase))
                                          .Select(v => v.Reasoning).ToList();
 
@@ -925,7 +940,13 @@ public class LlmVotingService
                     request.Question, successful, quorum, ct);
                 consensus      = synth.consensus;
                 narrative      = synth.narrative;
-                agreementCount = Math.Clamp(synth.agreementCount, 1, successful.Count);
+                // Floor at 0, not 1: the judge legitimately reports "nobody agrees
+                // with the synthesized consensus" (0) for fully-split panels.
+                // Forcing a floor of 1 here manufactured a phantom agreeing voter,
+                // inflating ConsensusStrength and letting a no-agreement vote clear
+                // SimpleMajority on an even split. (The genuine single-voter branch
+                // below sets agreementCount = 1 on its own.)
+                agreementCount = Math.Clamp(synth.agreementCount, 0, successful.Count);
             }
             catch (Exception ex)
             {
@@ -944,7 +965,7 @@ public class LlmVotingService
         }
 
         var fraction      = (double)agreementCount / successful.Count;
-        var quorumReached = fraction >= quorum.Threshold();
+        var quorumReached = quorum.IsSatisfiedBy(agreementCount, successful.Count);
 
         return new VotingResult
         {
@@ -1109,27 +1130,74 @@ public class LlmVotingService
         };
 
     /// <summary>
-    /// Extracts the first balanced JSON object from <paramref name="text"/> by
-    /// slicing between the outermost <c>{</c> and <c>}</c>. Tolerates LLMs that
-    /// wrap their JSON in prose preamble or backtick code fences. Returns
-    /// <c>"{}"</c> when no object is found so the caller's parser doesn't NPE.
+    /// Extracts a balanced JSON object from <paramref name="text"/>. Tolerates
+    /// LLMs that wrap their JSON in prose preamble or backtick code fences.
+    /// Returns <c>"{}"</c> when no object is found so the caller's parser doesn't NPE.
     /// </summary>
-    private static string ExtractJson(string text)
-    {
-        var start = text.IndexOf('{');
-        var end   = text.LastIndexOf('}');
-        return start >= 0 && end > start ? text[start..(end + 1)] : "{}";
-    }
+    private static string ExtractJson(string text) => ExtractBalanced(text, '{', '}', "{}");
 
     /// <summary>
-    /// Same as <see cref="ExtractJson"/> but for a top-level JSON array —
-    /// slices between the outermost <c>[</c> and <c>]</c>, returning <c>"[]"</c>
-    /// on miss.
+    /// Same as <see cref="ExtractJson"/> but for a top-level JSON array,
+    /// returning <c>"[]"</c> on miss.
     /// </summary>
-    private static string ExtractJsonArray(string text)
+    private static string ExtractJsonArray(string text) => ExtractBalanced(text, '[', ']', "[]");
+
+    /// <summary>
+    /// Returns the longest balanced <paramref name="open"/>…<paramref name="close"/>
+    /// region in <paramref name="text"/>. Tracks nesting depth and skips bracket
+    /// characters that occur inside JSON string literals (honouring backslash
+    /// escapes), so prose such as <c>"see note {1}: {\"decision\":\"Yes\"}"</c> —
+    /// or a closing brace embedded in a string value — no longer mis-slices the
+    /// JSON. Picking the longest top-level region means a stray <c>{1}</c> in the
+    /// preamble loses to the real (larger) object. Falls back to a first-open…
+    /// last-close slice for a truncated reply, and returns
+    /// <paramref name="emptySentinel"/> when nothing matches.
+    /// </summary>
+    private static string ExtractBalanced(string text, char open, char close, string emptySentinel)
     {
-        var start = text.IndexOf('[');
-        var end   = text.LastIndexOf(']');
-        return start >= 0 && end > start ? text[start..(end + 1)] : "[]";
+        if (string.IsNullOrEmpty(text)) return emptySentinel;
+
+        int bestStart = -1, bestLen = 0;
+        int curStart = -1, depth = 0;
+        bool inString = false, escaped = false;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') { inString = true; continue; }
+
+            if (c == open)
+            {
+                if (depth == 0) curStart = i;
+                depth++;
+            }
+            else if (c == close && depth > 0)
+            {
+                depth--;
+                if (depth == 0 && curStart >= 0)
+                {
+                    var len = i - curStart + 1;
+                    if (len > bestLen) { bestLen = len; bestStart = curStart; }
+                }
+            }
+        }
+
+        if (bestStart >= 0) return text.Substring(bestStart, bestLen);
+
+        // No complete balanced region (e.g. a truncated reply) — fall back to the
+        // naive first-open…last-close slice so a mostly-complete object still has
+        // a chance to parse.
+        var fallbackStart = text.IndexOf(open);
+        var fallbackEnd   = text.LastIndexOf(close);
+        return fallbackStart >= 0 && fallbackEnd > fallbackStart
+            ? text[fallbackStart..(fallbackEnd + 1)]
+            : emptySentinel;
     }
 }

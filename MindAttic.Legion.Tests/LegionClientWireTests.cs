@@ -433,6 +433,30 @@ public class LegionClientWireTests
     }
 
     [Test]
+    public async Task EmbedAsync_UnsupportedProvider_DoesNotTripCircuitBreaker()
+    {
+        // An "embeddings not supported" ArgumentException is client-side validation,
+        // not a remote failure — repeating it must NOT open the provider's breaker
+        // and fast-fail a subsequent legitimate chat call.
+        var options = new LegionClientOptions
+        {
+            MaxRetries = 0,
+            CircuitBreakerThreshold = 2,
+            CircuitBreakerCooldown = TimeSpan.FromMinutes(2),
+        };
+        var client = new LegionClient(new HttpClient(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk)), options);
+
+        for (var i = 0; i < 5; i++)
+            Assert.ThrowsAsync<ArgumentException>(() => client.EmbedAsync("claude", "k", "m", new[] { "x" }));
+
+        Assert.That(CircuitBreaker.IsOpen("claude"), Is.False);
+
+        // And a real chat call still goes through (breaker not poisoned).
+        var reply = await client.CallAsync("claude", "sk", "claude-sonnet-4-6", "s", "u");
+        Assert.That(reply, Is.Not.Null);
+    }
+
+    [Test]
     public async Task EmbedAsync_PassesDimensionsWhenSpecified()
     {
         var body = """{"data":[{"embedding":[0.1]}]}""";

@@ -254,15 +254,19 @@ public class LegionClient
         if (inputs is null || inputs.Count == 0)
             return Array.Empty<float[]>();
 
+        // Resolve the endpoint BEFORE entering the resilience wrapper: an
+        // unsupported-provider ArgumentException is a client-side validation
+        // error, not a remote failure, and must not record a circuit-breaker
+        // failure against the provider (which would later fast-fail healthy calls).
+        var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+            ? "https://api.openai.com/v1/embeddings"
+            : throw new ArgumentException($"Embeddings not supported for provider '{providerId}'.");
+
         return await ExecuteWithResilienceAsync(providerId, async () =>
         {
             object payload = dimensions.HasValue
                 ? new { model, input = inputs, dimensions = dimensions.Value }
                 : new { model, input = inputs };
-
-            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
-                ? "https://api.openai.com/v1/embeddings"
-                : throw new ArgumentException($"Embeddings not supported for provider '{providerId}'.");
 
             using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -311,12 +315,14 @@ public class LegionClient
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt is required.", nameof(prompt));
 
+        // Validate the endpoint before the resilience wrapper so an unsupported
+        // provider raises ArgumentException without tripping the circuit breaker.
+        var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+            ? "https://api.openai.com/v1/images/generations"
+            : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
+
         return await ExecuteWithResilienceAsync(providerId, async () =>
         {
-            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
-                ? "https://api.openai.com/v1/images/generations"
-                : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
-
             var payload = new { model, prompt, size, quality, n, response_format = "b64_json" };
 
             using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
@@ -360,12 +366,14 @@ public class LegionClient
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt is required.", nameof(prompt));
 
+        // Validate the endpoint before the resilience wrapper so an unsupported
+        // provider raises ArgumentException without tripping the circuit breaker.
+        var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+            ? "https://api.openai.com/v1/images/generations"
+            : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
+
         return await ExecuteWithResilienceAsync(providerId, async () =>
         {
-            var endpoint = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
-                ? "https://api.openai.com/v1/images/generations"
-                : throw new ArgumentException($"Image generation not supported for provider '{providerId}'.");
-
             var payload = new { model, prompt, size, n };
 
             using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
@@ -458,6 +466,16 @@ public class LegionClient
                 return result;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (ArgumentException)
+            {
+                // Client-side validation (e.g. unsupported provider / operation), not
+                // a provider health signal. Rethrow WITHOUT recording a breaker
+                // failure — otherwise repeated bad-argument calls would open the
+                // breaker and fast-fail healthy requests to the same provider. Caught
+                // here (not just at the call sites) so a future validation throw added
+                // inside the action can't silently re-arm that trap.
+                throw;
+            }
             catch (Exception ex) when (IsTransient(ex))
             {
                 if (attempt >= options.MaxRetries)

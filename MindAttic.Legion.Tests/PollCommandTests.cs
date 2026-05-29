@@ -138,6 +138,14 @@ public class PollCommandTests
             Is.Null);
     }
 
+    [Test]
+    public void SnapToOption_ShortOptionInsideUnrelatedWord_DoesNotMatch()
+    {
+        // "cat" must not match inside "communicate" — that would count a wrong vote.
+        Assert.That(PollCommand.SnapToOption("Let's communicate clearly", new[] { "cat", "dog" }),
+            Is.Null);
+    }
+
     // ── Aggregate ──────────────────────────────────────────────────────────
 
     [Test]

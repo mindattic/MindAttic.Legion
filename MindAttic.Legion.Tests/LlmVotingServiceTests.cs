@@ -32,6 +32,46 @@ public class QuorumTests
     }
     [Test]
     public void Unanimous_HasOneHundredPercent()    => Assert.That(Quorum.Unanimous.Threshold(),      Is.EqualTo(1.00));
+
+    // IsSatisfiedBy — the exact, integer-math quorum predicate the tally uses.
+    [Test]
+    public void SimpleMajority_RejectsExactTie()
+    {
+        // Documented as ">50%": 2 of 4 is a tie, NOT a majority. The old
+        // fraction >= 0.50 check wrongly admitted it.
+        Assert.That(Quorum.SimpleMajority.IsSatisfiedBy(2, 4), Is.False);
+        Assert.That(Quorum.SimpleMajority.IsSatisfiedBy(3, 4), Is.True);
+        Assert.That(Quorum.SimpleMajority.IsSatisfiedBy(2, 3), Is.True);
+    }
+
+    [Test]
+    public void TwoThirds_IsSatisfiedBy_AdmitsTwoOfThree_RejectsOneOfTwo()
+    {
+        Assert.That(Quorum.TwoThirds.IsSatisfiedBy(2, 3), Is.True);
+        Assert.That(Quorum.TwoThirds.IsSatisfiedBy(1, 2), Is.False);
+        Assert.That(Quorum.TwoThirds.IsSatisfiedBy(3, 5), Is.False); // 0.6 < 2/3
+    }
+
+    [Test]
+    public void Plurality_IsSatisfiedBy_NeedsAtLeastOne()
+    {
+        Assert.That(Quorum.Plurality.IsSatisfiedBy(1, 5), Is.True);
+        Assert.That(Quorum.Plurality.IsSatisfiedBy(0, 5), Is.False);
+    }
+
+    [Test]
+    public void Unanimous_IsSatisfiedBy_NeedsEveryVoter()
+    {
+        Assert.That(Quorum.Unanimous.IsSatisfiedBy(3, 3), Is.True);
+        Assert.That(Quorum.Unanimous.IsSatisfiedBy(2, 3), Is.False);
+    }
+
+    [Test]
+    public void IsSatisfiedBy_ZeroTotal_AlwaysFalse()
+    {
+        Assert.That(Quorum.Plurality.IsSatisfiedBy(0, 0), Is.False);
+        Assert.That(Quorum.Unanimous.IsSatisfiedBy(0, 0), Is.False);
+    }
 }
 
 // VotingConfigurationTests moved to VotingConfigurationTests.cs — a comprehensive
@@ -318,6 +358,55 @@ public class LlmVotingServiceTests
         Assert.That(result.AggregateScores["VOICE"], Is.EqualTo(8.0));
         Assert.That(result.AggregateScores["PACING"], Is.EqualTo(6.0));
         Assert.That(result.WeakestDimension, Is.EqualTo("PACING"));
+    }
+
+    [Test]
+    public async Task VoteAsync_ChoiceVote_JsonWrappedInProseWithStrayBraces_StillParses()
+    {
+        // The model prefixes a footnote "{1}" before the real JSON object. The
+        // naive first-{…last-} slice produced invalid JSON ("{1}): {…}") and the
+        // vote was lost; the balanced-region extractor must pick the real object.
+        var stubJson = """{"content":[{"text":"Sure — see note {1}: {\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8}"}]}""";
+        var svc      = BuildService(stubJson);
+        var request  = new VoteRequest { Question = "Proceed?", Options = ["Yes", "No"] };
+
+        var result = await svc.VoteAsync(request, Quorum.SimpleMajority);
+
+        Assert.That(result.IndividualVotes[0].IsError, Is.False);
+        Assert.That(result.IndividualVotes[0].Decision, Is.EqualTo("Yes"));
+    }
+
+    [Test]
+    public async Task ScoreAsync_ConsensusStrengthsAndFailures_KeepGoodBadPolarity()
+    {
+        // Both voters report the same positive (flags_good) and negative
+        // (flags_bad) observation. The aggregate must file the good one under
+        // ConsensusStrengths and the bad one under ConsensusFailures — never the
+        // reverse (the old frequency-only split inverted them).
+        var stubJson = """{"content":[{"text":"{\"scores\":{\"VOICE\":7},\"reasoning\":\"r\",\"flags_good\":[\"Strong opening\"],\"flags_bad\":[\"Weak ending\"],\"improvement_directive\":\"Tighten act two\"}"}]}""";
+        var svc      = BuildService(stubJson);
+
+        // Two claude voters so both responses parse against the Claude-shaped stub
+        // body (an openai voter would parse choices[] and error out, dropping the
+        // panel below minConsensus and defeating the point of the test).
+        var voters = new[]
+        {
+            new VoterProfile { ProviderId = "claude", Name = "claude#1", ApiKeyOverride = "k" },
+            new VoterProfile { ProviderId = "claude", Name = "claude#2", ApiKeyOverride = "k" },
+        };
+        var request = new ScoredVoteRequest
+        {
+            Question            = "Rate this scene.",
+            Dimensions          = ["VOICE"],
+            SynthesizeNarrative = false,
+        };
+
+        var result = await svc.ScoreWithProfilesAsync(request, voters);
+
+        Assert.That(result.ConsensusStrengths, Does.Contain("Strong opening"));
+        Assert.That(result.ConsensusStrengths, Does.Not.Contain("Weak ending"));
+        Assert.That(result.ConsensusFailures, Does.Contain("Weak ending"));
+        Assert.That(result.ConsensusFailures, Does.Not.Contain("Strong opening"));
     }
 
     [Test]

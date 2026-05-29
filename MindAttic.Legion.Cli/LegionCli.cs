@@ -581,7 +581,7 @@ public class LegionCli
                         options = args[++i].Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
                     break;
                 case "--max-tokens":
-                    if (i + 1 < args.Length && int.TryParse(args[++i], out var mt))
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var mt) && mt > 0)
                         maxTokens = mt;
                     break;
                 case "--no-narrative":

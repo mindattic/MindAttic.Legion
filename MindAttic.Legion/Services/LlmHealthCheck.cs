@@ -94,6 +94,7 @@ public class LlmHealthCheck
         CancellationToken ct = default)
     {
         var ids = providerIds?.Select(p => p.Trim().ToLowerInvariant())
+                              .Where(p => p.Length > 0)
                               .Distinct()
                               .ToList()
                   ?? new List<string>();

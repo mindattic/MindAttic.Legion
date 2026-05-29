@@ -99,6 +99,29 @@ public class LlmModelDiscoveryExtractTests
     }
 
     [Test]
+    public void WrapperObjectWithName_DoesNotHarvestWrapperAsModel()
+    {
+        // A wrapper that BOTH names a default and carries the model list must not
+        // contribute its own `name` as a model id — only the leaf entries count.
+        var json = """{"name":"default-model","models":[{"name":"command-r-plus"},{"name":"command-r"}]}""";
+        var ids  = LlmModelDiscovery.ExtractModelIds("cohere", json);
+        Assert.That(ids, Is.EqualTo(new[] { "command-r-plus", "command-r" }));
+        Assert.That(ids, Does.Not.Contain("default-model"));
+    }
+
+    [Test]
+    public void LeafEntryWithScalarOrObjectDataField_StillYieldsItsId()
+    {
+        // A leaf model entry that merely carries a (non-array) field named "data"
+        // must still surface its own id — the wrapper guard only fires on a
+        // data/models ARRAY, so it must not suppress this leaf.
+        var json = """{"data":[{"id":"gpt-x","data":{"owner":"acme"}},{"id":"gpt-y","models":"n/a"}]}""";
+        var ids  = LlmModelDiscovery.ExtractModelIds("openai", json);
+        Assert.That(ids, Does.Contain("gpt-x"));
+        Assert.That(ids, Does.Contain("gpt-y"));
+    }
+
+    [Test]
     public void ModelIdProperty_IsAlsoAccepted()
     {
         // Some legacy shapes use `model_id`.

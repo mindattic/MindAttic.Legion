@@ -161,7 +161,11 @@ public static class AskCommand
                         quorum = q;
                     break;
                 case "--max-tokens":
-                    if (i + 1 < args.Length && int.TryParse(args[++i], out var mt))
+                    // Require a positive budget (matching poll/generate). A 0 or
+                    // negative value silently flowed into the request and, worse,
+                    // the --must-answer phase-2 retry doubles it (0*2 = 0), so the
+                    // "always emit an answer" rescue would request 0 tokens.
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var mt) && mt > 0)
                         maxTokens = mt;
                     break;
                 case "--json":
@@ -465,14 +469,35 @@ public static class AskCommand
         if (exact is not null)
             return exact;
 
-        // Prefer the longest option that the answer contains, so "FirstChoiceOption"
-        // wins over "First" when both are on the ballot. Without this, a substring-
-        // ordered match could pick the shorter, more ambiguous option first.
+        // Prefer the longest option that the answer contains as a WHOLE TOKEN, so
+        // "FirstChoiceOption" wins over "First" when both are on the ballot. A
+        // whole-token match (not raw substring) also prevents a short option like
+        // "No" from matching inside "Notify" or "cat" inside "communicate", which
+        // would otherwise register an off-ballot reply as a (wrong) vote.
         return options
-            .Where(o => !string.IsNullOrWhiteSpace(o)
-                         && trimmed.Contains(o, StringComparison.OrdinalIgnoreCase))
+            .Where(o => !string.IsNullOrWhiteSpace(o) && ContainsWholeToken(trimmed, o))
             .OrderByDescending(o => o.Length)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// True when <paramref name="option"/> occurs in <paramref name="haystack"/>
+    /// as a whole token — i.e. not embedded inside a larger alphanumeric word.
+    /// Boundaries are any non-alphanumeric char (or the string edge), so "No"
+    /// matches in "No, thanks" but not in "Notify". Case-insensitive.
+    /// </summary>
+    private static bool ContainsWholeToken(string haystack, string option)
+    {
+        var idx = 0;
+        while ((idx = haystack.IndexOf(option, idx, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            var beforeOk = idx == 0 || !char.IsLetterOrDigit(haystack[idx - 1]);
+            var after    = idx + option.Length;
+            var afterOk  = after >= haystack.Length || !char.IsLetterOrDigit(haystack[after]);
+            if (beforeOk && afterOk) return true;
+            idx++;
+        }
+        return false;
     }
 
     // ── Output ─────────────────────────────────────────────────────────────

@@ -30,9 +30,18 @@ public class VoteResult
 
     /// <summary>
     /// Optional specific clichés, failures, or strong points identified.
-    /// Used by quality evaluation to feed back into the story generation pipeline.
+    /// Flat, polarity-less union of <see cref="FlagsGood"/>, <see cref="FlagsBad"/>,
+    /// and the improvement directive — kept for back-compat with consumers that
+    /// don't care which is which. Aggregation that DOES care (consensus strengths
+    /// vs failures) reads <see cref="FlagsGood"/>/<see cref="FlagsBad"/> instead.
     /// </summary>
     public List<string> Flags { get; init; } = [];
+
+    /// <summary>Positive observations (the model's <c>flags_good</c>). Populated by scored votes.</summary>
+    public List<string> FlagsGood { get; init; } = [];
+
+    /// <summary>Negative observations (the model's <c>flags_bad</c>). Populated by scored votes.</summary>
+    public List<string> FlagsBad { get; init; } = [];
 
     /// <summary>The strongest moment identified in the evaluated content. Populated by scored votes.</summary>
     public string BestMoment { get; init; } = "";

@@ -213,6 +213,26 @@ public class AskCommandTests
     }
 
     [Test]
+    public void SnapToOption_ShortOptionInsideUnrelatedWord_DoesNotMatch()
+    {
+        // "No" must not match inside "Notify"; the reply is genuinely off-ballot.
+        var match = AskCommand.SnapToOption(
+            "I'd notify the team first",
+            new[] { "No", "Yes" });
+        Assert.That(match, Is.Null);
+    }
+
+    [Test]
+    public void SnapToOption_WholeTokenWithPunctuation_StillMatches()
+    {
+        // "No" as a standalone token (comma boundary) should still snap.
+        var match = AskCommand.SnapToOption(
+            "No, that's too risky",
+            new[] { "No", "Yes" });
+        Assert.That(match, Is.EqualTo("No"));
+    }
+
+    [Test]
     public void SnapToOption_EmptyAnswer_ReturnsNull()
     {
         Assert.That(AskCommand.SnapToOption("", new[] { "A", "B" }), Is.Null);
