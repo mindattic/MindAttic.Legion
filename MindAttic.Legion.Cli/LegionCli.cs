@@ -28,9 +28,9 @@ public class LegionCli
             return 0;
         }
 
-        // Wire User Secrets + env vars into the Vault credential chain. Reads
-        // now consult MindAttic:Vault:LLM:* in IConfiguration first, with the
-        // %APPDATA%/MindAttic/LLM/providers.json file as fallback.
+        // Wire the %APPDATA%/MindAttic credential files + env vars into the Vault
+        // credential chain. Reads consult MindAttic:Vault:LLM:* in IConfiguration,
+        // surfaced from the %APPDATA%/MindAttic/LLM/providers.json file.
         MindAtticCredentialStore.UseConfiguration(BuildConfiguration());
 
         try
@@ -61,12 +61,12 @@ public class LegionCli
 
     /// <summary>
     /// Build the credential-source chain handed to <see cref="MindAtticCredentialStore.UseConfiguration"/>.
-    /// User Secrets at <c>mindattic-vault-shared</c> + environment variables (incl. the
+    /// The <c>%APPDATA%\MindAttic</c> credential files + environment variables (incl. the
     /// <c>MindAttic__Vault__LLM__claude__apiKey</c> form for App Service / containers).
     /// </summary>
     private static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
-            .AddUserSecrets(VaultConfigurationKeys.SharedUserSecretsId, reloadOnChange: false)
+            .AddMindAtticVaultFiles()
             .AddEnvironmentVariables()
             .Build();
 
