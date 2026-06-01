@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MindAttic.Legion\MindAttic.Legion.csproj" />
+    <ProjectReference Include="..\MindAttic.Legion.Data\MindAttic.Legion.Data.csproj" />
   </ItemGroup>
 
   <ItemGroup>

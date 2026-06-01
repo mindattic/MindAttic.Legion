@@ -5,8 +5,8 @@ namespace MindAttic.Legion;
 /// persona per LLM in <see cref="LlmProviderCatalog"/> — these are raw,
 /// instruction-free Personas (e.g. "Claude", "ChatGPT") whose
 /// <see cref="Persona.PersonalityMarkdown"/> is empty so the model speaks as
-/// itself with no overlay. Following the defaults are 1000 enriched personas
-/// built from the cross-product of 10 archetypes × 10 worldviews × 10 cultural
+/// itself with no overlay. Following the defaults are 1024 enriched personas
+/// built from the cross-product of 16 archetypes × 8 worldviews × 8 cultural
 /// backgrounds, each further enriched with a deterministic age, pronouns, and
 /// a signature quirk so even neighbouring entries feel like distinct people.
 ///
@@ -19,7 +19,7 @@ namespace MindAttic.Legion;
 /// </summary>
 public static class PersonaLibrary
 {
-    /// <summary>The 10 vocational archetypes — first axis of the 10×10×10 enriched-persona cube.</summary>
+    /// <summary>The 16 vocational archetypes — first axis of the 16×8×8 enriched-persona cube.</summary>
     private static readonly string[] Archetypes =
     {
         "retired schoolteacher",
@@ -32,16 +32,20 @@ public static class PersonaLibrary
         "long-haul truck driver",
         "graduate student",
         "former military officer",
+        "union machinist",
+        "hospice social worker",
+        "investigative journalist",
+        "commercial airline pilot",
+        "restaurant line cook",
+        "field research biologist",
     };
 
-    /// <summary>The 10 worldviews — second axis of the enriched-persona cube; shapes how the persona reasons.</summary>
+    /// <summary>The 8 worldviews — second axis of the enriched-persona cube; shapes how the persona reasons.</summary>
     private static readonly string[] Worldviews =
     {
         "cautious traditionalist",
         "impatient pragmatist",
         "dry-witted skeptic",
-        "relentless optimist",
-        "contrarian gadfly",
         "soft-spoken idealist",
         "data-driven empiricist",
         "religious moralist",
@@ -49,25 +53,23 @@ public static class PersonaLibrary
         "quietly anxious worrier",
     };
 
-    /// <summary>The 10 cultural backgrounds — third axis of the enriched-persona cube; shapes voice and references.</summary>
+    /// <summary>The 8 cultural backgrounds — third axis of the enriched-persona cube; shapes voice and references.</summary>
     private static readonly string[] Backgrounds =
     {
         "rural Midwestern",
         "coastal urban",
         "first-generation immigrant",
         "Southern small-town",
-        "Pacific Northwest",
         "New England Yankee",
         "Texan",
         "multi-generational Californian",
         "Appalachian",
-        "Mid-Atlantic suburban",
     };
 
     /// <summary>
     /// 100 first names spanning genders, generations, and origins. Combined
-    /// with 10 letter suffixes (A.-J.) this yields 1000 unique display names —
-    /// one per enriched persona.
+    /// with 11 letter suffixes (A.-K.) this yields up to 1100 unique display
+    /// names — more than enough for one per enriched persona.
     /// </summary>
     private static readonly string[] FirstNames =
     {
@@ -90,7 +92,7 @@ public static class PersonaLibrary
     };
 
     /// <summary>
-    /// 50 signature quirks rotated through the 1000 personas (20 personas per
+    /// 50 signature quirks rotated through the 1024 personas (~20 personas per
     /// quirk). Each persona's prompt names exactly one quirk so even adjacent
     /// entries in the catalog read like distinct people.
     /// </summary>
@@ -148,26 +150,36 @@ public static class PersonaLibrary
         "Recites poetry they wrote in high school as if it's still their best work.",
     };
 
-    /// <summary>The fixed enriched persona count: 10 × 10 × 10.</summary>
-    public const int EnrichedCount = 1000;
+    /// <summary>The fixed enriched persona count: 16 × 8 × 8.</summary>
+    public const int EnrichedCount = 1024;
 
-    private static readonly Lazy<IReadOnlyList<Persona>> defaults = new(BuildDefaults);
-    private static readonly Lazy<IReadOnlyList<Persona>> enriched = new(BuildEnriched);
+    private static readonly Lazy<(IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details)> defaultData = new(BuildDefaults);
+    private static readonly Lazy<(IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details)> enrichedData = new(BuildEnriched);
     private static readonly Lazy<IReadOnlyList<Persona>> all =
-        new(() => defaults.Value.Concat(enriched.Value).ToArray());
+        new(() => defaultData.Value.personas.Concat(enrichedData.Value.personas).ToArray());
+    private static readonly Lazy<IReadOnlyList<PersonaDetail>> allDetails =
+        new(() => defaultData.Value.details.Concat(enrichedData.Value.details).ToArray());
 
     /// <summary>
     /// Raw "default" personas — one per provider in <see cref="LlmProviderCatalog"/>,
     /// in canonical order. Each has an empty <see cref="Persona.PersonalityMarkdown"/>,
     /// meaning the LLM speaks as itself with no persona overlay.
     /// </summary>
-    public static IReadOnlyList<Persona> Defaults => defaults.Value;
+    public static IReadOnlyList<Persona> Defaults => defaultData.Value.personas;
 
-    /// <summary>The 1000 enriched personas built from the diversity skeleton.</summary>
-    public static IReadOnlyList<Persona> Enriched => enriched.Value;
+    /// <summary>The 1024 enriched personas built from the diversity skeleton.</summary>
+    public static IReadOnlyList<Persona> Enriched => enrichedData.Value.personas;
 
     /// <summary>The full set of personas in deterministic order: defaults first, then enriched.</summary>
     public static IReadOnlyList<Persona> All => all.Value;
+
+    /// <summary>
+    /// Structured metadata for every persona in <see cref="All"/>, aligned by
+    /// index and id: the cube axes and enrichments behind each prompt. Lets
+    /// persistence and analytics query by archetype/worldview/background without
+    /// re-parsing the prompt string.
+    /// </summary>
+    public static IReadOnlyList<PersonaDetail> AllDetails => allDetails.Value;
 
     /// <summary>Number of personas in the library (defaults + enriched).</summary>
     public static int Count => All.Count;
@@ -210,23 +222,29 @@ public static class PersonaLibrary
     /// <see cref="LlmProviderCatalog"/>, with an empty personality so the LLM
     /// speaks as itself with no overlay.
     /// </summary>
-    private static IReadOnlyList<Persona> BuildDefaults() =>
-        LlmProviderCatalog.All
-            .Select(p => new Persona(
-                Id: $"default-{p.Id}",
-                Name: p.DisplayName,
-                PersonalityMarkdown: ""))
-            .ToArray();
+    private static (IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details) BuildDefaults()
+    {
+        var personas = new List<Persona>();
+        var details = new List<PersonaDetail>();
+        foreach (var p in LlmProviderCatalog.All)
+        {
+            var id = $"default-{p.Id}";
+            personas.Add(new Persona(id, p.DisplayName, PersonalityMarkdown: ""));
+            details.Add(new PersonaDetail(id, null, null, null, null, null, null, IsDefault: true, ProviderId: p.Id));
+        }
+        return (personas, details);
+    }
 
     /// <summary>
-    /// Materializes the 1000-persona cube: every (archetype × worldview ×
+    /// Materializes the 1024-persona cube: every (archetype × worldview ×
     /// background) combination, enriched with a deterministic age, pronoun
     /// set, and signature quirk so each persona has a unique fingerprint.
     /// Called lazily on first access and cached for the process lifetime.
     /// </summary>
-    private static IReadOnlyList<Persona> BuildEnriched()
+    private static (IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details) BuildEnriched()
     {
         var personas = new Persona[EnrichedCount];
+        var details = new PersonaDetail[EnrichedCount];
         int i = 0;
         for (int a = 0; a < Archetypes.Length; a++)
         for (int w = 0; w < Worldviews.Length; w++)
@@ -247,8 +265,12 @@ $@"You are {name}, age {age} ({pronouns}). You are a {Worldviews[w]} {Archetypes
 Signature trait: {quirk}
 Speak in your own voice with conviction. Bring the perspective your life would actually shape — values, blind spots, and all. Don't break character.
 Be concise. 2-3 sentences max.";
-            personas[i++] = new Persona(id, name, prompt);
+            personas[i] = new Persona(id, name, prompt);
+            details[i] = new PersonaDetail(
+                id, Archetypes[a], Worldviews[w], Backgrounds[b], age, pronouns, quirk,
+                IsDefault: false, ProviderId: null);
+            i++;
         }
-        return personas;
+        return (personas, details);
     }
 }

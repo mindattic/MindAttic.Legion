@@ -2,7 +2,7 @@
 
 **Multi-LLM consensus engine for .NET 10.** Turn a panel of frontier models — Claude, GPT, Gemini, DeepSeek, and seven more — into a single trustworthy answer with quorum, reasoning, and confidence. Vote, decide, score, poll, generate, or persona-wear. One panel for the calls you can't afford to get wrong.
 
-One LLM is one opinion. When a contradiction, a misclassification, or a bad route is expensive, you don't want a single model that bluffs — you want a panel that votes. Legion is the panel: unified transport across every major provider, a voting layer with quorum and dissent, tiered model selection that survives version drift, automatic failover when a provider blips, a 1000-persona library, and a CLI (`legion.exe`) that lets shell scripts, CI jobs, and other coding agents call the panel directly.
+One LLM is one opinion. When a contradiction, a misclassification, or a bad route is expensive, you don't want a single model that bluffs — you want a panel that votes. Legion is the panel: unified transport across every major provider, a voting layer with quorum and dissent, tiered model selection that survives version drift, automatic failover when a provider blips, a 1024-persona library, and a CLI (`legion.exe`) that lets shell scripts, CI jobs, and other coding agents call the panel directly.
 
 Portable: Legion has no dependency on any specific MindAttic project. Drop it into a `csproj`, register it via DI, hand it your API keys, and you have the panel.
 
@@ -18,7 +18,7 @@ Legion is the panel:
 - **Voting** — call all configured providers in parallel, tally their answers, return the consensus with reasoning + dissent.
 - **Decision-making** — `DecideAsync(question, options)` picks one option from a fixed list with confidence.
 - **Scoring** — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.
-- **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1000-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote *as* them.
+- **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1000-persona library, build a panel of N unique voices, score each persona on five psychometric instruments (OCEAN, MBTI, Enneagram, DISC, HEXACO), or wrap a fictional character's psychology to vote *as* them.
 - **Tiered model selection** — every provider exposes a Low / Medium / High / Higher / Highest tier (e.g. claude → haiku / sonnet / opus). Pick the tier that fits the work: Low for bulk polls, Medium for creative generation, High for architectural decisions. The catalog hides specific model versions behind tier names so a model-id rotation doesn't break callers.
 - **Autonomous architectural decisions** — `legion.exe ask` is purpose-built for the loop where another coding CLI (Claude Code, Codex) blocks on a user prompt: an outer monitor pipes the question to `ask`, the panel deliberates on the High tier (claude-opus-4-7, gpt-4.1, gemini-2.5-pro, deepseek-reasoner), and the bare answer flows back to the blocked CLI. Architect-framed voters, auto-pulls `CLAUDE.md`/`README`/git as context, default panel is the four-provider trust list with automatic refill on outages.
 - **Bulk distribution sampling** — `legion.exe poll` round-robins N voters across the trusted four at a chosen tier (Low by default), reports a count-sorted distribution + plurality winner. The cheap fast tool for "how does the panel split on this?"
@@ -306,8 +306,18 @@ legion.exe status --no-probe      # list live/static models without sending prom
 legion.exe status --json          # machine-readable status output
 legion.exe providers              # list all providers + dashboard URLs
 legion.exe models <provider>      # catalog models for a provider
-legion.exe personas 10            # sample 10 personas from the 1000-persona library
+legion.exe personas 10            # sample 10 personas from the 1024-persona library
 legion.exe panel 5                # build a 5-voter panel + show provider mix
+legion.exe panel 5 --diverse      # panel chosen to maximize psychometric spread (needs scored profiles)
+
+# Psychometrics — score the persona library on OCEAN/HEXACO/MBTI/Enneagram/DISC into SQL Server
+legion.exe psychometrics db init                  # create/upgrade the DB + seed personas
+legion.exe psychometrics score --limit 8          # pilot: score 8 personas (resumable; default tier high/Opus)
+legion.exe psychometrics score                    # score everything still missing a profile
+legion.exe psychometrics show persona-0000        # a persona's latest profile
+legion.exe psychometrics stats                    # distribution summary across the library
+legion.exe psychometrics rescore                  # fresh full run (drift tracking); schedule via cron/Task Scheduler
+legion.exe psychometrics diff 1 2                 # per-framework drift between two runs
 
 # Health & connectivity
 legion.exe health                 # probe every provider's DefaultModel with a hello-world

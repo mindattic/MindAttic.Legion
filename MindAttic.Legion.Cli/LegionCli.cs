@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using MindAttic.Legion;
+using MindAttic.Legion.Data;
 using MindAttic.Legion.Providers;
 using MindAttic.Vault.Configuration;
 
@@ -43,12 +44,13 @@ public class LegionCli
                 "models"    => Models(args.Skip(1).ToArray()),
                 "providers" => Providers(),
                 "personas"  => Personas(args.Skip(1).ToArray()),
-                "panel"     => Panel(args.Skip(1).ToArray()),
+                "panel"     => await PanelAsync(args.Skip(1).ToArray()),
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
                 "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
                 "poll"      => await PollCommand.RunAsync(args.Skip(1).ToArray()),
                 "generate"  => await GenerateCommand.RunAsync(args.Skip(1).ToArray()),
                 "tiers"     => await TiersCommand.RunAsync(args.Skip(1).ToArray()),
+                "psychometrics" => await PsychometricsCommand.RunAsync(args.Skip(1).ToArray()),
                 _ => UnknownCommand(args[0]),
             };
         }
@@ -94,8 +96,9 @@ public class LegionCli
         Console.WriteLine("  status [opts] [provider...]  Show model inventory, config, and connectivity");
         Console.WriteLine("  providers                    List supported providers + dashboard URLs");
         Console.WriteLine("  models <provider>            Show known models for a provider");
-        Console.WriteLine("  personas <count>             Sample N personas from the 1000-persona library");
-        Console.WriteLine("  panel <count> [provider...]  Build a voter panel: spread across providers, backfill claude");
+        Console.WriteLine("  personas <count>             Sample N personas from the 1024-persona library");
+        Console.WriteLine("  panel <count> [provider...]  Build a voter panel: spread across providers, backfill claude.");
+        Console.WriteLine("                               --diverse picks personas that maximize psychometric spread.");
         Console.WriteLine("  vote <question> [opts]       Multi-LLM consensus vote on a question; outputs JSON.");
         Console.WriteLine("                               Opts: --context <text>, --quorum plurality|simplemajority|twothirds|unanimous,");
         Console.WriteLine("                                     --options A,B,C, --max-tokens N, --no-narrative");
@@ -114,6 +117,9 @@ public class LegionCli
         Console.WriteLine("  tiers [opts]                 Probe trusted providers × tier mapping (Low/Medium/High).");
         Console.WriteLine("                               Opts: --providers a,b,c, --tiers low,medium,high, --all-tiers,");
         Console.WriteLine("                                     --json, --timeout SECONDS, --max-tokens N");
+        Console.WriteLine("  psychometrics <sub> [opts]   Score the persona library (OCEAN/HEXACO/MBTI/Enneagram/DISC)");
+        Console.WriteLine("                               into SQL Server and query the results. Subcommands:");
+        Console.WriteLine("                               db init | score | rescore | show | stats | history | diff");
         Console.WriteLine("  status opts: --no-probe, --json, --timeout N");
         Console.WriteLine();
         Console.WriteLine("All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.");
@@ -482,28 +488,75 @@ public class LegionCli
     /// configured key) and backfill with <c>claude</c>. Prints provider, name,
     /// and a one-line persona preview per voter.
     /// </summary>
-    private static int Panel(string[] args)
+    private static async Task<int> PanelAsync(string[] args)
     {
         if (args.Length == 0 || !int.TryParse(args[0], out var count))
         {
-            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...]");
+            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...] [--diverse] [--connection <cs>]");
+            Console.Error.WriteLine("  --diverse  pick personas that maximize psychometric spread (needs scored profiles).");
             return 1;
         }
-        var providers = args.Skip(1).ToArray();
-        if (providers.Length == 0)
-            providers = LlmProviderCatalog.AllIds
+
+        // Split trailing args into flags and provider-id positionals.
+        var diverse = false;
+        string? connection = null;
+        var providerList = new List<string>();
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i].ToLowerInvariant())
+            {
+                case "--diverse": diverse = true; break;
+                case "--connection": if (i + 1 < args.Length) connection = args[++i]; break;
+                default: providerList.Add(args[i]); break;
+            }
+        }
+
+        var providers = providerList.Count > 0
+            ? providerList.ToArray()
+            : LlmProviderCatalog.AllIds
                 .Where(id => !string.IsNullOrEmpty(MindAtticCredentialStore.GetKey(id)))
                 .ToArray();
 
-        var voters = VoterFactory.GenerateUniqueVoters(count, providers, fallbackProviderId: "claude");
-        Console.WriteLine($"Built panel of {voters.Count}; available providers: [{string.Join(", ", providers)}]");
+        IReadOnlyList<VoterProfile> voters;
+        if (diverse)
+        {
+            Dictionary<string, PsychometricProfile> profiles;
+            try
+            {
+                await using var db = LegionData.CreateContext(connection);
+                var latest = await new PsychometricProfileRepository(db).LatestPerPersonaAsync();
+                profiles = latest.ToDictionary(p => p.PersonaId, p => p.ToDomain());
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"error: could not load psychometric profiles: {ex.Message}");
+                Console.Error.WriteLine("  run 'legion psychometrics db init' and 'legion psychometrics score' first.");
+                return 1;
+            }
+            if (profiles.Count == 0)
+            {
+                Console.Error.WriteLine("no scored personas yet — run 'legion psychometrics score' first.");
+                return 1;
+            }
+            voters = VoterFactory.GenerateDiverseVoters(count, providers, profiles, fallbackProviderId: "claude");
+        }
+        else
+        {
+            voters = VoterFactory.GenerateUniqueVoters(count, providers, fallbackProviderId: "claude");
+        }
+
+        Console.WriteLine($"Built {(diverse ? "psychometric-diverse " : "")}panel of {voters.Count}; available providers: [{string.Join(", ", providers)}]");
         Console.WriteLine();
-        Console.WriteLine($"{"PROVIDER",-12} {"NAME",-14} {"PERSONA"}");
-        Console.WriteLine(new string('─', 100));
+        var traitsHeader = diverse ? $" {"TRAITS",-22}" : "";
+        Console.WriteLine($"{"PROVIDER",-12} {"NAME",-14}{traitsHeader} {"PERSONA"}");
+        Console.WriteLine(new string('─', 110));
         foreach (var v in voters)
         {
             var firstLine = v.PersonalityMarkdown.Split('\n').FirstOrDefault()?.Trim() ?? "";
-            Console.WriteLine($"{v.ProviderId,-12} {v.Name,-14} {Truncate(firstLine, 70)}");
+            var traits = diverse && v.Psychometrics is { } p
+                ? $" {p.Mbti.Type + " " + p.Enneagram.Notation() + " D" + p.Disc.PrimaryStyle,-22}"
+                : (diverse ? $" {"(unscored)",-22}" : "");
+            Console.WriteLine($"{v.ProviderId,-12} {v.Name,-14}{traits} {Truncate(firstLine, 60)}");
         }
         return 0;
     }

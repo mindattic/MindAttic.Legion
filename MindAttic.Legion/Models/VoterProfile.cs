@@ -42,6 +42,14 @@ public class VoterProfile
     public int? MaxTokensOverride { get; init; }
 
     /// <summary>
+    /// Optional psychometric profile for this voter's persona (OCEAN, HEXACO,
+    /// MBTI, Enneagram, DISC). Set by <see cref="VoterFactory.GenerateDiverseVoters"/>
+    /// and consumed by <see cref="PsychometricVoteAnalysis"/> to segment a vote
+    /// by trait composition. Null when the persona hasn't been scored.
+    /// </summary>
+    public PsychometricProfile? Psychometrics { get; init; }
+
+    /// <summary>
     /// Build a VoterProfile for character persona simulation.
     /// The LLM will reason and vote as this character would, given their psychology.
     /// </summary>

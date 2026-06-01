@@ -11,12 +11,14 @@
     <PackageReference Include="NUnit" Version="4.3.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.6" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MindAttic.Legion\MindAttic.Legion.csproj" />
     <ProjectReference Include="..\MindAttic.Legion.Cli\MindAttic.Legion.Cli.csproj" />
+    <ProjectReference Include="..\MindAttic.Legion.Data\MindAttic.Legion.Data.csproj" />
   </ItemGroup>
 
 </Project>
