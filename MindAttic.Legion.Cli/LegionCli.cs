@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using MindAttic.Legion;
-using MindAttic.Legion.Data;
 using MindAttic.Legion.Providers;
 using MindAttic.Vault.Configuration;
 
@@ -44,7 +43,7 @@ public class LegionCli
                 "models"    => Models(args.Skip(1).ToArray()),
                 "providers" => Providers(),
                 "personas"  => Personas(args.Skip(1).ToArray()),
-                "panel"     => await PanelAsync(args.Skip(1).ToArray()),
+                "panel"     => Panel(args.Skip(1).ToArray()),
                 "vote"      => await VoteAsync(args.Skip(1).ToArray()),
                 "ask"       => await AskCommand.RunAsync(args.Skip(1).ToArray()),
                 "poll"      => await PollCommand.RunAsync(args.Skip(1).ToArray()),
@@ -118,8 +117,8 @@ public class LegionCli
         Console.WriteLine("                               Opts: --providers a,b,c, --tiers low,medium,high, --all-tiers,");
         Console.WriteLine("                                     --json, --timeout SECONDS, --max-tokens N");
         Console.WriteLine("  psychometrics <sub> [opts]   Score the persona library (OCEAN/HEXACO/MBTI/Enneagram/DISC)");
-        Console.WriteLine("                               into SQL Server and query the results. Subcommands:");
-        Console.WriteLine("                               db init | score | rescore | show | stats | history | diff");
+        Console.WriteLine("                               into one JSON file per persona, and query the results. Subcommands:");
+        Console.WriteLine("                               init | score | rescore | show | stats | history | diff");
         Console.WriteLine("  status opts: --no-probe, --json, --timeout N");
         Console.WriteLine();
         Console.WriteLine("All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.");
@@ -488,25 +487,25 @@ public class LegionCli
     /// configured key) and backfill with <c>claude</c>. Prints provider, name,
     /// and a one-line persona preview per voter.
     /// </summary>
-    private static async Task<int> PanelAsync(string[] args)
+    private static int Panel(string[] args)
     {
         if (args.Length == 0 || !int.TryParse(args[0], out var count))
         {
-            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...] [--diverse] [--connection <cs>]");
+            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...] [--diverse] [--store <dir>]");
             Console.Error.WriteLine("  --diverse  pick personas that maximize psychometric spread (needs scored profiles).");
             return 1;
         }
 
         // Split trailing args into flags and provider-id positionals.
         var diverse = false;
-        string? connection = null;
+        string? storeDir = null;
         var providerList = new List<string>();
         for (var i = 1; i < args.Length; i++)
         {
             switch (args[i].ToLowerInvariant())
             {
                 case "--diverse": diverse = true; break;
-                case "--connection": if (i + 1 < args.Length) connection = args[++i]; break;
+                case "--store": if (i + 1 < args.Length) storeDir = args[++i]; break;
                 default: providerList.Add(args[i]); break;
             }
         }
@@ -523,14 +522,13 @@ public class LegionCli
             Dictionary<string, PsychometricProfile> profiles;
             try
             {
-                await using var db = LegionData.CreateContext(connection);
-                var latest = await new PsychometricProfileRepository(db).LatestPerPersonaAsync();
-                profiles = latest.ToDictionary(p => p.PersonaId, p => p.ToDomain());
+                var store = new PersonaStore(storeDir);
+                profiles = store.LatestPerPersona().ToDictionary(p => p.PersonaId, p => p);
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"error: could not load psychometric profiles: {ex.Message}");
-                Console.Error.WriteLine("  run 'legion psychometrics db init' and 'legion psychometrics score' first.");
+                Console.Error.WriteLine("  run 'legion psychometrics init' and 'legion psychometrics score' first.");
                 return 1;
             }
             if (profiles.Count == 0)

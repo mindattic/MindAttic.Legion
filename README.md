@@ -19,7 +19,7 @@ Legion is the panel:
 - **Decision-making** — `DecideAsync(question, options)` picks one option from a fixed list with confidence.
 - **Scoring** — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.
 - **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1024-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote *as* them.
-- **Psychometric profiles** — score the whole persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style), persisted as versioned runs in SQL Server. The model only answers items in-character; scoring is deterministic in code. Use the profiles to build trait-diverse panels and to segment a vote by composition. See [Psychometric persona profiles](#legionexe-psychometrics--score-the-persona-library).
+- **Psychometric profiles** — score the whole persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style), persisted as one faithful JSON file per persona. The model only answers items in-character; scoring is deterministic in code. Use the profiles to build trait-diverse panels and to segment a vote by composition. See [Psychometric persona profiles](#legionexe-psychometrics--score-the-persona-library).
 - **Tiered model selection** — every provider exposes a Low / Medium / High / Higher / Highest tier (e.g. claude → haiku / sonnet / opus). Pick the tier that fits the work: Low for bulk polls, Medium for creative generation, High for architectural decisions. The catalog hides specific model versions behind tier names so a model-id rotation doesn't break callers.
 - **Autonomous architectural decisions** — `legion.exe ask` is purpose-built for the loop where another coding CLI (Claude Code, Codex) blocks on a user prompt: an outer monitor pipes the question to `ask`, the panel deliberates on the High tier (claude-opus-4-7, gpt-4.1, gemini-2.5-pro, deepseek-reasoner), and the bare answer flows back to the blocked CLI. Architect-framed voters, auto-pulls `CLAUDE.md`/`README`/git as context, default panel is the four-provider trust list with automatic refill on outages.
 - **Bulk distribution sampling** — `legion.exe poll` round-robins N voters across the trusted four at a chosen tier (Low by default), reports a count-sorted distribution + plurality winner. The cheap fast tool for "how does the panel split on this?"
@@ -311,8 +311,8 @@ legion.exe personas 10            # sample 10 personas from the 1024-persona lib
 legion.exe panel 5                # build a 5-voter panel + show provider mix
 legion.exe panel 5 --diverse      # panel chosen to maximize psychometric spread (needs scored profiles)
 
-# Psychometrics — score the persona library on OCEAN/HEXACO/MBTI/Enneagram/DISC into SQL Server
-legion.exe psychometrics db init                  # create/upgrade the DB + seed personas
+# Psychometrics — score the persona library on OCEAN/HEXACO/MBTI/Enneagram/DISC into JSON files
+legion.exe psychometrics init                     # create the store + seed persona files
 legion.exe psychometrics score --limit 8          # pilot: score 8 personas (resumable; default tier high/Opus)
 legion.exe psychometrics score                    # score everything still missing a profile
 legion.exe psychometrics show persona-0000        # a persona's latest profile
@@ -414,10 +414,10 @@ Legion can administer five personality instruments to every persona and persist 
 | **Enneagram-style** | dominant type 1–9, wing, triad (Gut/Heart/Head) |
 | **DISC-style** | D, I, S, C scores + primary style |
 
-**Storage.** Profiles live in a dedicated **SQL Server** database via EF Core (project `MindAttic.Legion.Data`). The core library stays EF-free. Each scoring batch is an `AssessmentRun` stamped with the administrator model and an **instrument-set version** (`PsychometricInstruments.SetVersion`), so re-runs are comparable and drift is trackable. Connection resolution order: an explicit `--connection`, then the `MINDATTIC_LEGION_DB` environment variable, then a local `(localdb)\MSSQLLocalDB;Database=MindAtticLegion` (zero-config on Windows).
+**Storage.** Each persona is **one faithful JSON file** under `personas/` (identity + structured traits + the full nested assessment history), with a small `runs.json` index alongside — no database. A persona is fully reconstructable from its single file: portable, git-diffable, human-readable. The administering LLM is recorded **on each assessment, not on the persona** — so re-scoring through a different provider records a new *variant* of the same person rather than overwriting it. Each run is stamped with the model and an **instrument-set version** (`PsychometricInstruments.SetVersion`) so re-runs stay comparable. Store location: an explicit `--store <dir>`, then the `MINDATTIC_LEGION_STORE` environment variable, then `%APPDATA%/MindAttic/Legion`. Writes are atomic (temp file + move); the store assumes a single writer at a time.
 
 ```bash
-legion.exe psychometrics db init                  # create/upgrade the DB + seed the persona rows
+legion.exe psychometrics init                     # create the store + seed the persona files
 legion.exe psychometrics score --limit 8          # pilot: score 8 personas (resumable; default tier high/Opus)
 legion.exe psychometrics score                    # score everything still missing a current-version profile
 legion.exe psychometrics show persona-0000        # a persona's latest profile (--json for the raw record)
@@ -428,15 +428,15 @@ legion.exe psychometrics diff 1 2                 # per-framework drift between 
 
 | `score` / `rescore` option | Meaning |
 |---|---|
-| `--provider <id>` | Trusted administrator (default `claude`). |
+| `--provider <id>` | Trusted administering lens (default `claude`); a new provider yields a new variant. |
 | `--tier <t>` | `low`…`highest` (default `high` = Opus class). |
 | `--limit N` | Score at most N personas — use for a cheap pilot first. |
 | `--concurrency N` | Personas assessed in parallel (default 4). |
 | `--timeout S` | Per-provider timeout in seconds (default 120). |
 | `--store-raw` | Also persist every raw item answer for audit. |
-| `--connection <cs>` | Override the SQL Server connection string. |
+| `--store <dir>` | Override the store directory. |
 
-`score` is **resumable**: it skips personas that already have a profile at the current instrument-set version, so re-running continues where it left off. `rescore` forces a brand-new run scoring everyone (for drift tracking) and is the command an external scheduler should invoke. Scoring the full library is ≈ `personas × 5` model calls — pilot with `--limit` before committing to the whole run.
+`score` is **resumable**: it skips personas that already have a profile at the current instrument-set version *for this provider/lens*, so re-running continues where it left off (and scoring through a different `--provider` produces a fresh variant instead of skipping). `rescore` forces a brand-new run scoring everyone (for drift tracking) and is the command an external scheduler should invoke. Scoring the full library is ≈ `personas × 5` model calls — pilot with `--limit` before committing to the whole run.
 
 **Using the profiles.** Once scored:
 

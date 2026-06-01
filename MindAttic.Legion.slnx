@@ -1,6 +1,5 @@
 <Solution>
   <Project Path="MindAttic.Legion/MindAttic.Legion.csproj" />
   <Project Path="MindAttic.Legion.Cli/MindAttic.Legion.Cli.csproj" />
-  <Project Path="MindAttic.Legion.Data/MindAttic.Legion.Data.csproj" />
   <Project Path="MindAttic.Legion.Tests/MindAttic.Legion.Tests.csproj" />
 </Solution>

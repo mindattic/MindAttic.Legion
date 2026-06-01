@@ -1,22 +1,21 @@
 namespace MindAttic.Legion.Cli;
 
 using System.Text.Json;
-using Microsoft.Data.SqlClient;
 using MindAttic.Legion;
-using MindAttic.Legion.Data;
 using MindAttic.Legion.Providers;
 
 /// <summary>
 /// <c>legion psychometrics</c> — score the persona library on five instruments
 /// (Big Five/OCEAN, HEXACO, MBTI-style, Enneagram-style, DISC-style) and persist
-/// the results to SQL Server. A single trusted model administers every test in a
-/// run, so all personas are measured on the same yardstick; each run is versioned
-/// so drift can be tracked over time.
+/// the results as one faithful JSON file per persona (see <see cref="PersonaStore"/>).
+/// A single trusted model administers every test in a run; the administering
+/// model is a per-assessment lens, so re-scoring through a different provider
+/// records a new <em>variant</em> of the same persona rather than overwriting it.
 ///
 /// Subcommands:
-///   db init                         create/upgrade the database and seed personas
-///   score   [opts]                  score personas missing a current-version profile (resumable)
-///   rescore [opts]                  force a fresh full run (for drift tracking)
+///   init                            create the store and seed persona files
+///   score   [opts]                  score personas missing a current-version profile for this lens (resumable)
+///   rescore [opts]                  force a fresh full run (drift / new lens)
 ///   show    &lt;persona-id&gt; [opts]      print a persona's latest profile
 ///   stats   [opts]                  distribution summary across the library
 ///   history &lt;persona-id&gt; [opts]      a persona's profiles across runs
@@ -33,51 +32,27 @@ public static class PsychometricsCommand
         }
 
         var rest = args.Skip(1).ToArray();
-        try
+        return args[0].ToLowerInvariant() switch
         {
-            return args[0].ToLowerInvariant() switch
-            {
-                "db"      => await DbAsync(rest),
-                "score"   => await ScoreAsync(rest, rescore: false),
-                "rescore" => await ScoreAsync(rest, rescore: true),
-                "show"    => await ShowAsync(rest),
-                "stats"   => await StatsAsync(rest),
-                "history" => await HistoryAsync(rest),
-                "diff"    => await DiffAsync(rest),
-                _         => Unknown(args[0]),
-            };
-        }
-        catch (SqlException ex)
-        {
-            Console.Error.WriteLine($"error: database call failed: {ex.Message}");
-            Console.Error.WriteLine($"  connection: {Redact(LegionConnectionString.Resolve(LastConnectionOverride))}");
-            Console.Error.WriteLine($"  set {LegionConnectionString.EnvVar} to point at your SQL Server, or run 'legion psychometrics db init' first.");
-            return 2;
-        }
+            "init"    => Init(rest),
+            "score"   => await ScoreAsync(rest, rescore: false),
+            "rescore" => await ScoreAsync(rest, rescore: true),
+            "show"    => Show(rest),
+            "stats"   => Stats(rest),
+            "history" => History(rest),
+            "diff"    => Diff(rest),
+            _         => Unknown(args[0]),
+        };
     }
 
-    // Remembered so the SqlException handler can report the connection actually used.
-    private static string? LastConnectionOverride;
+    // ── init ──────────────────────────────────────────────────────────────────
 
-    // ── db init ──────────────────────────────────────────────────────────────
-
-    private static async Task<int> DbAsync(string[] args)
+    private static int Init(string[] args)
     {
-        if (args.Length == 0 || args[0].ToLowerInvariant() != "init")
-        {
-            Console.Error.WriteLine("usage: legion psychometrics db init [--connection <cs>]");
-            return 1;
-        }
-        var connection = ParseConnection(args);
-        await using var db = LegionData.CreateContext(connection);
-        await LegionData.MigrateAsync(db);
-
-        var personas = new PersonaRepository(db);
-        var changed = await personas.SyncFromLibraryAsync();
-        var count = await personas.CountAsync();
-
-        Console.WriteLine($"Database ready: {Redact(LegionConnectionString.Resolve(connection))}");
-        Console.WriteLine($"Personas synced: {count} total ({changed} inserted/updated).");
+        var store = new PersonaStore(ParseStore(args));
+        var changed = store.SyncFromLibrary();
+        Console.WriteLine($"Store ready: {store.RootDirectory}");
+        Console.WriteLine($"Personas synced: {store.Count()} total ({changed} written).");
         Console.WriteLine($"Instruments: {PsychometricInstruments.All.Count} ({PsychometricInstruments.TotalItemCount} items), set version {PsychometricInstruments.SetVersion}.");
         return 0;
     }
@@ -86,7 +61,7 @@ public static class PsychometricsCommand
 
     private static async Task<int> ScoreAsync(string[] args, bool rescore)
     {
-        var connection = ParseConnection(args);
+        var store = new PersonaStore(ParseStore(args));
         var providerId = "claude";
         var tier = ModelTier.High;
         var limit = int.MaxValue;
@@ -133,46 +108,36 @@ public static class PsychometricsCommand
         }
 
         var assessor = new LlmPsychometricAssessor(provider, providerId, tier);
+        store.SyncFromLibrary();
 
-        await using var db = LegionData.CreateContext(connection);
-        await LegionData.MigrateAsync(db);
-        var personaRepo = new PersonaRepository(db);
-        var runRepo = new AssessmentRunRepository(db);
-        var profileRepo = new PsychometricProfileRepository(db);
-        await personaRepo.SyncFromLibraryAsync();
-
-        // Decide who to score. `score` skips personas already scored at the
-        // current instrument version (resumable); `rescore` always re-scores.
+        // `score` skips personas already scored at the current instrument version
+        // *through this provider/lens* (resumable; a different provider yields a
+        // new variant). `rescore` always re-scores.
         var byId = PersonaLibrary.All.ToDictionary(p => p.Id);
         var ordered = PersonaLibrary.All.Select(p => p.Id).ToList();
         var skip = rescore
             ? new HashSet<string>(StringComparer.Ordinal)
-            : await profileRepo.PersonaIdsScoredAsync(PsychometricInstruments.SetVersion);
+            : store.PersonaIdsScored(PsychometricInstruments.SetVersion, providerId);
         var toScore = ordered.Where(id => !skip.Contains(id)).Take(limit).Select(id => byId[id]).ToList();
 
         if (toScore.Count == 0)
         {
             Console.WriteLine(rescore
                 ? "Nothing to score."
-                : $"All {ordered.Count} personas already scored at instrument set {PsychometricInstruments.SetVersion}. Use 'rescore' to force a fresh run.");
+                : $"All {ordered.Count} personas already scored at set {PsychometricInstruments.SetVersion} via {providerId}. Use 'rescore' or a different --provider for a new variant.");
             return 0;
         }
 
         Console.WriteLine($"Scoring {toScore.Count} persona(s) on {PsychometricInstruments.All.Count} instruments " +
                           $"via {providerId} ({assessor.ModelId}, tier {tier}), concurrency {concurrency}.");
-        Console.WriteLine($"  ≈ {toScore.Count * PsychometricInstruments.All.Count} model calls. Ctrl+C saves progress and exits (resume with 'score').");
+        Console.WriteLine($"  ≈ {toScore.Count * PsychometricInstruments.All.Count} model calls. Resumable with 'score'.");
 
         using var cts = new CancellationTokenSource();
-        // Only honor Ctrl+C in a real interactive console. Under redirected I/O
-        // (background runs, pipes) a spurious console control event can fire at
-        // startup and would otherwise abort the whole run; resumability via
-        // 'score' covers a hard kill in that case.
         if (!Console.IsInputRedirected)
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        var run = await runRepo.StartAsync(
-            providerId, assessor.ModelId, tier.ToString(), PsychometricInstruments.SetVersion,
-            toScore.Count, DateTime.UtcNow, notes, cts.Token);
+        var run = store.StartRun(providerId, assessor.ModelId, tier.ToString(),
+            PsychometricInstruments.SetVersion, toScore.Count, DateTime.UtcNow, notes);
 
         int done = 0, failed = 0;
         try
@@ -184,9 +149,6 @@ public static class PsychometricsCommand
                 var tasks = batch.Select(async p =>
                 {
                     try { return (persona: p, assessment: await assessor.AssessAsync(p, DateTime.UtcNow, cts.Token), error: (string?)null); }
-                    // Only a genuine user cancel (cts) aborts the run; a per-call
-                    // provider timeout also surfaces as OCE but must be treated as
-                    // a single failed persona so the batch keeps going.
                     catch (OperationCanceledException) when (cts.IsCancellationRequested) { throw; }
                     catch (Exception ex) { return (persona: p, assessment: (PsychometricAssessment?)null, error: ex.Message); }
                 });
@@ -198,11 +160,11 @@ public static class PsychometricsCommand
                         Console.Error.WriteLine($"  ! {r.persona.Id} failed: {r.error}");
                         continue;
                     }
-                    await profileRepo.SaveAsync(r.assessment.Profile, run.Id, storeRaw ? r.assessment.RawAnswers : null, cts.Token);
+                    store.SaveAssessment(r.persona.Id, run.Id, r.assessment.Profile, storeRaw ? ToMutable(r.assessment.RawAnswers) : null);
                     done++;
                     Console.WriteLine($"  [{done}/{toScore.Count}] {r.persona.Id}  {r.assessment.Profile.Summary()}");
                 }
-                await runRepo.SetProgressAsync(run.Id, done, cts.Token);
+                store.SetRunProgress(run.Id, done);
             }
         }
         catch (OperationCanceledException)
@@ -210,28 +172,31 @@ public static class PsychometricsCommand
             Console.Error.WriteLine($"cancelled — {done} saved, {failed} failed. Resume with 'legion psychometrics score'.");
         }
 
-        await runRepo.CompleteAsync(run.Id, DateTime.UtcNow, CancellationToken.None);
+        store.CompleteRun(run.Id, DateTime.UtcNow);
         Console.WriteLine($"Run #{run.Id} done: {done} scored, {failed} failed.");
         return failed > 0 && done == 0 ? 1 : 0;
     }
 
+    private static Dictionary<string, Dictionary<int, int>> ToMutable(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>> raw) =>
+        raw.ToDictionary(kv => kv.Key, kv => kv.Value.ToDictionary(x => x.Key, x => x.Value));
+
     // ── show ──────────────────────────────────────────────────────────────────
 
-    private static async Task<int> ShowAsync(string[] args)
+    private static int Show(string[] args)
     {
         if (args.Length == 0 || args[0].StartsWith("--"))
         {
-            Console.Error.WriteLine("usage: legion psychometrics show <persona-id> [--json] [--connection <cs>]");
+            Console.Error.WriteLine("usage: legion psychometrics show <persona-id> [--json] [--store <dir>]");
             return 1;
         }
         var personaId = args[0];
         var json = args.Contains("--json");
-        var connection = ParseConnection(args);
+        var store = new PersonaStore(ParseStore(args));
 
-        await using var db = LegionData.CreateContext(connection);
-        var profile = await new PsychometricProfileRepository(db).GetLatestAsync(personaId);
-        var persona = await new PersonaRepository(db).GetAsync(personaId);
-        if (profile is null)
+        var doc = store.Get(personaId);
+        var profile = store.LatestProfile(personaId);
+        if (doc is null || profile is null)
         {
             Console.Error.WriteLine($"no profile for '{personaId}'. Has it been scored? (run 'score')");
             return 1;
@@ -239,15 +204,14 @@ public static class PsychometricsCommand
 
         if (json)
         {
-            Console.WriteLine(JsonSerializer.Serialize(ToDto(profile, persona),
-                new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine(JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
 
-        Console.WriteLine($"{personaId} — {persona?.Name ?? "(unknown)"}");
-        if (persona is { IsDefault: false })
-            Console.WriteLine($"  {persona.Worldview} {persona.Archetype}, {persona.Background}, age {persona.Age} ({persona.Pronouns})");
-        Console.WriteLine($"  scored {profile.ScoredAtUtc:u} by {profile.AdministeredByProvider}/{profile.AdministeredByModel} (set {profile.InstrumentSetVersion})");
+        Console.WriteLine($"{personaId} — {doc.Name}");
+        if (doc.Traits is { IsDefault: false, Archetype: not null })
+            Console.WriteLine($"  {doc.Traits.Worldview} {doc.Traits.Archetype}, {doc.Traits.Background}, age {doc.Traits.Age} ({doc.Traits.Pronouns})");
+        Console.WriteLine($"  scored {profile.ScoredAtUtc:u} through {profile.AdministeredByProvider}/{profile.AdministeredByModel} (set {profile.InstrumentSetVersion})");
         Console.WriteLine();
         Console.WriteLine($"  MBTI:       {profile.Mbti.Type}  (E/I {profile.Mbti.ExtraversionPct:0} · S/N {profile.Mbti.SensingPct:0} · T/F {profile.Mbti.ThinkingPct:0} · J/P {profile.Mbti.JudgingPct:0})");
         Console.WriteLine($"  Enneagram:  {profile.Enneagram.Notation()}  ({profile.Enneagram.Triad})");
@@ -259,12 +223,11 @@ public static class PsychometricsCommand
 
     // ── stats ──────────────────────────────────────────────────────────────────
 
-    private static async Task<int> StatsAsync(string[] args)
+    private static int Stats(string[] args)
     {
         var json = args.Contains("--json");
-        var connection = ParseConnection(args);
-        await using var db = LegionData.CreateContext(connection);
-        var latest = await new PsychometricProfileRepository(db).LatestPerPersonaAsync();
+        var store = new PersonaStore(ParseStore(args));
+        var latest = store.LatestPerPersona();
 
         if (latest.Count == 0)
         {
@@ -288,9 +251,7 @@ public static class PsychometricsCommand
         {
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                profiles = latest.Count,
-                mbti, disc, enneagram = enn,
-                meanOcean, meanHexaco,
+                profiles = latest.Count, mbti, disc, enneagram = enn, meanOcean, meanHexaco,
             }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
@@ -310,42 +271,39 @@ public static class PsychometricsCommand
 
     // ── history ─────────────────────────────────────────────────────────────────
 
-    private static async Task<int> HistoryAsync(string[] args)
+    private static int History(string[] args)
     {
         if (args.Length == 0 || args[0].StartsWith("--"))
         {
-            Console.Error.WriteLine("usage: legion psychometrics history <persona-id> [--connection <cs>]");
+            Console.Error.WriteLine("usage: legion psychometrics history <persona-id> [--store <dir>]");
             return 1;
         }
         var personaId = args[0];
-        var connection = ParseConnection(args);
-        await using var db = LegionData.CreateContext(connection);
-        var rows = await new PsychometricProfileRepository(db).HistoryAsync(personaId);
+        var store = new PersonaStore(ParseStore(args));
+        var rows = store.History(personaId);
         if (rows.Count == 0)
         {
             Console.Error.WriteLine($"no profiles for '{personaId}'.");
             return 1;
         }
-        Console.WriteLine($"{personaId} — {rows.Count} run(s):");
-        foreach (var p in rows)
-            Console.WriteLine($"  run #{p.AssessmentRunId,-4} {p.ScoredAtUtc:u}  {p.ToDomain().Summary()}");
+        Console.WriteLine($"{personaId} — {rows.Count} assessment(s):");
+        foreach (var a in rows)
+            Console.WriteLine($"  run #{a.RunId,-4} {a.Profile.ScoredAtUtc:u}  via {a.Profile.AdministeredByProvider,-8} {a.Profile.Summary()}");
         return 0;
     }
 
     // ── diff ──────────────────────────────────────────────────────────────────
 
-    private static async Task<int> DiffAsync(string[] args)
+    private static int Diff(string[] args)
     {
         if (args.Length < 2 || !int.TryParse(args[0], out var runA) || !int.TryParse(args[1], out var runB))
         {
-            Console.Error.WriteLine("usage: legion psychometrics diff <runA> <runB> [--connection <cs>]");
+            Console.Error.WriteLine("usage: legion psychometrics diff <runA> <runB> [--store <dir>]");
             return 1;
         }
-        var connection = ParseConnection(args);
-        await using var db = LegionData.CreateContext(connection);
-        var repo = new PsychometricProfileRepository(db);
-        var a = (await repo.ByRunAsync(runA)).ToDictionary(p => p.PersonaId);
-        var b = (await repo.ByRunAsync(runB)).ToDictionary(p => p.PersonaId);
+        var store = new PersonaStore(ParseStore(args));
+        var a = store.ProfilesByRun(runA);
+        var b = store.ProfilesByRun(runB);
         var shared = a.Keys.Intersect(b.Keys).OrderBy(x => x).ToList();
         if (shared.Count == 0)
         {
@@ -386,40 +344,12 @@ public static class PsychometricsCommand
 
     private static double MeanAbs(params double[] deltas) => deltas.Select(Math.Abs).Average();
 
-    private static object ToDto(PsychometricProfileEntity p, PersonaEntity? persona) => new
-    {
-        personaId = p.PersonaId,
-        name = persona?.Name,
-        scoredAtUtc = p.ScoredAtUtc,
-        administeredBy = new { provider = p.AdministeredByProvider, model = p.AdministeredByModel },
-        instrumentSetVersion = p.InstrumentSetVersion,
-        ocean = p.Ocean,
-        hexaco = p.Hexaco,
-        mbti = p.Mbti,
-        enneagram = new { p.Enneagram.Type, p.Enneagram.Wing, p.Enneagram.Triad, notation = p.Enneagram.Notation() },
-        disc = p.Disc,
-    };
-
-    private static string? ParseConnection(string[] args)
+    private static string? ParseStore(string[] args)
     {
         for (var i = 0; i < args.Length - 1; i++)
-            if (args[i].Equals("--connection", StringComparison.OrdinalIgnoreCase))
-            {
-                LastConnectionOverride = args[i + 1];
+            if (args[i].Equals("--store", StringComparison.OrdinalIgnoreCase))
                 return args[i + 1];
-            }
         return null;
-    }
-
-    /// <summary>Show only server + database from a connection string (never credentials).</summary>
-    private static string Redact(string connectionString)
-    {
-        try
-        {
-            var b = new SqlConnectionStringBuilder(connectionString);
-            return $"{b.DataSource}/{b.InitialCatalog}";
-        }
-        catch { return "(configured connection)"; }
     }
 
     private static int Unknown(string sub)
@@ -434,19 +364,19 @@ public static class PsychometricsCommand
         Console.WriteLine("legion psychometrics <subcommand> [opts]");
         Console.WriteLine();
         Console.WriteLine("  Score the persona library on OCEAN, HEXACO, MBTI, Enneagram, and DISC, and");
-        Console.WriteLine("  persist versioned profiles to SQL Server.");
+        Console.WriteLine("  persist one JSON file per persona (no database).");
         Console.WriteLine();
         Console.WriteLine("Subcommands:");
-        Console.WriteLine("  db init                      Create/upgrade the database and seed personas.");
-        Console.WriteLine("  score [opts]                 Score personas missing a current-version profile (resumable).");
-        Console.WriteLine("  rescore [opts]               Force a fresh full run (drift tracking).");
+        Console.WriteLine("  init                         Create the store and seed persona files.");
+        Console.WriteLine("  score [opts]                 Score personas missing a current-version profile for this lens (resumable).");
+        Console.WriteLine("  rescore [opts]               Force a fresh full run (drift / new lens).");
         Console.WriteLine("  show <persona-id> [--json]   Print a persona's latest profile.");
         Console.WriteLine("  stats [--json]               Distribution summary across the library.");
         Console.WriteLine("  history <persona-id>         A persona's profiles across runs.");
         Console.WriteLine("  diff <runA> <runB>           Per-framework drift between two runs.");
         Console.WriteLine();
         Console.WriteLine("score/rescore opts:");
-        Console.WriteLine("  --provider <id>   Trusted administrator (default claude).");
+        Console.WriteLine("  --provider <id>   Trusted administering lens (default claude).");
         Console.WriteLine("  --tier <t>        low|medium|high|higher|highest (default high = Opus class).");
         Console.WriteLine("  --limit N         Score at most N personas (pilot runs).");
         Console.WriteLine("  --concurrency N   Personas assessed in parallel (default 4).");
@@ -454,7 +384,7 @@ public static class PsychometricsCommand
         Console.WriteLine("  --store-raw       Persist raw per-item answers for audit.");
         Console.WriteLine("  --notes <text>    Free-form note on the run.");
         Console.WriteLine();
-        Console.WriteLine("All subcommands accept --connection <cs>; otherwise the MINDATTIC_LEGION_DB env var");
-        Console.WriteLine("or a local (localdb)\\MSSQLLocalDB database is used.");
+        Console.WriteLine("All subcommands accept --store <dir>; otherwise MINDATTIC_LEGION_STORE or the");
+        Console.WriteLine("roaming MindAttic bucket (%APPDATA%/MindAttic/Legion) is used.");
     }
 }

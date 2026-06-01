@@ -1,5 +1,4 @@
 using MindAttic.Legion;
-using MindAttic.Legion.Data;
 using NUnit.Framework;
 
 namespace MindAttic.Legion.Tests;
@@ -52,18 +51,5 @@ public class PsychometricModelTests
         Assert.That(s, Does.Contain("DISC-D"));
         Assert.That(s, Does.Contain("OCEAN"));
         Assert.That(s, Does.Contain("HEXACO"));
-    }
-
-    [Test]
-    public void Entity_FromDomain_ToDomain_RoundTripsLosslessly()
-    {
-        var original = Sample();
-        var entity = PsychometricProfileEntity.FromDomain(original, assessmentRunId: 7);
-
-        Assert.That(entity.AssessmentRunId, Is.EqualTo(7));
-        Assert.That(entity.PersonaId, Is.EqualTo(original.PersonaId));
-
-        var roundTripped = entity.ToDomain();
-        Assert.That(roundTripped, Is.EqualTo(original), "records compare by value; the mapping must be lossless");
     }
 }
