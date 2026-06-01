@@ -163,7 +163,12 @@ public static class PsychometricsCommand
         Console.WriteLine($"  ≈ {toScore.Count * PsychometricInstruments.All.Count} model calls. Ctrl+C saves progress and exits (resume with 'score').");
 
         using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+        // Only honor Ctrl+C in a real interactive console. Under redirected I/O
+        // (background runs, pipes) a spurious console control event can fire at
+        // startup and would otherwise abort the whole run; resumability via
+        // 'score' covers a hard kill in that case.
+        if (!Console.IsInputRedirected)
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
         var run = await runRepo.StartAsync(
             providerId, assessor.ModelId, tier.ToString(), PsychometricInstruments.SetVersion,
@@ -179,7 +184,10 @@ public static class PsychometricsCommand
                 var tasks = batch.Select(async p =>
                 {
                     try { return (persona: p, assessment: await assessor.AssessAsync(p, DateTime.UtcNow, cts.Token), error: (string?)null); }
-                    catch (OperationCanceledException) { throw; }
+                    // Only a genuine user cancel (cts) aborts the run; a per-call
+                    // provider timeout also surfaces as OCE but must be treated as
+                    // a single failed persona so the batch keeps going.
+                    catch (OperationCanceledException) when (cts.IsCancellationRequested) { throw; }
                     catch (Exception ex) { return (persona: p, assessment: (PsychometricAssessment?)null, error: ex.Message); }
                 });
                 foreach (var r in await Task.WhenAll(tasks))
