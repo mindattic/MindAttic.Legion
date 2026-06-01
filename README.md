@@ -18,13 +18,14 @@ Legion is the panel:
 - **Voting** — call all configured providers in parallel, tally their answers, return the consensus with reasoning + dissent.
 - **Decision-making** — `DecideAsync(question, options)` picks one option from a fixed list with confidence.
 - **Scoring** — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.
-- **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1000-persona library, build a panel of N unique voices, score each persona on five psychometric instruments (OCEAN, MBTI, Enneagram, DISC, HEXACO), or wrap a fictional character's psychology to vote *as* them.
+- **Personas** — every voter can wear a persona (a markdown system prompt). Use the bundled 1024-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote *as* them.
+- **Psychometric profiles** — score the whole persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style), persisted as versioned runs in SQL Server. The model only answers items in-character; scoring is deterministic in code. Use the profiles to build trait-diverse panels and to segment a vote by composition. See [Psychometric persona profiles](#legionexe-psychometrics--score-the-persona-library).
 - **Tiered model selection** — every provider exposes a Low / Medium / High / Higher / Highest tier (e.g. claude → haiku / sonnet / opus). Pick the tier that fits the work: Low for bulk polls, Medium for creative generation, High for architectural decisions. The catalog hides specific model versions behind tier names so a model-id rotation doesn't break callers.
 - **Autonomous architectural decisions** — `legion.exe ask` is purpose-built for the loop where another coding CLI (Claude Code, Codex) blocks on a user prompt: an outer monitor pipes the question to `ask`, the panel deliberates on the High tier (claude-opus-4-7, gpt-4.1, gemini-2.5-pro, deepseek-reasoner), and the bare answer flows back to the blocked CLI. Architect-framed voters, auto-pulls `CLAUDE.md`/`README`/git as context, default panel is the four-provider trust list with automatic refill on outages.
 - **Bulk distribution sampling** — `legion.exe poll` round-robins N voters across the trusted four at a chosen tier (Low by default), reports a count-sorted distribution + plurality winner. The cheap fast tool for "how does the panel split on this?"
 - **Bulk creative generation** — `legion.exe generate` fans out one batched call per provider asking for that provider's share of N items, deduplicates across the merge, and emits newline-separated results to stdout. Built for `legion generate "100 hero-vibe names" | head -25 > names.txt`.
 - **On-demand connectivity probe** — `legion.exe tiers` probes every (trusted-provider, tier) cell with a tiny prompt and prints a matrix. Use it before a critical session to confirm the panel is healthy.
-- **CLI** — `legion.exe status`, `legion.exe vote`, `legion.exe ask`, `legion.exe poll`, `legion.exe generate`, `legion.exe tiers`, `legion.exe health`, `legion.exe panel` — same engine, no .NET app required.
+- **CLI** — `legion.exe status`, `legion.exe vote`, `legion.exe ask`, `legion.exe poll`, `legion.exe generate`, `legion.exe tiers`, `legion.exe health`, `legion.exe panel`, `legion.exe psychometrics` — same engine, no .NET app required.
 
 ---
 
@@ -398,6 +399,51 @@ Output contract:
 | (empty) | `2` | unhandled error (network, etc.) |
 
 stderr carries warnings; never parse it.
+
+### `legion.exe psychometrics` — score the persona library
+
+Legion can administer five personality instruments to every persona and persist the results, so panels can be composed and votes read by *trait composition*, not just by provider. This is a separate subsystem from the decision commands (`ask`/`vote`/`poll` do **not** touch it) — it powers persona panels.
+
+**How scoring works.** A single trusted model (default **Claude, High tier / Opus**) answers each instrument's 1–5 Likert items **in character** as the persona; the LLM never computes a score. Scoring is done deterministically in C# (`PsychometricScorer`) from those raw answers, so the same answers always yield the same profile and the maths is unit-tested. The five instruments are public-domain-derived (IPIP Big Five & HEXACO, OEJTS-style Jungian axes, open DISC- and Enneagram-style banks); the trademarked questionnaires are never used, hence "-style".
+
+| Framework | Output |
+|---|---|
+| **OCEAN / Big Five** | O, C, E, A, N — each 0–100 |
+| **HEXACO** | Honesty-Humility, Emotionality, eXtraversion, Agreeableness, Conscientiousness, Openness — 0–100 |
+| **MBTI-style** | 4-letter type + per-axis lean (E/I, S/N, T/F, J/P) |
+| **Enneagram-style** | dominant type 1–9, wing, triad (Gut/Heart/Head) |
+| **DISC-style** | D, I, S, C scores + primary style |
+
+**Storage.** Profiles live in a dedicated **SQL Server** database via EF Core (project `MindAttic.Legion.Data`). The core library stays EF-free. Each scoring batch is an `AssessmentRun` stamped with the administrator model and an **instrument-set version** (`PsychometricInstruments.SetVersion`), so re-runs are comparable and drift is trackable. Connection resolution order: an explicit `--connection`, then the `MINDATTIC_LEGION_DB` environment variable, then a local `(localdb)\MSSQLLocalDB;Database=MindAtticLegion` (zero-config on Windows).
+
+```bash
+legion.exe psychometrics db init                  # create/upgrade the DB + seed the persona rows
+legion.exe psychometrics score --limit 8          # pilot: score 8 personas (resumable; default tier high/Opus)
+legion.exe psychometrics score                    # score everything still missing a current-version profile
+legion.exe psychometrics show persona-0000        # a persona's latest profile (--json for the raw record)
+legion.exe psychometrics stats                    # MBTI/DISC/Enneagram distribution + mean OCEAN/HEXACO
+legion.exe psychometrics rescore                  # fresh full versioned run — point cron/Task Scheduler at this
+legion.exe psychometrics diff 1 2                 # per-framework drift between two runs
+```
+
+| `score` / `rescore` option | Meaning |
+|---|---|
+| `--provider <id>` | Trusted administrator (default `claude`). |
+| `--tier <t>` | `low`…`highest` (default `high` = Opus class). |
+| `--limit N` | Score at most N personas — use for a cheap pilot first. |
+| `--concurrency N` | Personas assessed in parallel (default 4). |
+| `--timeout S` | Per-provider timeout in seconds (default 120). |
+| `--store-raw` | Also persist every raw item answer for audit. |
+| `--connection <cs>` | Override the SQL Server connection string. |
+
+`score` is **resumable**: it skips personas that already have a profile at the current instrument-set version, so re-running continues where it left off. `rescore` forces a brand-new run scoring everyone (for drift tracking) and is the command an external scheduler should invoke. Scoring the full library is ≈ `personas × 5` model calls — pilot with `--limit` before committing to the whole run.
+
+**Using the profiles.** Once scored:
+
+- `legion.exe panel N --diverse` builds a panel chosen to **maximize psychometric spread** (greedy farthest-point over the OCEAN+HEXACO+DISC vector) instead of sampling at random, and tags each voter with its type.
+- In code, `VoterFactory.GenerateDiverseVoters(count, providers, profiles)` does the same and attaches each `PsychometricProfile` to its `VoterProfile`; `PsychometricVoteAnalysis.Segment(voters, result, selector)` then splits a completed `VotingResult` by trait (built-in selectors: `ByMbtiType`, `ByDiscPrimary`, `ByEnneagramTriad`, `ByOpennessHalf`) to see, e.g., whether high-Openness voters split from low-Openness ones.
+
+> **Caveat — self-report skew.** Because a model answering "in character" still drifts toward dutiful, agreeable, conscientious self-presentation, LLM-administered profiles cluster toward a corner of the trait space (expect lots of *_STJ types and high Conscientiousness). Personas are still differentiated, just less than real humans would be. Sharper separation would need forced-choice/ipsative items or per-trait anchoring — a future instrument-set version, comparable to the current one via `diff`.
 
 ### `legion.exe poll` — bulk distribution sampling
 

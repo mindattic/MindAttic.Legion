@@ -99,5 +99,78 @@ public class PsychometricVotingTests
         Assert.That(byOpenness.Values.SelectMany(d => d.Values).Sum(), Is.EqualTo(3), "unscored + error votes excluded");
     }
 
+    [Test]
+    public void GenerateDiverseVoters_CountExceedingCandidates_ReturnsAllScored()
+    {
+        var ids = PersonaLibrary.Enriched.Take(3).Select(p => p.Id).ToList();
+        var profiles = ids.ToDictionary(id => id, id => Profile(id, 50, 50));
+
+        var voters = VoterFactory.GenerateDiverseVoters(10, new[] { "claude" }, profiles);
+        Assert.That(voters, Has.Count.EqualTo(3), "can't exceed the number of scored personas");
+    }
+
+    [Test]
+    public void GenerateDiverseVoters_SpreadsProvidersThenBackfillsFallback()
+    {
+        var ids = PersonaLibrary.Enriched.Take(4).Select(p => p.Id).ToList();
+        var profiles = new Dictionary<string, PsychometricProfile>();
+        for (var i = 0; i < ids.Count; i++) profiles[ids[i]] = Profile(ids[i], i * 30, i * 30);
+
+        var voters = VoterFactory.GenerateDiverseVoters(4, new[] { "claude", "openai" }, profiles, fallbackProviderId: "claude");
+        var providers = voters.Select(v => v.ProviderId).ToList();
+
+        Assert.That(providers[0], Is.EqualTo("claude"));
+        Assert.That(providers[1], Is.EqualTo("openai"));
+        Assert.That(providers.Skip(2), Is.All.EqualTo("claude"), "remaining slots backfill the fallback");
+    }
+
+    [Test]
+    public void Segment_ByMbtiType_GroupsByExactType()
+    {
+        var voters = new[]
+        {
+            new VoterProfile { VoterId = "a", Psychometrics = Profile("a", 50, 50, "INTJ") },
+            new VoterProfile { VoterId = "b", Psychometrics = Profile("b", 50, 50, "INTJ") },
+            new VoterProfile { VoterId = "c", Psychometrics = Profile("c", 50, 50, "ENFP") },
+        };
+        var result = new VotingResult
+        {
+            IndividualVotes =
+            {
+                new VoteResult { VoterId = "a", Decision = "Yes" },
+                new VoteResult { VoterId = "b", Decision = "No" },
+                new VoteResult { VoterId = "c", Decision = "Yes" },
+            },
+        };
+
+        var byType = PsychometricVoteAnalysis.Segment(voters, result, PsychometricVoteAnalysis.ByMbtiType);
+        Assert.That(byType["INTJ"]["Yes"], Is.EqualTo(1));
+        Assert.That(byType["INTJ"]["No"], Is.EqualTo(1));
+        Assert.That(byType["ENFP"]["Yes"], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Segment_ByDiscPrimary_LabelsWithDiscPrefix()
+    {
+        var voters = new[]
+        {
+            new VoterProfile { VoterId = "a", Psychometrics = Profile("a", 50, 90) }, // dominance≥50 → D
+            new VoterProfile { VoterId = "b", Psychometrics = Profile("b", 50, 10) }, // dominance<50 → S
+        };
+        var result = new VotingResult
+        {
+            IndividualVotes =
+            {
+                new VoteResult { VoterId = "a", Decision = "Ship" },
+                new VoteResult { VoterId = "b", Decision = "Wait" },
+            },
+        };
+
+        var byDisc = PsychometricVoteAnalysis.Segment(voters, result, PsychometricVoteAnalysis.ByDiscPrimary);
+        Assert.That(byDisc.Keys, Does.Contain("DISC-D"));
+        Assert.That(byDisc.Keys, Does.Contain("DISC-S"));
+        Assert.That(byDisc["DISC-D"]["Ship"], Is.EqualTo(1));
+    }
+
     private static string StripSuffix(string voterId) => voterId[..voterId.LastIndexOf('-')];
 }

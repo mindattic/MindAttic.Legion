@@ -121,4 +121,59 @@ public class PsychometricScorerTests
             Assert.That(profile.Summary(), Is.Not.Empty);
         });
     }
+
+    [Test]
+    public void OutOfRangeAnswers_AreClampedToTheScale()
+    {
+        // 9 clamps to 5; 0 clamps to 1 (then reverse-keyed back to 5) → Openness 100.
+        var ocean = PsychometricScorer.ScoreBigFive(Answers((5, 9), (10, 0), (15, 0), (20, 0)));
+        Assert.That(ocean.Openness, Is.EqualTo(100.0));
+    }
+
+    [Test]
+    public void NonReverseScale_NormalizesMidRange()
+    {
+        // All DISC items are non-reverse; answering every item "4" → (4-1)/4 = 75.
+        var disc = PsychometricScorer.ScoreDisc(
+            PsychometricInstruments.Disc.Items.ToDictionary(i => i.Id, _ => 4));
+        Assert.That(disc.Dominance, Is.EqualTo(75.0));
+        Assert.That(disc.Influence, Is.EqualTo(75.0));
+    }
+
+    [Test]
+    public void Hexaco_HonestyHumilityMaxed_RespectsReverseKeying()
+    {
+        // H items: 21/23 positive, 22/24 reverse.
+        var hexaco = PsychometricScorer.ScoreHexaco(Answers((21, 5), (23, 5), (22, 1), (24, 1)));
+        Assert.That(hexaco.HonestyHumility, Is.EqualTo(100.0));
+        Assert.That(hexaco.Emotionality, Is.EqualTo(50.0));
+    }
+
+    [Test]
+    public void Disc_TieBetweenDandI_PrefersDByOrder()
+    {
+        var answers = new Dictionary<int, int>();
+        foreach (var item in PsychometricInstruments.Disc.Items.Where(i => i.Scale is "D" or "I"))
+            answers[item.Id] = 5; // D and I both 100, S and C neutral
+        Assert.That(PsychometricScorer.ScoreDisc(answers).PrimaryStyle, Is.EqualTo("D"));
+    }
+
+    [Test]
+    public void Disc_TieBetweenSandC_PrefersSByOrder()
+    {
+        var answers = new Dictionary<int, int>();
+        foreach (var item in PsychometricInstruments.Disc.Items.Where(i => i.Scale is "S" or "C"))
+            answers[item.Id] = 5; // S and C both 100, D and I neutral
+        Assert.That(PsychometricScorer.ScoreDisc(answers).PrimaryStyle, Is.EqualTo("S"));
+    }
+
+    [Test]
+    public void Enneagram_WingIsTheHigherScoringNeighbour()
+    {
+        // Dominant type 5 (Head); make neighbour 6 outscore neighbour 4 → wing 6.
+        var enn = PsychometricScorer.ScoreEnneagram(Answers((101, 5), (102, 5), (103, 5), (104, 5)));
+        Assert.That(enn.Type, Is.EqualTo(5));
+        Assert.That(enn.Wing, Is.EqualTo(6));
+        Assert.That(enn.Triad, Is.EqualTo("Head"));
+    }
 }
