@@ -32,7 +32,7 @@ public class PsychometricAssessorLiveTests
             Assert.Ignore("No claude key in the Vault — skipping live assessment.");
 
         var assessor = new LlmPsychometricAssessor(provider, "claude", ModelTier.High);
-        var persona = PersonaLibrary.Get(PersonaLibrary.Defaults.Count); // first enriched persona
+        var persona = PersonaLibrary.Get(0); // first persona
         var result = await assessor.AssessAsync(persona, DateTime.UtcNow);
 
         Assert.Multiple(() =>

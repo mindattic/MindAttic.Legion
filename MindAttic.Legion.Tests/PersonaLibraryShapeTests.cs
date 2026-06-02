@@ -48,17 +48,12 @@ public class PersonaLibraryShapeTests
     }
 
     [Test]
-    public void DefaultDetails_AreFlaggedAndCarryProviderId()
+    public void NoDefaultPersonas_EverythingIsEnriched()
     {
-        var defaultIds = PersonaLibrary.Defaults.Select(p => p.Id).ToHashSet();
-        var defaults = PersonaLibrary.AllDetails.Where(d => defaultIds.Contains(d.Id)).ToList();
-        Assert.That(defaults, Is.Not.Empty);
-        foreach (var d in defaults)
-        {
-            Assert.That(d.IsDefault, Is.True, d.Id);
-            Assert.That(d.ProviderId, Is.Not.Null.And.Not.Empty, d.Id);
-            Assert.That(d.Archetype, Is.Null, d.Id);
-        }
+        // A bare LLM has no persona — there are no per-provider "default" entries.
+        Assert.That(PersonaLibrary.AllDetails.Any(d => d.IsDefault), Is.False);
+        Assert.That(PersonaLibrary.All.Any(p => p.Id.StartsWith("default-")), Is.False);
+        Assert.That(PersonaLibrary.Count, Is.EqualTo(1024));
     }
 
     [Test]

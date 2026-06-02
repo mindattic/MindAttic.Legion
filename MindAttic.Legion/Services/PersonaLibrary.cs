@@ -4,21 +4,19 @@ using System.Text.Json;
 namespace MindAttic.Legion;
 
 /// <summary>
-/// Library of baked-in voter personas. The catalog opens with one "default"
-/// persona per LLM in <see cref="LlmProviderCatalog"/> — these are raw,
-/// instruction-free Personas (e.g. "Claude", "ChatGPT") whose
-/// <see cref="Persona.PersonalityMarkdown"/> is empty so the model speaks as
-/// itself with no overlay. Following the defaults are 1024 enriched personas
-/// built from the cross-product of 16 archetypes × 8 worldviews × 8 cultural
-/// backgrounds, each further enriched with a deterministic age, pronouns, and
-/// a signature quirk so even neighbouring entries feel like distinct people.
+/// Library of baked-in voter personas: exactly 1024 personas built from the
+/// cross-product of 16 archetypes × 8 worldviews × 8 cultural backgrounds, each
+/// further enriched with a deterministic age, pronouns, and a signature quirk so
+/// even neighbouring entries feel like distinct people. There are no per-provider
+/// "default" entries — a bare LLM has no persona, so an instruction-free model is
+/// simply a <see cref="VoterProfile"/> with an empty personality, not a library
+/// member.
 ///
-/// Every persona in the library has a unique id and unique name. Enriched
-/// personas additionally have unique personality prompts; the defaults all
-/// share an empty prompt by design. <see cref="Sample(int, Random?)"/> draws
-/// WITHOUT replacement, so any panel built via <see cref="VoterFactory"/>
-/// never repeats a persona inside a single batch. The full list is
-/// materialized lazily on first use and cached for the process lifetime.
+/// Every persona has a unique id, name, and personality prompt.
+/// <see cref="Sample(int, Random?)"/> draws WITHOUT replacement, so any panel
+/// built via <see cref="VoterFactory"/> never repeats a persona inside a single
+/// batch. The list is materialized lazily on first use and cached for the
+/// process lifetime.
 /// </summary>
 public static class PersonaLibrary
 {
@@ -156,25 +154,16 @@ public static class PersonaLibrary
     /// <summary>The fixed enriched persona count: 16 × 8 × 8.</summary>
     public const int EnrichedCount = 1024;
 
-    private static readonly Lazy<(IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details)> defaultData = new(BuildDefaults);
     private static readonly Lazy<(IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details)> enrichedData = new(BuildEnriched);
-    private static readonly Lazy<IReadOnlyList<Persona>> all =
-        new(() => defaultData.Value.personas.Concat(enrichedData.Value.personas).ToArray());
-    private static readonly Lazy<IReadOnlyList<PersonaDetail>> allDetails =
-        new(() => defaultData.Value.details.Concat(enrichedData.Value.details).ToArray());
-
-    /// <summary>
-    /// Raw "default" personas — one per provider in <see cref="LlmProviderCatalog"/>,
-    /// in canonical order. Each has an empty <see cref="Persona.PersonalityMarkdown"/>,
-    /// meaning the LLM speaks as itself with no persona overlay.
-    /// </summary>
-    public static IReadOnlyList<Persona> Defaults => defaultData.Value.personas;
 
     /// <summary>The 1024 enriched personas built from the diversity skeleton.</summary>
     public static IReadOnlyList<Persona> Enriched => enrichedData.Value.personas;
 
-    /// <summary>The full set of personas in deterministic order: defaults first, then enriched.</summary>
-    public static IReadOnlyList<Persona> All => all.Value;
+    /// <summary>
+    /// The full persona library — exactly the 1024 <see cref="Enriched"/> personas.
+    /// A bare LLM has no persona, so there are no per-provider "default" entries.
+    /// </summary>
+    public static IReadOnlyList<Persona> All => enrichedData.Value.personas;
 
     /// <summary>
     /// Structured metadata for every persona in <see cref="All"/>, aligned by
@@ -182,7 +171,7 @@ public static class PersonaLibrary
     /// persistence and analytics query by archetype/worldview/background without
     /// re-parsing the prompt string.
     /// </summary>
-    public static IReadOnlyList<PersonaDetail> AllDetails => allDetails.Value;
+    public static IReadOnlyList<PersonaDetail> AllDetails => enrichedData.Value.details;
 
     private static readonly Lazy<IReadOnlyDictionary<string, PsychometricProfile>> profiles = new(LoadProfiles);
 
@@ -214,7 +203,7 @@ public static class PersonaLibrary
         return profiles ?? new Dictionary<string, PsychometricProfile>();
     }
 
-    /// <summary>Number of personas in the library (defaults + enriched).</summary>
+    /// <summary>Number of personas in the library (the 1024 enriched personas).</summary>
     public static int Count => All.Count;
 
     /// <summary>Returns the persona at the supplied index in [0, Count).</summary>
@@ -248,24 +237,6 @@ public static class PersonaLibrary
         var result = new Persona[take];
         for (int i = 0; i < take; i++) result[i] = All[indices[i]];
         return result;
-    }
-
-    /// <summary>
-    /// Builds the default-persona list — one persona per provider in
-    /// <see cref="LlmProviderCatalog"/>, with an empty personality so the LLM
-    /// speaks as itself with no overlay.
-    /// </summary>
-    private static (IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details) BuildDefaults()
-    {
-        var personas = new List<Persona>();
-        var details = new List<PersonaDetail>();
-        foreach (var p in LlmProviderCatalog.All)
-        {
-            var id = $"default-{p.Id}";
-            personas.Add(new Persona(id, p.DisplayName, PersonalityMarkdown: ""));
-            details.Add(new PersonaDetail(id, null, null, null, null, null, null, IsDefault: true, ProviderId: p.Id));
-        }
-        return (personas, details);
     }
 
     /// <summary>

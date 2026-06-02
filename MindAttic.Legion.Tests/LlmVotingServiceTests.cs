@@ -695,22 +695,20 @@ public class MindAtticCredentialStoreTests
 public class PersonaLibraryTests
 {
     [Test]
-    public void Count_IsDefaultsPlusEnriched()
+    public void Count_IsExactlyTheEnrichedLibrary()
     {
-        var expected = LlmProviderCatalog.All.Count + PersonaLibrary.EnrichedCount;
-        Assert.That(PersonaLibrary.Count, Is.EqualTo(expected));
-        Assert.That(PersonaLibrary.All, Has.Count.EqualTo(expected));
-        Assert.That(PersonaLibrary.Defaults, Has.Count.EqualTo(LlmProviderCatalog.All.Count));
-        Assert.That(PersonaLibrary.Enriched, Has.Count.EqualTo(PersonaLibrary.EnrichedCount));
+        // No per-provider "default" personas — a bare LLM has no persona.
+        Assert.That(PersonaLibrary.Count, Is.EqualTo(PersonaLibrary.EnrichedCount));
+        Assert.That(PersonaLibrary.Count, Is.EqualTo(1024));
+        Assert.That(PersonaLibrary.All, Has.Count.EqualTo(PersonaLibrary.EnrichedCount));
+        Assert.That(PersonaLibrary.All, Is.EqualTo(PersonaLibrary.Enriched));
     }
 
     [Test]
-    public void Defaults_ComeFirstInAllAndMatchProviderDisplayNames()
+    public void Every_PersonaHasANonEmptyPrompt()
     {
-        var providerNames = LlmProviderCatalog.All.Select(p => p.DisplayName).ToList();
-        var firstN = PersonaLibrary.All.Take(providerNames.Count).Select(p => p.Name).ToList();
-        Assert.That(firstN, Is.EqualTo(providerNames));
-        Assert.That(PersonaLibrary.Defaults.All(p => string.IsNullOrEmpty(p.PersonalityMarkdown)), Is.True);
+        // The whole point of stripping defaults: every library member is a real persona.
+        Assert.That(PersonaLibrary.All.All(p => !string.IsNullOrWhiteSpace(p.PersonalityMarkdown)), Is.True);
     }
 
     [Test]
