@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Version>2.3.0</Version>
+    <Version>2.4.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
@@ -28,6 +28,13 @@
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\LICENSE"   Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The 1024 personas' latest psychometric profiles (id → profile), so the
+         package delivers profile-carrying personas to consumers via
+         PersonaLibrary.Profiles without any external data source. -->
+    <EmbeddedResource Include="Resources\psychometric-profiles.json" />
   </ItemGroup>
 
   <ItemGroup>

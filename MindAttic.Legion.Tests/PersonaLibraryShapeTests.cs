@@ -62,6 +62,18 @@ public class PersonaLibraryShapeTests
     }
 
     [Test]
+    public void Profiles_AreEmbeddedAndLoad()
+    {
+        Assert.That(PersonaLibrary.Profiles, Has.Count.GreaterThanOrEqualTo(1024), "embedded profiles should cover the library");
+        var p = PersonaLibrary.GetProfile("persona-0500");
+        Assert.That(p, Is.Not.Null);
+        Assert.That(p!.PersonaId, Is.EqualTo("persona-0500"));
+        Assert.That(p.Mbti.Type, Has.Length.EqualTo(4));
+        Assert.That(p.Ocean.Openness, Is.InRange(0, 100));
+        Assert.That(PersonaLibrary.GetProfile("does-not-exist"), Is.Null);
+    }
+
+    [Test]
     public void EveryAxisCombination_AppearsExactlyOnce()
     {
         var enrichedIds = PersonaLibrary.Enriched.Select(p => p.Id).ToHashSet();

@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Text.Json;
+
 namespace MindAttic.Legion;
 
 /// <summary>
@@ -180,6 +183,36 @@ public static class PersonaLibrary
     /// re-parsing the prompt string.
     /// </summary>
     public static IReadOnlyList<PersonaDetail> AllDetails => allDetails.Value;
+
+    private static readonly Lazy<IReadOnlyDictionary<string, PsychometricProfile>> profiles = new(LoadProfiles);
+
+    /// <summary>
+    /// The latest psychometric profile per persona, keyed by <see cref="Persona.Id"/>
+    /// (OCEAN/HEXACO/MBTI/Enneagram/DISC + provenance). Embedded in the package so
+    /// consumers get profile-carrying personas with no external data source —
+    /// pair with <see cref="VoterFactory.GenerateDiverseVoters"/> to build
+    /// trait-diverse panels. Lazily deserialized on first access. A persona not
+    /// present here simply hasn't been scored.
+    /// </summary>
+    public static IReadOnlyDictionary<string, PsychometricProfile> Profiles => profiles.Value;
+
+    /// <summary>The psychometric profile for a persona id, or null if it hasn't been scored.</summary>
+    public static PsychometricProfile? GetProfile(string id) =>
+        Profiles.TryGetValue(id, out var p) ? p : null;
+
+    /// <summary>Deserialize the embedded <c>psychometric-profiles.json</c> (id → profile).</summary>
+    private static IReadOnlyDictionary<string, PsychometricProfile> LoadProfiles()
+    {
+        var asm = typeof(PersonaLibrary).Assembly;
+        var resource = asm.GetManifestResourceNames()
+            .FirstOrDefault(n => n.EndsWith("psychometric-profiles.json", StringComparison.OrdinalIgnoreCase));
+        if (resource is null) return new Dictionary<string, PsychometricProfile>();
+
+        using var stream = asm.GetManifestResourceStream(resource)!;
+        var profiles = JsonSerializer.Deserialize<Dictionary<string, PsychometricProfile>>(
+            stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        return profiles ?? new Dictionary<string, PsychometricProfile>();
+    }
 
     /// <summary>Number of personas in the library (defaults + enriched).</summary>
     public static int Count => All.Count;
