@@ -20,7 +20,7 @@ namespace MindAttic.Legion;
 /// </summary>
 public static class PersonaLibrary
 {
-    /// <summary>The 16 vocational archetypes — first axis of the 16×8×8 enriched-persona cube.</summary>
+    /// <summary>The 40 vocational archetypes — first axis of the 40×16×16 persona space.</summary>
     private static readonly string[] Archetypes =
     {
         "retired schoolteacher",
@@ -39,9 +39,33 @@ public static class PersonaLibrary
         "commercial airline pilot",
         "restaurant line cook",
         "field research biologist",
+        "construction foreman",
+        "pediatric surgeon",
+        "high-school football coach",
+        "tenured philosophy professor",
+        "freelance graphic designer",
+        "county sheriff's deputy",
+        "commercial fisherman",
+        "jazz musician",
+        "911 dispatcher",
+        "wind-turbine technician",
+        "corporate accountant",
+        "midwife",
+        "museum curator",
+        "auto mechanic",
+        "venture capitalist",
+        "daycare provider",
+        "oil-rig roughneck",
+        "data scientist",
+        "funeral director",
+        "vineyard owner",
+        "air-traffic controller",
+        "social-media influencer",
+        "stay-at-home parent",
+        "retired firefighter",
     };
 
-    /// <summary>The 8 worldviews — second axis of the enriched-persona cube; shapes how the persona reasons.</summary>
+    /// <summary>The 16 worldviews — second axis; shapes how the persona reasons.</summary>
     private static readonly string[] Worldviews =
     {
         "cautious traditionalist",
@@ -52,9 +76,17 @@ public static class PersonaLibrary
         "religious moralist",
         "blunt populist",
         "quietly anxious worrier",
+        "relentless optimist",
+        "contrarian gadfly",
+        "stoic fatalist",
+        "starry-eyed dreamer",
+        "cynical realist",
+        "principled libertarian",
+        "communitarian collectivist",
+        "restless reformer",
     };
 
-    /// <summary>The 8 cultural backgrounds — third axis of the enriched-persona cube; shapes voice and references.</summary>
+    /// <summary>The 16 cultural backgrounds — third axis; shapes voice and references.</summary>
     private static readonly string[] Backgrounds =
     {
         "rural Midwestern",
@@ -65,31 +97,20 @@ public static class PersonaLibrary
         "Texan",
         "multi-generational Californian",
         "Appalachian",
+        "Pacific Northwest",
+        "Mid-Atlantic suburban",
+        "Gulf Coast bayou",
+        "Rust Belt industrial town",
+        "Mountain West ranching",
+        "Great Plains prairie",
+        "inner-city Northeast",
+        "desert Southwest borderlands",
     };
 
-    /// <summary>
-    /// 100 first names spanning genders, generations, and origins. Combined
-    /// with 11 letter suffixes (A.-K.) this yields up to 1100 unique display
-    /// names — more than enough for one per enriched persona.
-    /// </summary>
-    private static readonly string[] FirstNames =
-    {
-        "Margaret","Paul","Elaine","Roger","Iris","Curtis","Henrietta","Vincent","Joan","Samuel",
-        "Beverly","Wallace","Phyllis","Edgar","Ramona","Otis","Yvonne","Stanley","Lillian","Bernard",
-        "Rosa","Gerald","Frances","Lloyd","Mabel","Marvin","Adelaide","Roy","Hazel","Floyd",
-        "Imani","Jamal","Priya","Diego","Mei","Hassan","Sofia","Kenji","Anika","Eduardo",
-        "Aisha","Dmitri","Naledi","Tariq","Yuki","Olamide","Camila","Rashid","Nadia","Mateo",
-        "Brenda","Keith","Doris","Lester","Marlene","Harold","Joyce","Ralph","Eleanor","Walter",
-        "Tasha","Jerome","Letitia","Maurice","Tabitha","Reginald","Geraldine","Cornelius","Loretta","Theodore",
-        "Sage","River","Quinn","Ash","Rowan","Phoenix","Arden","Jules","Skylar","Wren",
-        "Bertha","Norman","Edna","Clarence","Hilda","Wilbur","Gladys","Homer","Mavis","Ernest",
-        "Tomoko","Ranjit","Inara","Thabo","Sibel","Olufemi","Xiao","Demetri","Halimah","Zlatan",
-    };
-
-    /// <summary>The pronoun sets cycled through enriched personas (one per persona, deterministic by index).</summary>
+    /// <summary>The pronoun sets cycled through personas (one per persona, deterministic by index) — the female and male perspectives.</summary>
     private static readonly string[] PronounSets =
     {
-        "she/her", "he/him", "they/them",
+        "she/her", "he/him",
     };
 
     /// <summary>
@@ -151,8 +172,11 @@ public static class PersonaLibrary
         "Recites poetry they wrote in high school as if it's still their best work.",
     };
 
-    /// <summary>The fixed enriched persona count: 16 × 8 × 8.</summary>
+    /// <summary>The fixed persona count: 1024 unique combinations sampled from the 40×16×16 space.</summary>
     public const int EnrichedCount = 1024;
+
+    /// <summary>Fixed seed for the deterministic combination sample — change it and every persona changes.</summary>
+    private const uint SampleSeed = 0x9E3779B1;
 
     private static readonly Lazy<(IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details)> enrichedData = new(BuildEnriched);
 
@@ -240,32 +264,56 @@ public static class PersonaLibrary
     }
 
     /// <summary>
-    /// Materializes the 1024-persona cube: every (archetype × worldview ×
-    /// background) combination, enriched with a deterministic age, pronoun
-    /// set, and signature quirk so each persona has a unique fingerprint.
-    /// Called lazily on first access and cached for the process lifetime.
+    /// Materializes 1024 personas by deterministically sampling 1024 distinct
+    /// (archetype × worldview × background) combinations from the full 40×16×16
+    /// space (10,240 combinations) — a fixed-seed Fisher–Yates draw, so the same
+    /// 1024 are chosen on every build and machine. Each is enriched with a
+    /// deterministic age, pronoun set, and signature quirk so it reads as a
+    /// distinct individual. Sampling (rather than enumerating the whole cube)
+    /// lets every axis carry a rich vocabulary without blowing past 1024.
     /// </summary>
     private static (IReadOnlyList<Persona> personas, IReadOnlyList<PersonaDetail> details) BuildEnriched()
     {
+        int A = Archetypes.Length, W = Worldviews.Length, B = Backgrounds.Length;
+        int total = A * W * B;
+
+        // Deterministic Fisher–Yates over every combination index using a fixed
+        // seed (own LCG, not System.Random — stable across .NET versions/machines),
+        // then take the first EnrichedCount and sort for a stable, readable order.
+        var order = new int[total];
+        for (int k = 0; k < total; k++) order[k] = k;
+        uint seed = SampleSeed;
+        for (int k = total - 1; k > 0; k--)
+        {
+            seed = unchecked(seed * 1664525u + 1013904223u);
+            int j = (int)(seed % (uint)(k + 1));
+            (order[k], order[j]) = (order[j], order[k]);
+        }
+        var selected = new int[EnrichedCount];
+        Array.Copy(order, selected, EnrichedCount);
+        Array.Sort(selected);
+
         var personas = new Persona[EnrichedCount];
         var details = new PersonaDetail[EnrichedCount];
-        int i = 0;
-        for (int a = 0; a < Archetypes.Length; a++)
-        for (int w = 0; w < Worldviews.Length; w++)
-        for (int b = 0; b < Backgrounds.Length; b++)
+        int female = 0, male = 0;   // sequential draws from the gendered name pools
+        for (int i = 0; i < EnrichedCount; i++)
         {
-            var first = FirstNames[i % FirstNames.Length];
-            var initial = (char)('A' + (i / FirstNames.Length));
-            var name = $"{first} {initial}.";
+            int combo = selected[i];
+            int a = combo / (W * B);
+            int w = (combo / B) % W;
+            int b = combo % B;
+
             var id = $"persona-{i:0000}";
 
-            // Deterministic age in 22-78 (57-year span), pronouns rotated, signature quirk rotated.
-            var age = 22 + ((i * 7) % 57);
+            // Deterministic age in 18-80 (working-adult demographic), pronoun set + quirk rotated.
+            var age = 18 + ((i * 17) % 63);
             var pronouns = PronounSets[i % PronounSets.Length];
+            // Unique first name matching the pronoun's perspective — no last initial.
+            var name = pronouns == "she/her" ? PersonaNames.Female[female++] : PersonaNames.Male[male++];
             var quirk = Quirks[i % Quirks.Length];
 
             var prompt =
-$@"You are {name}, age {age} ({pronouns}). You are a {Worldviews[w]} {Archetypes[a]} from a {Backgrounds[b]} background.
+$@"You are {name}, age {age} ({pronouns}). You are {Article(Worldviews[w])} {Worldviews[w]} {Archetypes[a]} from {Article(Backgrounds[b])} {Backgrounds[b]} background.
 Signature trait: {quirk}
 Speak in your own voice with conviction. Bring the perspective your life would actually shape — values, blind spots, and all. Don't break character.
 Be concise. 2-3 sentences max.";
@@ -273,8 +321,11 @@ Be concise. 2-3 sentences max.";
             details[i] = new PersonaDetail(
                 id, Archetypes[a], Worldviews[w], Backgrounds[b], age, pronouns, quirk,
                 IsDefault: false, ProviderId: null);
-            i++;
         }
         return (personas, details);
     }
+
+    /// <summary>Indefinite article ("a"/"an") for the following word, by its first letter.</summary>
+    private static string Article(string word) =>
+        word.Length > 0 && "aeiouAEIOU".IndexOf(word[0]) >= 0 ? "an" : "a";
 }

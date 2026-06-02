@@ -786,24 +786,23 @@ public class PersonaLibraryTests
     // Enriched-persona checks (age / pronouns / signature trait)
 
     [Test]
-    public void EveryEnrichedPersona_PromptIncludesAgeBetween22And78()
+    public void EveryEnrichedPersona_PromptIncludesAgeBetween18And80()
     {
-        // Age formula: 22 + ((i*7) % 57) → range [22, 78]
+        // Age formula: 18 + ((i*17) % 63) → range [18, 80] (working-adult demographic)
         var bad = PersonaLibrary.Enriched
-            .Select((p, i) => new { p, i, expected = 22 + ((i * 7) % 57) })
+            .Select((p, i) => new { p, i, expected = 18 + ((i * 17) % 63) })
             .Where(x => !x.p.PersonalityMarkdown.Contains($"age {x.expected}"))
             .ToList();
         Assert.That(bad, Is.Empty, $"persona prompts missing expected age tag: {string.Join(",", bad.Take(5).Select(b => b.i))}");
     }
 
     [Test]
-    public void EveryEnrichedPersona_PromptIncludesOneOfThreePronounSets()
+    public void EveryEnrichedPersona_PromptIncludesAFemaleOrMalePronounSet()
     {
         foreach (var p in PersonaLibrary.Enriched)
         {
             var hasOne = p.PersonalityMarkdown.Contains("she/her")
-                      || p.PersonalityMarkdown.Contains("he/him")
-                      || p.PersonalityMarkdown.Contains("they/them");
+                      || p.PersonalityMarkdown.Contains("he/him");
             Assert.That(hasOne, Is.True, $"{p.Id} has no recognized pronoun set");
         }
     }
