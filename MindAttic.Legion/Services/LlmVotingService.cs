@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -296,6 +297,12 @@ public class LlmVotingService
         List<VoterProfile> voters,
         CancellationToken ct)
     {
+        // Enforced here (not just in ScoreAsync) so the ScoreWithProfilesAsync
+        // entry point can't slip through with an empty schema and return a
+        // meaningless "Overall: 0.0/10, quorum reached" result.
+        if (request.Dimensions.Count == 0)
+            throw new ArgumentException("ScoredVoteRequest must have at least one dimension.", nameof(request));
+
         var sw = Stopwatch.StartNew();
         log.LogInformation("LLMVoting: starting scored vote — dimensions={Count}, voters={Voters}",
             request.Dimensions.Count, voters.Count);
@@ -316,7 +323,10 @@ public class LlmVotingService
         var individualVotes = await Task.WhenAll(tasks);
         var successful = individualVotes.Where(v => !v.IsError).ToList();
 
-        // Aggregate scores
+        // Aggregate scores. Only dimensions at least one successful voter actually
+        // scored are recorded. A dimension every voter omitted has NO data —
+        // recording it as 0.0 would wrongly flag it as a failing dimension, pick
+        // it as the weakest, and drag the overall average down with a phantom zero.
         var aggregateScores = new Dictionary<string, double>();
         foreach (var dim in request.Dimensions)
         {
@@ -324,7 +334,8 @@ public class LlmVotingService
                 .Where(v => v.Scores.ContainsKey(dim))
                 .Select(v => (double)v.Scores[dim])
                 .ToList();
-            aggregateScores[dim] = scores.Count > 0 ? scores.Average() : 0.0;
+            if (scores.Count > 0)
+                aggregateScores[dim] = scores.Average();
         }
 
         var failingDimensions = aggregateScores
@@ -785,8 +796,10 @@ public class LlmVotingService
         if (el.ValueKind == JsonValueKind.String)
         {
             var s = el.GetString();
-            if (int.TryParse(s, out value)) return true;
-            if (double.TryParse(s, out var d)) { value = (int)Math.Round(d, MidpointRounding.AwayFromZero); return true; }
+            // Invariant culture: an LLM emits "8.5" with a dot regardless of the
+            // host locale; CurrentCulture parsing drops it on comma-decimal hosts.
+            if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)) return true;
+            if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)) { value = (int)Math.Round(d, MidpointRounding.AwayFromZero); return true; }
         }
         return false;
     }

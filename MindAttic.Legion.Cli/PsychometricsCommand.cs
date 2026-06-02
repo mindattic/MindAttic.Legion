@@ -78,7 +78,7 @@ public static class PsychometricsCommand
                 case "--tier": if (i + 1 < args.Length && Enum.TryParse<ModelTier>(args[++i], true, out var t)) tier = t; break;
                 case "--limit": if (i + 1 < args.Length && int.TryParse(args[++i], out var l) && l > 0) limit = l; break;
                 case "--concurrency": if (i + 1 < args.Length && int.TryParse(args[++i], out var c) && c > 0) concurrency = c; break;
-                case "--timeout": if (i + 1 < args.Length && double.TryParse(args[++i], out var s) && s > 0) timeoutSeconds = s; break;
+                case "--timeout": if (i + 1 < args.Length && double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var s) && s > 0) timeoutSeconds = s; break;
                 case "--store-raw": storeRaw = true; break;
                 case "--notes": if (i + 1 < args.Length) notes = args[++i]; break;
             }
@@ -169,11 +169,15 @@ public static class PsychometricsCommand
         }
         catch (OperationCanceledException)
         {
+            store.SetRunProgress(run.Id, done);
             Console.Error.WriteLine($"cancelled — {done} saved, {failed} failed. Resume with 'legion psychometrics score'.");
         }
 
-        store.CompleteRun(run.Id, DateTime.UtcNow);
-        Console.WriteLine($"Run #{run.Id} done: {done} scored, {failed} failed.");
+        // Only stamp CompletedUtc on a run that actually finished — a cancelled
+        // run must stay open so it's distinguishable from a clean completion.
+        if (!cts.IsCancellationRequested)
+            store.CompleteRun(run.Id, DateTime.UtcNow);
+        Console.WriteLine($"Run #{run.Id} {(cts.IsCancellationRequested ? "cancelled" : "done")}: {done} scored, {failed} failed.");
         return failed > 0 && done == 0 ? 1 : 0;
     }
 

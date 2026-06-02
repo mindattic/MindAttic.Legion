@@ -670,10 +670,20 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content").GetProperty("parts")[0]
-            .GetProperty("text").GetString() ?? "";
+        var root = doc.RootElement;
+        // A safety-blocked or MAX_TOKENS candidate legitimately carries no
+        // content/parts on a 200 response. Navigate defensively and return ""
+        // rather than letting GetProperty/[0] throw — those raw element-access
+        // exceptions bubble to the resilience layer and get recorded as a
+        // circuit-breaker failure against a perfectly reachable provider.
+        if (root.TryGetProperty("candidates", out var candidates)
+            && candidates.ValueKind == JsonValueKind.Array && candidates.GetArrayLength() > 0
+            && candidates[0].TryGetProperty("content", out var content)
+            && content.TryGetProperty("parts", out var parts)
+            && parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0
+            && parts[0].TryGetProperty("text", out var text))
+            return text.GetString() ?? "";
+        return "";
     }
 
     /// <summary>
@@ -701,9 +711,13 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-            .GetProperty("message").GetProperty("content")[0]
-            .GetProperty("text").GetString() ?? "";
+        var root = doc.RootElement;
+        if (root.TryGetProperty("message", out var message)
+            && message.TryGetProperty("content", out var content)
+            && content.ValueKind == JsonValueKind.Array && content.GetArrayLength() > 0
+            && content[0].TryGetProperty("text", out var text))
+            return text.GetString() ?? "";
+        return "";
     }
 
     /// <summary>
@@ -736,8 +750,13 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-            .GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+        var root = doc.RootElement;
+        if (root.TryGetProperty("choices", out var choices)
+            && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0
+            && choices[0].TryGetProperty("message", out var message)
+            && message.TryGetProperty("content", out var content))
+            return content.GetString() ?? "";
+        return "";
     }
 
     /// <summary>

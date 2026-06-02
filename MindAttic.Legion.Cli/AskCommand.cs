@@ -172,7 +172,7 @@ public static class AskCommand
                     emitJson = true;
                     break;
                 case "--timeout":
-                    if (i + 1 < args.Length && double.TryParse(args[++i], out var ts) && ts > 0)
+                    if (i + 1 < args.Length && double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts > 0)
                         timeoutSeconds = ts;
                     break;
                 case "--providers":

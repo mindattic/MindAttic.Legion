@@ -382,6 +382,7 @@ public static class GenerateCommand
     internal static string Truncate(string s, int max)
     {
         if (string.IsNullOrEmpty(s)) return "";
+        if (max <= 0) return "";
         var oneLine = s.Replace('\n', ' ').Replace('\r', ' ');
         return oneLine.Length <= max ? oneLine : oneLine.Substring(0, max - 1) + "…";
     }

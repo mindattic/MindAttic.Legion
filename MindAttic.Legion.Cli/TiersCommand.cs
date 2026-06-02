@@ -100,7 +100,7 @@ public static class TiersCommand
                     emitJson = true;
                     break;
                 case "--timeout":
-                    if (i + 1 < args.Length && double.TryParse(args[++i], out var ts) && ts > 0)
+                    if (i + 1 < args.Length && double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts > 0)
                         timeoutSec = ts;
                     break;
                 case "--max-tokens":
@@ -257,6 +257,7 @@ public static class TiersCommand
     internal static string Truncate(string s, int max)
     {
         if (string.IsNullOrEmpty(s)) return "";
+        if (max <= 0) return "";
         var oneLine = s.Replace('\n', ' ').Replace('\r', ' ');
         return oneLine.Length <= max ? oneLine : oneLine.Substring(0, max - 1) + "…";
     }

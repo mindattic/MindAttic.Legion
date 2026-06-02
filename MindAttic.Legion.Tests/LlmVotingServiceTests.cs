@@ -361,6 +361,38 @@ public class LlmVotingServiceTests
     }
 
     [Test]
+    public async Task ScoreAsync_DimensionNoVoterScored_IsOmittedNotZero()
+    {
+        // Voter scores VOICE and PACING but omits TENSION. TENSION must not be
+        // recorded as 0.0 (which would flag it failing, pick it weakest, and
+        // drag OVERALL down to (8+6+0)/3).
+        var stubJson = """{"content":[{"text":"{\"scores\":{\"VOICE\":8,\"PACING\":6},\"reasoning\":\"x\",\"flags_good\":[],\"flags_bad\":[],\"improvement_directive\":\"\"}"}]}""";
+        var svc = BuildService(stubJson);
+        var request = new ScoredVoteRequest
+        {
+            Question = "Rate.",
+            Dimensions = ["VOICE", "PACING", "TENSION"],
+            SynthesizeNarrative = false,
+        };
+
+        var result = await svc.ScoreAsync(request);
+
+        Assert.That(result.AggregateScores.ContainsKey("TENSION"), Is.False, "un-scored dimension must not be recorded");
+        Assert.That(result.FailingDimensions, Does.Not.Contain("TENSION"));
+        Assert.That(result.WeakestDimension, Is.EqualTo("PACING"));
+        Assert.That(result.AggregateScores["OVERALL"], Is.EqualTo(7.0), "OVERALL averages only scored dimensions");
+    }
+
+    [Test]
+    public void ScoreWithProfilesAsync_EmptyDimensions_Throws()
+    {
+        var svc = BuildService("{}");
+        var voters = new[] { new VoterProfile { ProviderId = "claude", Name = "claude" } };
+        Assert.ThrowsAsync<ArgumentException>(async () =>
+            await svc.ScoreWithProfilesAsync(new ScoredVoteRequest { Question = "x", Dimensions = [] }, voters));
+    }
+
+    [Test]
     public async Task VoteAsync_ChoiceVote_JsonWrappedInProseWithStrayBraces_StillParses()
     {
         // The model prefixes a footnote "{1}" before the real JSON object. The

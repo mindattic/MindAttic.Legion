@@ -153,6 +153,16 @@ public class LlmHealthDiagnosisExceptionClassifierTests
     }
 
     [Test]
+    public void InvalidOperationException_NonCredential_IsBadResponse()
+    {
+        // A non-credential IOE (e.g. GetString on the wrong JSON kind) must not
+        // be mislabeled as a missing API key.
+        var (d, _) = LlmHealthDiagnoser.ClassifyException(
+            new InvalidOperationException("Operation is not valid due to the current state of the object."));
+        Assert.That(d, Is.EqualTo(LlmHealthDiagnosis.BadResponse));
+    }
+
+    [Test]
     public void ArgumentException_IsBadRequest()
     {
         var (d, _) = LlmHealthDiagnoser.ClassifyException(new ArgumentException("bad payload"));

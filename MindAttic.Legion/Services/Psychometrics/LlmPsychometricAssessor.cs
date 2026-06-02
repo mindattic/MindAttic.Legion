@@ -62,7 +62,16 @@ public sealed class LlmPsychometricAssessor : IPsychometricAssessor
                 temperature: 0.0,
                 voterOverrides: pin,
                 ct);
-            raw[instrument.Key] = ParseAnswers(reply, instrument);
+            var parsed = ParseAnswers(reply, instrument);
+            // Reject a reply that parsed to (almost) nothing — prose, a refusal,
+            // or a truncated payload. Without this, the scorer fills every gap
+            // with the scale midpoint and we'd persist a uniform 50/50 profile as
+            // though it were a real assessment. Failing here surfaces the persona
+            // as a failed slot the caller can retry, instead of silent garbage.
+            if (parsed.Count * 2 < instrument.Items.Count)
+                throw new InvalidOperationException(
+                    $"{instrument.Key}: only {parsed.Count}/{instrument.Items.Count} answers parsed from the model reply.");
+            raw[instrument.Key] = parsed;
         }
 
         var profile = PsychometricScorer.ScoreAll(

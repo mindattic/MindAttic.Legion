@@ -109,10 +109,10 @@ public static class LlmHealthDiagnoser
             case JsonException:
             case KeyNotFoundException:
             case IndexOutOfRangeException:
+                return (LlmHealthDiagnosis.BadResponse, 200);
+
             case InvalidOperationException ioe when LooksLikeMissingCredential(ioe.Message):
-                return ex is InvalidOperationException
-                    ? (LlmHealthDiagnosis.MissingCredential, null)
-                    : (LlmHealthDiagnosis.BadResponse, 200);
+                return (LlmHealthDiagnosis.MissingCredential, null);
 
             case HttpRequestException hre:
                 return ClassifyHttp(hre);
@@ -121,7 +121,11 @@ public static class LlmHealthDiagnoser
                 return (LlmHealthDiagnosis.BadRequest, 400);
 
             case InvalidOperationException:
-                return (LlmHealthDiagnosis.MissingCredential, null);
+                // A non-credential InvalidOperationException is almost always a
+                // malformed-response access (e.g. GetString on the wrong JSON
+                // kind), not a missing key — don't steer the user to rotate a
+                // valid key. (The credential-looking case is handled above.)
+                return (LlmHealthDiagnosis.BadResponse, null);
 
             default:
                 return (LlmHealthDiagnosis.Unknown, null);

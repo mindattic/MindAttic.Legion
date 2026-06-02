@@ -133,7 +133,7 @@ public class LegionCli
     /// </summary>
     private static async Task<int> HealthAsync(string[] args)
     {
-        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         var client = new LegionClient(http, LegionClientOptions.NoResilience);
         var hc = new LlmHealthCheck(client);
 
@@ -179,7 +179,7 @@ public class LegionCli
             return 1;
         }
         var providerId = args[0];
-        var http   = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         var client = new LegionClient(http, LegionClientOptions.NoResilience);
         var hc     = new LlmHealthCheck(client);
         var r      = await hc.CheckOneAsync(providerId, timeout: TimeSpan.FromSeconds(20));
@@ -220,7 +220,7 @@ public class LegionCli
                     json = true;
                     break;
                 case "--timeout":
-                    if (i + 1 >= args.Length || !double.TryParse(args[++i], out var seconds) || seconds <= 0)
+                    if (i + 1 >= args.Length || !double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds) || seconds <= 0)
                     {
                         Console.Error.WriteLine("usage: legion status [--no-probe] [--json] [--timeout seconds] [provider...]");
                         return 1;
@@ -564,7 +564,7 @@ public class LegionCli
     /// appending an ellipsis when truncated. Returns "" for null/empty input.
     /// </summary>
     private static string Truncate(string s, int max) =>
-        string.IsNullOrEmpty(s) ? "" : (s.Length <= max ? s : s[..(max - 1)] + "…");
+        string.IsNullOrEmpty(s) || max <= 0 ? "" : (s.Length <= max ? s : s[..(max - 1)] + "…");
 
     // ── vote ───────────────────────────────────────────────────────────────────
 
