@@ -588,9 +588,9 @@ Use it before a critical session, after a model-id rotation, or as a lightweight
 
 ## Testing
 
-`MindAttic.Legion.Tests/` is a two-tier suite: a **unit suite** (337 tests, runs on every `dotnet test`, no network) and a **live integration suite** (17 explicit tests, runs only when filtered).
+`MindAttic.Legion.Tests/` is a two-tier suite: a **unit suite** (441 tests, runs on every `dotnet test`, no network) and a **live integration suite** (20 explicit tests across three categories, runs only when filtered).
 
-### Unit suite (337 tests)
+### Unit suite (441 tests)
 
 Covers, with no network calls:
 
@@ -617,22 +617,27 @@ dotnet test MindAttic.Legion.Tests/MindAttic.Legion.Tests.csproj
 
 Typical wall time: ~2s.
 
-### Live integration suite (17 explicit tests)
+### Live integration suite (20 explicit tests)
 
-`LiveApiIntegrationTests.cs` is the .NET equivalent of a Cypress / Playwright suite for this CLI: end-to-end tests that hit the **real** trusted-provider APIs. Marked `[Explicit]` at the fixture level so they do **not** run on normal `dotnet test` invocations (no surprise spend on CI). Run on demand to verify wire-shape, tier mapping, and end-to-end command behavior across providers.
+The live suite spans three categories, all marked `[Explicit]` so they do **not** run on normal `dotnet test` invocations (no surprise spend on CI). Run on demand to verify wire-shape, tier mapping, key validity, and psychometric scoring against live providers.
 
-Coverage:
-
+**`LiveApi` (17 tests) — `LiveApiIntegrationTests.cs`:** End-to-end tests that hit the real trusted-provider APIs.
 - 12 per-(provider, tier) connectivity tests, one per cell of the trusted × Low/Medium/High matrix. A failure points at the exact cell.
 - 1 whole-matrix sanity check using `TiersCommand.ProbeMatrixAsync` — the "panel is healthy" assertion in one line.
 - 1 override-vs-catalog parity guard — pins that `BuildHighTierModelOverrides` matches `LlmProviderCatalog.GetTieredModel(..., High)` for every trusted provider.
 - 3 end-to-end smoke tests of `legion ask`, `legion poll`, `legion generate` at Low tier with tiny budgets.
 
+**`LiveKeys` (2 tests) — `LiveKeyValidationTests.cs`:** Verify the shared Vault keys resolve and authenticate against each provider.
+
+**`LivePsychometrics` (1 test) — `PsychometricLiveTests.cs`:** End-to-end persona scoring through a real provider (≈5 Opus calls).
+
 Run on demand:
 
 ```bash
-# Whole live suite
+# All live tests in a specific category
 dotnet test --filter "Category=LiveApi"
+dotnet test --filter "Category=LiveKeys"
+dotnet test --filter "Category=LivePsychometrics"
 
 # One specific cell — useful when a single provider is flaky
 dotnet test --filter "FullyQualifiedName~LiveApi.Claude_High"
@@ -641,7 +646,7 @@ dotnet test --filter "FullyQualifiedName~LiveApi.Claude_High"
 dotnet test --filter "FullyQualifiedName~LiveApi.Claude_"
 ```
 
-Cost is small (~12 tiny probes + 3 small smoke tests on Low tier) but real — wire it behind a manual GitHub Actions `workflow_dispatch` if you want it in CI without paying every run.
+Cost is small (~12 tiny probes + 3 small smoke tests on Low tier for LiveApi) but real — wire it behind a manual GitHub Actions `workflow_dispatch` if you want it in CI without paying every run.
 
 ---
 
