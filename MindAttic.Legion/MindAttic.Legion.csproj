@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <Version>2.6.0</Version>
+    <!-- Whole-number versioning: major-only bumps (3.0.0 → 4.0.0 → 5.0.0). Minor/patch stay 0. -->
+    <Version>3.0.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
@@ -38,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MindAttic.Vault" Version="0.3.0" />
+    <PackageReference Include="MindAttic.Vault" Version="1.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
