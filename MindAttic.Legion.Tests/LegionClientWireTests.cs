@@ -120,14 +120,65 @@ public class LegionClientWireTests
         // Belt-and-braces: assert the helper directly so a typo in the model
         // prefix is caught even if the wire test fixtures change. Older Claude
         // models still accept temperature and must NOT be stripped.
+
+        // Opus 4.7 and 4.8 families (incl. [1m] long-context + case-insensitive).
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-7"),       Is.True);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-7[1m]"),   Is.True);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("CLAUDE-OPUS-4-7"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-8"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-8[1m]"),   Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-8-20260101"), Is.True);
+
+        // Fable / Mythos families — temperature removed across the board.
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-fable-5"),        Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-mythos-5"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-mythos-preview"), Is.True);
+
+        // Future-proofing: parsed version, not a literal list — later Opus minors
+        // and majors must be covered without code edits.
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-9"),       Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-10"),      Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-5-0"),       Is.True);
+
+        // Still accept temperature → must NOT be stripped.
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-6"),       Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-5"),       Is.False);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-6-20251101"), Is.False);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-sonnet-4-6"),     Is.False);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-haiku-4-5-20251001"), Is.False);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature(""),                      Is.False);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature(null),                    Is.False);
+    }
+
+    [Test]
+    public async Task Claude_Opus48_OmitsTemperatureFromPayload()
+    {
+        // Regression guard for the stale-package bug: Opus 4.8 deprecates
+        // temperature exactly like 4.7, so the wire builder must omit it.
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("claude", "sk", "claude-opus-4-8", "s", "u",
+            maxTokens: 1234, temperature: 0.42);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.GetProperty("max_tokens").GetInt32(), Is.EqualTo(1234));
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.False,
+            "Opus 4.8 deprecates temperature; payload must omit the field.");
+    }
+
+    [Test]
+    public async Task Claude_Fable5_OmitsTemperatureFromPayload()
+    {
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("claude", "sk", "claude-fable-5", "s", "u",
+            maxTokens: 1234, temperature: 0.42);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.False,
+            "Fable 5 has thinking always on; temperature must be omitted.");
     }
 
     // ── OpenAI-compatible wire shape ────────────────────────────────────────────

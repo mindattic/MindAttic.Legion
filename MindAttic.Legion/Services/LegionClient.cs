@@ -619,17 +619,49 @@ public class LegionClient
     }
 
     /// <summary>
-    /// True when the Claude model id is one that rejects the
-    /// <c>temperature</c> parameter — currently the Opus 4.7 family
-    /// (including the <c>[1m]</c> long-context variant). Sending
-    /// <c>temperature</c> to these returns 400 invalid_request_error
-    /// ("`temperature` is deprecated for this model"), so the payload
-    /// builder strips the field for matching ids and leaves it for older
-    /// Claude models that still accept it.
+    /// True when the Claude model id rejects the <c>temperature</c> parameter
+    /// (the API returns 400 invalid_request_error, "`temperature` is deprecated
+    /// for this model"), so the payload builder must omit the field. Covers:
+    ///   • the <b>Fable</b> and <b>Mythos</b> families (all versions) — thinking
+    ///     is always on and the sampling parameters are removed; and
+    ///   • <b>Opus 4.7 and later</b> — every Opus 4.x minor ≥ 7 and every Opus
+    ///     major ≥ 5, including the <c>[1m]</c> long-context and dated-snapshot
+    ///     suffixes.
+    /// The version is <i>parsed</i> rather than matched against a hard-coded id
+    /// list, so a future Opus launch (4.9, 4.10, 5.0, …) can't silently re-break
+    /// every Opus call the way appending a new literal each release would.
+    /// Sonnet, Haiku, and Opus 4.6 and earlier still accept <c>temperature</c>
+    /// and must NOT be stripped.
     /// </summary>
     internal static bool ClaudeModelDeprecatesTemperature(string? model)
-        => !string.IsNullOrWhiteSpace(model)
-           && model!.StartsWith("claude-opus-4-7", StringComparison.OrdinalIgnoreCase);
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        var id = model.Trim();
+
+        // Fable / Mythos: temperature removed across the whole family.
+        if (id.StartsWith("claude-fable-", StringComparison.OrdinalIgnoreCase)
+         || id.StartsWith("claude-mythos-", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Opus 4.7+ (and any later major). Parse "claude-opus-{major}-{minor}";
+        // ignore any trailing suffix ([1m], -datestamp, etc.).
+        const string opusPrefix = "claude-opus-";
+        if (id.StartsWith(opusPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = id.Substring(opusPrefix.Length);          // "4-8", "4-7[1m]", "5-0-2026…"
+            var dash = rest.IndexOf('-');
+            if (dash > 0 && int.TryParse(rest.Substring(0, dash), out var major))
+            {
+                var after = rest.Substring(dash + 1);            // "8", "7[1m]", "0-2026…"
+                var j = 0;
+                while (j < after.Length && char.IsDigit(after[j])) j++;
+                if (j > 0 && int.TryParse(after.Substring(0, j), out var minor))
+                    return major > 4 || (major == 4 && minor >= 7);
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Google Gemini <c>generateContent</c> call. Auth goes in the
