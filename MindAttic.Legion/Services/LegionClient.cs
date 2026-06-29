@@ -1,7 +1,9 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MindAttic.Legion;
@@ -235,6 +237,81 @@ public class LegionClient
     }
 
     /// <summary>
+    /// Calls an OpenAI-compatible endpoint at an <b>explicit URL</b> with explicit credentials.
+    /// Use this for self-hosted or local providers — Ollama, vLLM, RunPod, any custom deployment —
+    /// that are not registered in the <see cref="LlmProviderCatalog"/>.
+    /// <para>The <paramref name="providerId"/> is used only for circuit-breaker tracking;
+    /// choose a stable lowercase identifier for the host (e.g. <c>"local"</c>). The API key is
+    /// passed as a Bearer token; pass any non-empty string for bare Ollama instances that ignore auth.</para>
+    /// </summary>
+    public Task<string> CallAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        string systemPrompt,
+        string userMessage,
+        string endpointUrl,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+            throw new ArgumentException("Endpoint URL is required.", nameof(endpointUrl));
+
+        var resolvedModel = string.IsNullOrWhiteSpace(model)
+            ? DefaultModels.GetValueOrDefault(providerId, "")
+            : model;
+
+        var key = string.IsNullOrWhiteSpace(apiKey) ? "ollama" : apiKey;
+
+        return ExecuteWithResilienceAsync(providerId,
+            () => CallOpenAiCompatibleChatAsync(
+                providerId, key, resolvedModel,
+                [new ChatTurn("user", userMessage)],
+                systemPrompt, maxTokens, temperature, endpointUrl, ct),
+            ct);
+    }
+
+    /// <summary>
+    /// Multi-turn chat call to an OpenAI-compatible endpoint at an <b>explicit URL</b>.
+    /// See <see cref="CallAsync(string,string,string,string,string,string,int,double,CancellationToken)"/>
+    /// for details on <paramref name="providerId"/> and auth conventions.
+    /// </summary>
+    public Task<string> CallChatAsync(
+        string providerId,
+        string apiKey,
+        string model,
+        IEnumerable<ChatTurn> messages,
+        string? systemPrompt,
+        string endpointUrl,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+            throw new ArgumentException("Endpoint URL is required.", nameof(endpointUrl));
+
+        var resolvedModel = string.IsNullOrWhiteSpace(model)
+            ? DefaultModels.GetValueOrDefault(providerId, "")
+            : model;
+
+        var key = string.IsNullOrWhiteSpace(apiKey) ? "ollama" : apiKey;
+        var turns = (messages ?? Enumerable.Empty<ChatTurn>()).ToList();
+        if (turns.Count == 0)
+            throw new ArgumentException("At least one message is required.", nameof(messages));
+
+        return ExecuteWithResilienceAsync(providerId,
+            () => CallOpenAiCompatibleChatAsync(
+                providerId, key, resolvedModel, turns,
+                systemPrompt, maxTokens, temperature, endpointUrl, ct),
+            ct);
+    }
+
+    /// <summary>
     /// Generates embedding vectors for a batch of texts via the provider's
     /// /embeddings endpoint. Currently supports OpenAI-compatible providers
     /// (openai). Returns one float[] per input string, in input order.
@@ -435,6 +512,144 @@ public class LegionClient
         }
         throw new AggregateException("All providers in fallback chain failed.", errors);
     }
+
+    // ── Document input (Claude only) ───────────────────────────────────────────
+
+    /// <summary>
+    /// Sends a document file (PDF, DOCX, EPUB, or plain-text) plus a user prompt to Claude
+    /// and returns the response text. PDF files are forwarded as native document content blocks
+    /// (Anthropic document API); all other formats have their text extracted first and forwarded
+    /// as standard text content. Only the "claude" provider is supported.
+    /// </summary>
+    public Task<string> CallWithDocumentAsync(
+        string apiKey,
+        string model,
+        byte[] documentBytes,
+        string mediaType,
+        string userPrompt,
+        string? systemPrompt = null,
+        int maxTokens = 2048,
+        double temperature = 0.7,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("No API key supplied for Claude.");
+        if (documentBytes is null || documentBytes.Length == 0)
+            throw new ArgumentException("Document bytes are required.", nameof(documentBytes));
+        if (string.IsNullOrWhiteSpace(userPrompt))
+            throw new ArgumentException("User prompt is required.", nameof(userPrompt));
+
+        var resolvedModel = string.IsNullOrWhiteSpace(model)
+            ? DefaultModels.GetValueOrDefault("claude", "")
+            : model;
+
+        return ExecuteWithResilienceAsync("claude",
+            () => CallClaudeWithDocumentAsync(apiKey, resolvedModel!, documentBytes, mediaType,
+                userPrompt, systemPrompt, maxTokens, temperature, ct),
+            ct);
+    }
+
+    private async Task<string> CallClaudeWithDocumentAsync(
+        string key, string model, byte[] documentBytes, string mediaType,
+        string userPrompt, string? systemPrompt, int maxTokens, double temperature, CancellationToken ct)
+    {
+        object docBlock;
+        if (string.Equals(mediaType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            docBlock = new
+            {
+                type = "document",
+                source = new
+                {
+                    type = "base64",
+                    media_type = "application/pdf",
+                    data = Convert.ToBase64String(documentBytes)
+                }
+            };
+        }
+        else
+        {
+            var extracted = ExtractDocumentText(documentBytes, mediaType);
+            docBlock = new { type = "text", text = extracted };
+        }
+
+        var userContent = new object[] { docBlock, new { type = "text", text = userPrompt } };
+        var apiMessages = new[] { new { role = "user", content = userContent } };
+        var omitTemperature = ClaudeModelDeprecatesTemperature(model);
+
+        object payload;
+        if (omitTemperature)
+        {
+            payload = string.IsNullOrWhiteSpace(systemPrompt)
+                ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
+                : new { model, max_tokens = maxTokens, system = systemPrompt, messages = apiMessages };
+        }
+        else
+        {
+            payload = string.IsNullOrWhiteSpace(systemPrompt)
+                ? new { model, max_tokens = maxTokens, temperature, messages = apiMessages } as object
+                : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
+        }
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
+        req.Headers.Add("x-api-key", key);
+        req.Headers.Add("anthropic-version", "2023-06-01");
+        req.Headers.Add("anthropic-beta", "pdfs-2024-09-25");
+        req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        var res = await http.SendAsync(req, ct);
+        await EnsureSuccessAsync(res, ct);
+        var json = await res.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement
+            .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
+    }
+
+    /// <summary>
+    /// Extracts human-readable text from a DOCX, EPUB, or plain-text file.
+    /// DOCX and EPUB are read as ZIP archives; XML/HTML tags are stripped.
+    /// Plain-text bytes are decoded as UTF-8.
+    /// </summary>
+    private static string ExtractDocumentText(byte[] bytes, string mediaType)
+    {
+        if (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+            return Encoding.UTF8.GetString(bytes).TrimStart('﻿');
+
+        using var stream = new MemoryStream(bytes);
+
+        if (mediaType.Equals(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+            var entry = zip.GetEntry("word/document.xml");
+            if (entry is null) return "";
+            using var entryStream = entry.Open();
+            using var reader = new StreamReader(entryStream, Encoding.UTF8);
+            return StripXmlTags(reader.ReadToEnd());
+        }
+
+        if (mediaType.Equals("application/epub+zip", StringComparison.OrdinalIgnoreCase))
+        {
+            using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+            var sb = new StringBuilder();
+            foreach (var entry in zip.Entries.OrderBy(e => e.FullName))
+            {
+                if (!entry.Name.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase)
+                 && !entry.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) continue;
+                using var entryStream = entry.Open();
+                using var reader = new StreamReader(entryStream, Encoding.UTF8);
+                sb.Append(StripXmlTags(reader.ReadToEnd()));
+                sb.Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    private static string StripXmlTags(string xml)
+        => Regex.Replace(xml, "<[^>]+>", " ").Replace("  ", " ").Trim();
 
     // ── Resilience wrapper ──────────────────────────────────────────────────────
 
@@ -753,19 +968,31 @@ public class LegionClient
     }
 
     /// <summary>
-    /// Generic OpenAI-compatible <c>/v1/chat/completions</c> call. Used by
-    /// OpenAI, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter, Fireworks —
-    /// everyone whose wire shape mirrors OpenAI's. Bearer auth; system prompt
-    /// is prepended as a <c>system</c>-role message.
+    /// Generic OpenAI-compatible <c>/v1/chat/completions</c> call for catalog providers.
+    /// Resolves the endpoint URL from the static <see cref="Endpoints"/> dictionary and
+    /// delegates to <see cref="CallOpenAiCompatibleChatAsync(string,string,string,IReadOnlyList{ChatTurn},string?,int,double,string,CancellationToken)"/>.
     /// </summary>
-    private async Task<string> CallOpenAiCompatibleChatAsync(
+    private Task<string> CallOpenAiCompatibleChatAsync(
         string providerId, string key, string model, IReadOnlyList<ChatTurn> messages,
         string? systemPrompt, int maxTokens, double temperature, CancellationToken ct)
     {
         var endpoint = Endpoints.GetValueOrDefault(providerId);
         if (string.IsNullOrWhiteSpace(endpoint))
             throw new ArgumentException($"Unknown provider: {providerId}");
+        return CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, endpoint, ct);
+    }
 
+    /// <summary>
+    /// Generic OpenAI-compatible <c>/v1/chat/completions</c> call with an explicit endpoint URL.
+    /// Used by catalog providers (OpenAI, DeepSeek, Mistral, xAI, Groq, Together, OpenRouter,
+    /// Fireworks) and by self-hosted / local providers (Ollama, vLLM, RunPod) via the
+    /// <see cref="CallAsync(string,string,string,string,string,string,int,double,CancellationToken)"/>
+    /// public overload. Bearer auth; system prompt prepended as a <c>system</c>-role message.
+    /// </summary>
+    private async Task<string> CallOpenAiCompatibleChatAsync(
+        string providerId, string key, string model, IReadOnlyList<ChatTurn> messages,
+        string? systemPrompt, int maxTokens, double temperature, string endpointUrl, CancellationToken ct)
+    {
         var apiMessages = new List<object>();
         if (!string.IsNullOrWhiteSpace(systemPrompt))
             apiMessages.Add(new { role = "system", content = systemPrompt });
@@ -774,7 +1001,7 @@ public class LegionClient
 
         var payload = new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        using var req = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 

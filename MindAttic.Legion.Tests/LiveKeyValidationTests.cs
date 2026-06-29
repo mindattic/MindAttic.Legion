@@ -131,18 +131,35 @@ public class LiveKeyValidationTests
 
         var results = await health.CheckAsync(LlmProviderCatalog.DefaultIds, ProbeTimeout);
 
-        var broken = results
-            .Where(r => !r.IsHealthy)
-            .Select(r => $"{r.ProviderId}: {r.Diagnosis} " +
-                         $"(HTTP {r.HttpStatusCode?.ToString() ?? "n/a"}) — {r.ActionableMessage}")
-            .ToList();
-
         foreach (var r in results)
             TestContext.WriteLine($"{r.ProviderId}: {(r.IsHealthy ? "OK" : "FAIL")} " +
                                   $"({r.Diagnosis}) in {r.ElapsedMilliseconds}ms");
 
-        Assert.That(broken, Is.Empty,
-            "trusted-panel keys that FAILED live validation — fix/rotate before committing:\n  - "
-            + string.Join("\n  - ", broken));
+        // Hard block: key is demonstrably invalid or absent. Rotate before committing.
+        var authBroken = results
+            .Where(r => r.Diagnosis is LlmHealthDiagnosis.AuthInvalid
+                                    or LlmHealthDiagnosis.AuthForbidden
+                                    or LlmHealthDiagnosis.MissingCredential)
+            .Select(r => $"{r.ProviderId}: {r.Diagnosis} " +
+                         $"(HTTP {r.HttpStatusCode?.ToString() ?? "n/a"}) — {r.ActionableMessage}")
+            .ToList();
+
+        // Soft warn: key proved itself valid but the account has an operational issue
+        // (quota exhausted, rate-limited, provider offline, etc.). The commit may proceed.
+        var operational = results
+            .Where(r => !r.IsHealthy
+                     && r.Diagnosis is not (LlmHealthDiagnosis.AuthInvalid
+                                         or LlmHealthDiagnosis.AuthForbidden
+                                         or LlmHealthDiagnosis.MissingCredential))
+            .ToList();
+
+        foreach (var r in operational)
+            Assert.Warn($"{r.ProviderId}: key is VALID but operational issue detected — " +
+                        $"{r.Diagnosis} (HTTP {r.HttpStatusCode?.ToString() ?? "n/a"}). " +
+                        r.ActionableMessage);
+
+        Assert.That(authBroken, Is.Empty,
+            "trusted-panel keys that FAILED authentication — rotate before committing:\n  - "
+            + string.Join("\n  - ", authBroken));
     }
 }

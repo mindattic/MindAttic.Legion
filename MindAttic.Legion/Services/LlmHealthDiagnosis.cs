@@ -205,6 +205,12 @@ public static class LlmHealthDiagnoser
         if (code == 429 && LooksLikeQuotaSignal(msg))
             return (LlmHealthDiagnosis.QuotaExhausted, code);
 
+        // Anthropic returns 400 for spend-limit exhaustion ("reached your specified
+        // API usage limits") instead of the more conventional 402/429. Detect this
+        // so callers see QuotaExhausted rather than the misleading BadRequest.
+        if (code == 400 && LooksLikeQuotaSignal(msg))
+            return (LlmHealthDiagnosis.QuotaExhausted, code);
+
         return code switch
         {
             400 => (LlmHealthDiagnosis.BadRequest, code),
@@ -234,7 +240,9 @@ public static class LlmHealthDiagnoser
             || lower.Contains("billing")
             || lower.Contains("credit balance")
             || lower.Contains("out of credit")
-            || lower.Contains("exceeded your current quota");
+            || lower.Contains("exceeded your current quota")
+            || lower.Contains("api usage limits")      // Anthropic spend-limit 400
+            || lower.Contains("usage limits");         // Anthropic spend-limit 400
     }
 
     private static bool LooksLikeMissingCredential(string s)
