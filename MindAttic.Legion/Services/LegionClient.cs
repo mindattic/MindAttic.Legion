@@ -75,7 +75,15 @@ public class LegionClient
             var resolved = keyResolver(providerId);
             if (!string.IsNullOrWhiteSpace(resolved)) return resolved;
         }
-        return MindAtticCredentialStore.GetKey(providerId);
+        var fromStore = MindAtticCredentialStore.GetKey(providerId);
+        if (!string.IsNullOrWhiteSpace(fromStore)) return fromStore;
+
+        // Fall back to the Claude Code CLI's OAuth token so Legion can
+        // authenticate as the same Team account without a separate API key.
+        if (string.Equals(providerId, "claude", StringComparison.OrdinalIgnoreCase))
+            return ClaudeCodeOAuthSource.GetAccessToken();
+
+        return null;
     }
 
     /// <summary>
@@ -592,7 +600,7 @@ public class LegionClient
         }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
-        req.Headers.Add("x-api-key", key);
+        AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         req.Headers.Add("anthropic-beta", "pdfs-2024-09-25");
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -786,7 +794,21 @@ public class LegionClient
         };
 
     /// <summary>
-    /// Anthropic Messages API call. Sends auth via <c>x-api-key</c> +
+    /// Adds the correct Anthropic auth header to <paramref name="req"/>.
+    /// OAuth access tokens (prefix <c>sk-ant-oat</c>) use
+    /// <c>Authorization: Bearer</c>; raw API keys use <c>x-api-key</c>.
+    /// </summary>
+    private static void AddClaudeAuth(HttpRequestMessage req, string key)
+    {
+        if (key.StartsWith(ClaudeCodeOAuthSource.OAuthTokenPrefix, StringComparison.OrdinalIgnoreCase))
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+        else
+            req.Headers.Add("x-api-key", key);
+    }
+
+    /// <summary>
+    /// Anthropic Messages API call. Sends auth via <c>x-api-key</c> (or
+    /// <c>Authorization: Bearer</c> for OAuth tokens) +
     /// <c>anthropic-version</c> headers; routes the system prompt to the
     /// top-level <c>system</c> field (omitted when blank); strips any
     /// <c>system</c>-role turns from the messages array.
@@ -821,7 +843,7 @@ public class LegionClient
         }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
-        req.Headers.Add("x-api-key", key);
+        AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
