@@ -49,7 +49,7 @@ public class VotingConfiguration
     /// The provider to use as a "judge" when synthesizing consensus from
     /// free-form votes. Defaults to "claude". Falls back to first available.
     /// </summary>
-    public string JudgeProviderId { get; set; } = "claude";
+    public string JudgeProviderId { get; set; } = "claude-api";
 
     /// <summary>
     /// Global voter persona applied to all votes unless overridden per-request.
@@ -68,7 +68,7 @@ public class VotingConfiguration
     /// </summary>
     public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        "claude", "openai", "gemini", "deepseek",
+        "claude-api", "claude-team", "openai", "gemini", "deepseek",
     };
 
     /// <summary>

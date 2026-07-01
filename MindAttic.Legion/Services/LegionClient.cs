@@ -70,6 +70,10 @@ public class LegionClient
     /// </summary>
     private string? ResolveKey(string providerId)
     {
+        // claude-team uses ONLY the Claude Code CLI OAuth token — no API key store lookup.
+        if (string.Equals(providerId, "claude-team", StringComparison.OrdinalIgnoreCase))
+            return ClaudeCodeOAuthSource.GetAccessToken();
+
         if (keyResolver is not null)
         {
             var resolved = keyResolver(providerId);
@@ -78,13 +82,17 @@ public class LegionClient
         var fromStore = MindAtticCredentialStore.GetKey(providerId);
         if (!string.IsNullOrWhiteSpace(fromStore)) return fromStore;
 
-        // Fall back to the Claude Code CLI's OAuth token so Legion can
-        // authenticate as the same Team account without a separate API key.
-        if (string.Equals(providerId, "claude", StringComparison.OrdinalIgnoreCase))
-            return ClaudeCodeOAuthSource.GetAccessToken();
-
+        // claude-api requires an explicit API key — no OAuth fallback.
         return null;
     }
+
+    /// <summary>
+    /// Returns the current Claude Team OAuth access token from the Claude Code CLI
+    /// credentials file (<c>~/.claude/.credentials.json</c>), refreshing it
+    /// automatically when it is within 60 seconds of expiry.
+    /// Returns <c>null</c> when the file is absent, malformed, or refresh fails.
+    /// </summary>
+    public static string? GetClaudeTeamOAuthToken() => ClaudeCodeOAuthSource.GetAccessToken();
 
     /// <summary>
     /// Default model per provider. Used when no <c>model</c> override is supplied
@@ -92,7 +100,8 @@ public class LegionClient
     /// </summary>
     public static IReadOnlyDictionary<string, string> DefaultModels { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        ["claude"]     = "claude-sonnet-4-6",
+        ["claude-api"]  = "claude-sonnet-4-6",
+        ["claude-team"] = "claude-sonnet-4-6",
         ["openai"]     = "gpt-4.1-mini",
         ["gemini"]     = "gemini-2.5-flash",
         ["deepseek"]   = "deepseek-chat",
@@ -116,7 +125,8 @@ public class LegionClient
     /// </summary>
     private static readonly Dictionary<string, string> Endpoints = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["claude"]     = "https://api.anthropic.com/v1/messages",
+        ["claude-api"]  = "https://api.anthropic.com/v1/messages",
+        ["claude-team"] = "https://api.anthropic.com/v1/messages",
         ["openai"]     = "https://api.openai.com/v1/chat/completions",
         ["gemini"]     = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         ["deepseek"]   = "https://api.deepseek.com/chat/completions",
@@ -548,10 +558,10 @@ public class LegionClient
             throw new ArgumentException("User prompt is required.", nameof(userPrompt));
 
         var resolvedModel = string.IsNullOrWhiteSpace(model)
-            ? DefaultModels.GetValueOrDefault("claude", "")
+            ? DefaultModels.GetValueOrDefault("claude-api", "")
             : model;
 
-        return ExecuteWithResilienceAsync("claude",
+        return ExecuteWithResilienceAsync("claude-api",
             () => CallClaudeWithDocumentAsync(apiKey, resolvedModel!, documentBytes, mediaType,
                 userPrompt, systemPrompt, maxTokens, temperature, ct),
             ct);
@@ -599,7 +609,7 @@ public class LegionClient
                 : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
         }
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
+        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude-api"]);
         AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         req.Headers.Add("anthropic-beta", "pdfs-2024-09-25");
@@ -787,7 +797,8 @@ public class LegionClient
         int maxTokens, double temperature, CancellationToken ct)
         => providerId.ToLowerInvariant() switch
         {
-            "claude" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            "claude-api"  => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            "claude-team" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             "gemini" => CallGeminiChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             "cohere" => CallCohereChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             _        => CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, ct),
@@ -842,7 +853,7 @@ public class LegionClient
                 : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
         }
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
+        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude-api"]);
         AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -945,13 +956,25 @@ public class LegionClient
         // rather than letting GetProperty/[0] throw — those raw element-access
         // exceptions bubble to the resilience layer and get recorded as a
         // circuit-breaker failure against a perfectly reachable provider.
+        //
+        // Gemini 2.5+ thinking models prepend a part with "thought": true that
+        // contains internal reasoning, not the actual response. Skip all thought
+        // parts and return the first non-thought text part.
         if (root.TryGetProperty("candidates", out var candidates)
             && candidates.ValueKind == JsonValueKind.Array && candidates.GetArrayLength() > 0
             && candidates[0].TryGetProperty("content", out var content)
             && content.TryGetProperty("parts", out var parts)
-            && parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0
-            && parts[0].TryGetProperty("text", out var text))
-            return text.GetString() ?? "";
+            && parts.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var part in parts.EnumerateArray())
+            {
+                if (part.TryGetProperty("thought", out var thoughtEl)
+                    && thoughtEl.ValueKind == JsonValueKind.True)
+                    continue;
+                if (part.TryGetProperty("text", out var text))
+                    return text.GetString() ?? "";
+            }
+        }
         return "";
     }
 

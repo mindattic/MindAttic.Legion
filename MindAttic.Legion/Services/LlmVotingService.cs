@@ -220,7 +220,7 @@ public class LlmVotingService
     /// </summary>
     public IReadOnlyList<VoterProfile> CreatePanel(
         int count,
-        string fallbackProviderId = "claude",
+        string fallbackProviderId = "claude-api",
         Random? rng = null)
         => VoterFactory.GenerateUniqueVoters(count, GetActiveProviderIds(), fallbackProviderId, rng);
 
@@ -1119,7 +1119,7 @@ public class LlmVotingService
             if (!string.IsNullOrWhiteSpace(provider.GetApiKey(preferred)))
                 return preferred;
         }
-        return config.ActiveProviderIds.FirstOrDefault() ?? "claude";
+        return config.ActiveProviderIds.FirstOrDefault() ?? "claude-api";
     }
 
     // ── Utilities ───────────────────────────────────────────────────────────────
