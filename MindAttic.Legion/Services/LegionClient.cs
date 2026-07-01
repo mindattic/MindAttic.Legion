@@ -939,7 +939,12 @@ public class LegionClient
         // tokens on thinking, leaving only ~50 for the actual JSON — which truncates
         // mid-object and causes every ballot to be unparseable. Disable thinking
         // (thinkingBudget=0) so the full output budget is available for the response.
-        var generationConfig = new { maxOutputTokens = maxTokens, temperature, thinkingConfig = new { thinkingBudget = 0 } };
+        // Only 2.5+ models support/need thinkingConfig; omit it for older models
+        // (e.g. gemini-2.0-flash, gemini-2.0-flash-lite) which don't have thinking.
+        var supportsThinking = model.Contains("2.5", StringComparison.OrdinalIgnoreCase);
+        object generationConfig = supportsThinking
+            ? (object)new { maxOutputTokens = maxTokens, temperature, thinkingConfig = new { thinkingBudget = 0 } }
+            : new { maxOutputTokens = maxTokens, temperature };
         object payload = string.IsNullOrWhiteSpace(systemPrompt)
             ? new { contents, generationConfig }
             : new
