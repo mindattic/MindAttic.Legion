@@ -933,13 +933,20 @@ public class LegionClient
             })
             .ToArray();
 
+        // Gemini 2.5+ thinking models count internal reasoning tokens against
+        // maxOutputTokens (thinking + output share the same budget). At the default
+        // thinking budget, a ballot call with maxOutputTokens=1002 can spend 950+
+        // tokens on thinking, leaving only ~50 for the actual JSON — which truncates
+        // mid-object and causes every ballot to be unparseable. Disable thinking
+        // (thinkingBudget=0) so the full output budget is available for the response.
+        var generationConfig = new { maxOutputTokens = maxTokens, temperature, thinkingConfig = new { thinkingBudget = 0 } };
         object payload = string.IsNullOrWhiteSpace(systemPrompt)
-            ? new { contents, generationConfig = new { maxOutputTokens = maxTokens, temperature } }
+            ? new { contents, generationConfig }
             : new
             {
                 systemInstruction = new { parts = new[] { new { text = systemPrompt } } },
                 contents,
-                generationConfig = new { maxOutputTokens = maxTokens, temperature }
+                generationConfig
             };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
