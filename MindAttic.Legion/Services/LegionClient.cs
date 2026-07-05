@@ -144,6 +144,16 @@ public class LegionClient
         !string.IsNullOrWhiteSpace(providerId) && LlmProviderCatalog.IsSupported(providerId);
 
     /// <summary>
+    /// True if credentials are resolvable for <paramref name="providerId"/>:
+    /// OAuth token for claude-team, credential-store key for everything else.
+    /// </summary>
+    public bool IsProviderConfigured(string providerId)
+    {
+        try { return !string.IsNullOrWhiteSpace(ResolveKey(providerId)); }
+        catch { return false; }
+    }
+
+    /// <summary>
     /// Calls the provider with explicit credentials. Wraps the call in retry +
     /// circuit-breaker logic per <see cref="LegionClientOptions"/>.
     /// </summary>
