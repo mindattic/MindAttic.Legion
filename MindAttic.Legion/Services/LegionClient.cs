@@ -165,7 +165,8 @@ public class LegionClient
         string userMessage,
         int maxTokens = 2048,
         double temperature = 0.7,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cachedSystemPrefix = null)
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
@@ -177,7 +178,7 @@ public class LegionClient
             : model;
 
         return ExecuteWithResilienceAsync(providerId,
-            () => DispatchAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct),
+            () => DispatchAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct, cachedSystemPrefix),
             ct);
     }
 
@@ -192,7 +193,8 @@ public class LegionClient
         int maxTokens = 2048,
         double temperature = 0.7,
         string? modelOverride = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cachedSystemPrefix = null)
     {
         var key = ResolveKey(providerId);
         if (string.IsNullOrWhiteSpace(key))
@@ -202,7 +204,7 @@ public class LegionClient
                   : ResolveModelFromStore(providerId)
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
-        return await CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct);
+        return await CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct, cachedSystemPrefix);
     }
 
     /// <summary>
@@ -792,10 +794,11 @@ public class LegionClient
     /// <see cref="ChatTurn"/> list and delegates to <see cref="DispatchChatAsync"/>.
     /// </summary>
     private Task<string> DispatchAsync(string providerId, string key, string model,
-        string system, string user, int maxTokens, double temperature, CancellationToken ct)
+        string system, string user, int maxTokens, double temperature, CancellationToken ct,
+        string? cachedSystemPrefix = null)
         => DispatchChatAsync(providerId, key, model,
             new[] { new ChatTurn("user", user) },
-            system, maxTokens, temperature, ct);
+            system, maxTokens, temperature, ct, cachedSystemPrefix);
 
     /// <summary>
     /// Routes the chat call to the right provider-specific implementation —
@@ -804,11 +807,12 @@ public class LegionClient
     /// </summary>
     private Task<string> DispatchChatAsync(string providerId, string key, string model,
         IReadOnlyList<ChatTurn> messages, string? systemPrompt,
-        int maxTokens, double temperature, CancellationToken ct)
+        int maxTokens, double temperature, CancellationToken ct,
+        string? cachedSystemPrefix = null)
         => providerId.ToLowerInvariant() switch
         {
-            "claude-api"  => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
-            "claude-team" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
+            "claude-api"  => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct, cachedSystemPrefix),
+            "claude-team" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct, cachedSystemPrefix),
             "gemini" => CallGeminiChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             "cohere" => CallCohereChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             _        => CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, ct),
@@ -836,7 +840,8 @@ public class LegionClient
     /// </summary>
     private async Task<string> CallClaudeChatAsync(
         string key, string model, IReadOnlyList<ChatTurn> messages, string? systemPrompt,
-        int maxTokens, double temperature, CancellationToken ct)
+        int maxTokens, double temperature, CancellationToken ct,
+        string? cachedSystemPrefix = null)
     {
         // Claude expects role = "user" or "assistant" only, with system as a separate field.
         var apiMessages = messages
@@ -849,23 +854,44 @@ public class LegionClient
         // Older Claude models still accept it, so strip it only for Opus 4.7+.
         var omitTemperature = ClaudeModelDeprecatesTemperature(model);
 
+        // When a cached prefix is provided, send system as a content-block array:
+        //   [{ type:"text", text:"<stable>", cache_control:{type:"ephemeral"} }, { type:"text", text:"<dynamic>" }]
+        // Otherwise fall back to the plain string form.
+        object? systemField = null;
+        if (!string.IsNullOrWhiteSpace(cachedSystemPrefix))
+        {
+            var blocks = new List<object>
+            {
+                new { type = "text", text = cachedSystemPrefix, cache_control = new { type = "ephemeral" } }
+            };
+            if (!string.IsNullOrWhiteSpace(systemPrompt))
+                blocks.Add(new { type = "text", text = systemPrompt });
+            systemField = blocks.ToArray();
+        }
+        else if (!string.IsNullOrWhiteSpace(systemPrompt))
+        {
+            systemField = systemPrompt;
+        }
+
         object payload;
         if (omitTemperature)
         {
-            payload = string.IsNullOrWhiteSpace(systemPrompt)
+            payload = systemField is null
                 ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
-                : new { model, max_tokens = maxTokens, system = systemPrompt, messages = apiMessages };
+                : new { model, max_tokens = maxTokens, system = systemField, messages = apiMessages };
         }
         else
         {
-            payload = string.IsNullOrWhiteSpace(systemPrompt)
+            payload = systemField is null
                 ? new { model, max_tokens = maxTokens, temperature, messages = apiMessages } as object
-                : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
+                : new { model, max_tokens = maxTokens, temperature, system = systemField, messages = apiMessages };
         }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude-api"]);
         AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
+        if (!string.IsNullOrWhiteSpace(cachedSystemPrefix))
+            req.Headers.Add("anthropic-beta", "prompt-caching-2024-07-31");
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         var res = await http.SendAsync(req, ct);
