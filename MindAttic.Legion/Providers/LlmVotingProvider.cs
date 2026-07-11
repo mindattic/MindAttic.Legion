@@ -58,6 +58,12 @@ public class LlmVotingProvider
     /// </summary>
     public string? GetApiKey(string providerId)
     {
+        // OAuth providers must always be resolved fresh — the token in ApiKeys is a
+        // startup snapshot that expires mid-session.  ClaudeCodeOAuthSource auto-
+        // refreshes when within 60 s of expiry, matching LegionClient.ResolveKey.
+        if (string.Equals(providerId, "claude-team", StringComparison.OrdinalIgnoreCase))
+            return ClaudeCodeOAuthSource.GetAccessToken();
+
         if (config.ApiKeys.TryGetValue(providerId, out var explicitKey)
             && !string.IsNullOrWhiteSpace(explicitKey))
             return explicitKey;
