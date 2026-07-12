@@ -48,6 +48,15 @@ public class LegionConfig
     public Dictionary<string, string> ApiKeys { get; set; } = new();
 
     /// <summary>
+    /// Cap on simultaneous ballot calls for this project. Overrides the app's
+    /// default <c>ReviewMaxConcurrency</c> when set. Use <c>3</c> when the
+    /// voter panel is claude-team, which shares its quota with the Claude Code
+    /// CLI in the same session.
+    /// </summary>
+    [JsonPropertyName("maxConcurrency")]
+    public int? MaxConcurrency { get; set; }
+
+    /// <summary>
     /// Walks up from <paramref name="startDir"/> looking for legion.json.
     /// Returns null when not found (caller should fall back to defaults).
     /// </summary>
@@ -113,5 +122,8 @@ public class LegionConfig
             if (!string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
                 cfg.ApiKeys[kv.Key] = kv.Value;
         }
+
+        if (MaxConcurrency.HasValue)
+            cfg.MaxConcurrency = MaxConcurrency.Value;
     }
 }

@@ -72,6 +72,15 @@ public class VotingConfiguration
     };
 
     /// <summary>
+    /// Optional cap on simultaneous ballot calls. <c>null</c> means "use the
+    /// app's default" (e.g. StreetSamurai's <c>ReviewMaxConcurrency</c>).
+    /// Set this in <c>legion.json</c> via <c>"maxConcurrency"</c> when the
+    /// voter panel uses a provider with tighter rate limits (e.g. claude-team
+    /// shares its quota with the Claude Code CLI in the same session).
+    /// </summary>
+    public int? MaxConcurrency { get; set; }
+
+    /// <summary>
     /// Returns provider IDs that have a resolvable API key — either explicit in
     /// <see cref="ApiKeys"/> or present in the shared credential store when
     /// <see cref="UseSharedCredentials"/> is enabled — and that pass the
