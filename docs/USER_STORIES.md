@@ -27,7 +27,7 @@ updated: 2026-06-07
 
 - **LEG-US-C1 ✅** As an integrator, I can request a model by tier and survive vendor model-id rotation, so my callers never name a drifting model id. *(verified by `BuildHighTierModelOverrides_*`, `BuildTierModelOverrides_*`, `BlankModel_FallsBackToProviderDefaultModel`.)* (See [LEG-LAW-4](BIBLE.md#LEG-LAW-4).)
 - **LEG-US-C2 ✅** As an integrator, I get a stable provider catalog with the expected provider count and known ids. *(verified by `All_HasExpectedProviderCount`, `All_KnownIds`.)*
-- **LEG-US-C3 ✅** As an integrator, a provider counts as active only with a non-empty key and membership in the allowed set (default trusted four). *(verified by `ActiveProviderIds_DefaultAllowedSet_IsTheTrustedFour`, `ActiveProviderIds_BlankKey_IsNotActive`, `ActiveProviderIds_KeyForUntrustedProvider_IsFilteredOut`, `ActiveProviderIds_NoKeys_ReturnsEmpty`.)* (See [LEG-LAW-5](BIBLE.md#LEG-LAW-5).)
+- **LEG-US-C3 ✅** As an integrator, a provider counts as active only with a non-empty key and membership in the allowed set (default trusted four). *(verified by `ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders`, `ActiveProviderIds_BlankKey_IsNotActive`, `ActiveProviderIds_KeyForUntrustedProvider_IsFilteredOut`, `ActiveProviderIds_NoKeys_ReturnsEmpty`.)* (See [LEG-LAW-5](BIBLE.md#LEG-LAW-5).)
 - **LEG-US-C4 ✅** As an operator, I can discover a provider's live model list and parse vendor-specific shapes. *(verified by `LlmModelDiscoveryExtractTests` / `LlmModelDiscoveryTests`, e.g. `AnthropicShape_DataArrayWithIdProperty`, `CohereShape_ModelsArrayWithNameProperty`, `BareArray_OfStrings_Works`.)*
 
 ## Epic D — Transport & resilience

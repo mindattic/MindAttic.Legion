@@ -100,6 +100,9 @@ public class VotingConfiguration
             {
                 foreach (var id in MindAtticCredentialStore.ListProviders())
                     ids.Add(id);
+                // claude-team authenticates via OAuth (not the file-based store) — check separately.
+                if (ClaudeCodeOAuthSource.GetAccessToken() is not null)
+                    ids.Add("claude-team");
             }
             if (AllowedProviderIds is { Count: > 0 })
                 ids.IntersectWith(AllowedProviderIds);

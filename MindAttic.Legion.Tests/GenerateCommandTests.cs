@@ -49,8 +49,8 @@ public class GenerateCommandTests
     [Test]
     public void ResolveProviders_DropsUntrustedAndDeduplicates()
     {
-        var result = GenerateCommand.ResolveProviders(new[] { "Claude", "claude", "mistral" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
+        var result = GenerateCommand.ResolveProviders(new[] { "Claude-Api", "claude-api", "mistral" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     // ── SplitCount ─────────────────────────────────────────────────────────

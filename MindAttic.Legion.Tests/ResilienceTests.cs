@@ -36,9 +36,9 @@ public class ResilienceTests
         // First call: 503; second call: success
         var handler = new ScriptedHandler(
             (HttpStatusCode.ServiceUnavailable, "down"),
-            (HttpStatusCode.OK, """{"content":[{"text":"finally"}]}"""));
+            (HttpStatusCode.OK, """{"content":[{"type":"text","text":"finally"}]}"""));
         var client = new LegionClient(new HttpClient(handler), FastRetries(2));
-        var reply = await client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u");
+        var reply = await client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u");
         Assert.That(reply, Is.EqualTo("finally"));
         Assert.That(handler.CallCount, Is.EqualTo(2));
     }
@@ -59,7 +59,7 @@ public class ResilienceTests
         var handler = new RepeatingHandler(HttpStatusCode.Unauthorized);
         var client  = new LegionClient(new HttpClient(handler), FastRetries(5));
         Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
+            client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
         Assert.That(handler.CallCount, Is.EqualTo(1)); // no retries on auth errors
     }
 
@@ -97,12 +97,12 @@ public class ResilienceTests
 
         for (int i = 0; i < 3; i++)
             Assert.ThrowsAsync<HttpRequestException>(() =>
-                client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
+                client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
 
         // 4th call: breaker is open, should fast-fail without hitting HTTP
         var ex = Assert.ThrowsAsync<CircuitBreakerOpenException>(() =>
-            client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
-        Assert.That(ex!.ProviderId, Is.EqualTo("claude"));
+            client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
+        Assert.That(ex!.ProviderId, Is.EqualTo("claude-api"));
         Assert.That(handler.CallCount, Is.EqualTo(3)); // 4th call never reached HTTP
     }
 
@@ -114,7 +114,7 @@ public class ResilienceTests
         var handler = new ScriptedHandler(
             (HttpStatusCode.InternalServerError, "fail1"),
             (HttpStatusCode.InternalServerError, "fail2"),
-            (HttpStatusCode.OK, """{"content":[{"text":"recovered"}]}"""),
+            (HttpStatusCode.OK, """{"content":[{"type":"text","text":"recovered"}]}"""),
             (HttpStatusCode.InternalServerError, "fail3"));
         var options = new LegionClientOptions
         {
@@ -124,13 +124,13 @@ public class ResilienceTests
         };
         var client = new LegionClient(new HttpClient(handler), options);
 
-        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
-        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
-        var reply = await client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u");
+        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
+        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
+        var reply = await client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u");
         Assert.That(reply, Is.EqualTo("recovered"));
-        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
+        Assert.ThrowsAsync<HttpRequestException>(() => client.CallAsync("claude-api", "k", "claude-sonnet-4-6", "s", "u"));
         // Breaker should still be closed (fewer than 3 consecutive)
-        Assert.That(CircuitBreaker.IsOpen("claude"), Is.False);
+        Assert.That(CircuitBreaker.IsOpen("claude-api"), Is.False);
     }
 
     [Test]
@@ -151,7 +151,7 @@ public class ResilienceTests
 
             var client = new LegionClient(new HttpClient(handler), LegionClientOptions.NoResilience);
             var (id, reply) = await client.CallWithFallbackAsync(
-                new[] { "claude", "openai" },
+                new[] { "claude-api", "openai" },
                 systemPrompt: "s", userMessage: "u");
 
             Assert.That(id, Is.EqualTo("openai"));
@@ -180,7 +180,7 @@ public class ResilienceTests
             var client  = new LegionClient(new HttpClient(handler), LegionClientOptions.NoResilience);
 
             var ex = Assert.ThrowsAsync<AggregateException>(() =>
-                client.CallWithFallbackAsync(new[] { "claude", "openai" }, "s", "u"));
+                client.CallWithFallbackAsync(new[] { "claude-api", "openai" }, "s", "u"));
             Assert.That(ex!.InnerExceptions, Has.Count.EqualTo(2));
         }
         finally

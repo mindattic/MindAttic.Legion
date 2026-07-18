@@ -18,7 +18,7 @@ public class AskCommandTests
     public void TrustedProviderIds_AreExactlyTheFourTrusted()
     {
         Assert.That(AskCommand.TrustedProviderIds,
-            Is.EquivalentTo(new[] { "claude", "openai", "gemini", "deepseek" }));
+            Is.EquivalentTo(new[] { "claude-api", "openai", "gemini", "deepseek" }));
     }
 
     [Test]
@@ -38,16 +38,16 @@ public class AskCommandTests
     [Test]
     public void IntersectWithTrustedSet_NarrowsToRequestedSubset()
     {
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude", "openai" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude-api", "openai" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
     public void IntersectWithTrustedSet_DropsUntrustedIds()
     {
         // The whole point: passing an untrusted id never adds it to the panel.
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude", "mistral", "ollama" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude-api", "mistral", "ollama" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     [Test]
@@ -60,15 +60,15 @@ public class AskCommandTests
     [Test]
     public void IntersectWithTrustedSet_CaseInsensitive()
     {
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "CLAUDE", "OpenAI" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "CLAUDE-API", "OpenAI" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
     public void IntersectWithTrustedSet_StripsBlankEntries()
     {
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude", "", "  " });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude-api", "", "  " });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     // ── BuildHighTierModelOverrides ────────────────────────────────────────
@@ -81,17 +81,17 @@ public class AskCommandTests
         // would otherwise pick. If this assertion ever flips, every ask vote
         // silently downgrades to Sonnet — fail loud.
         var overrides = AskCommand.BuildHighTierModelOverrides();
-        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-4-7"));
+        Assert.That(overrides["claude-api"], Is.EqualTo("claude-opus-4-7"));
     }
 
     [Test]
     public void BuildHighTierModelOverrides_PinsAllFourTrustedVotersToHighTier()
     {
         var overrides = AskCommand.BuildHighTierModelOverrides();
-        Assert.That(overrides["claude"],   Is.EqualTo("claude-opus-4-7"));
-        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1"));
-        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-pro"));
-        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-reasoner"));
+        Assert.That(overrides["claude-api"], Is.EqualTo("claude-opus-4-7"));
+        Assert.That(overrides["openai"],     Is.EqualTo("gpt-5.4"));
+        Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-pro"));
+        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-v4-pro"));
     }
 
     [Test]
@@ -105,12 +105,12 @@ public class AskCommandTests
     public void BuildHighTierModelOverrides_IsCaseInsensitive()
     {
         // VotingConfiguration.ModelOverrides is keyed case-insensitively in the
-        // resolution chain, so a "Claude" lookup must hit the same entry as
-        // "claude". Without an OrdinalIgnoreCase comparer the override would
+        // resolution chain, so a "Claude-Api" lookup must hit the same entry as
+        // "claude-api". Without an OrdinalIgnoreCase comparer the override would
         // miss when callers use mixed case.
         var overrides = AskCommand.BuildHighTierModelOverrides();
-        Assert.That(overrides.ContainsKey("CLAUDE"), Is.True);
-        Assert.That(overrides.ContainsKey("Claude"), Is.True);
+        Assert.That(overrides.ContainsKey("CLAUDE-API"), Is.True);
+        Assert.That(overrides.ContainsKey("Claude-Api"), Is.True);
     }
 
     [Test]
@@ -126,20 +126,20 @@ public class AskCommandTests
     public void BuildTierModelOverrides_Low_PinsCheapModels()
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Low);
-        Assert.That(overrides["claude"],   Is.EqualTo("claude-haiku-4-5-20251001"));
-        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1-nano"));
-        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-flash-lite"));
-        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-chat"));
+        Assert.That(overrides["claude-api"], Is.EqualTo("claude-haiku-4-5-20251001"));
+        Assert.That(overrides["openai"],     Is.EqualTo("gpt-4.1-nano"));
+        Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-flash-lite"));
+        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-v4-flash"));
     }
 
     [Test]
     public void BuildTierModelOverrides_Medium_PinsBalancedModels()
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Medium);
-        Assert.That(overrides["claude"],   Is.EqualTo("claude-sonnet-4-6"));
-        Assert.That(overrides["openai"],   Is.EqualTo("gpt-4.1-mini"));
-        Assert.That(overrides["gemini"],   Is.EqualTo("gemini-2.5-flash"));
-        Assert.That(overrides["deepseek"], Is.EqualTo("deepseek-chat"));
+        Assert.That(overrides["claude-api"], Is.EqualTo("claude-sonnet-5"));
+        Assert.That(overrides["openai"],     Is.EqualTo("gpt-5.4-mini"));
+        Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-flash"));
+        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-v4-flash"));
     }
 
     [Test]
@@ -154,14 +154,11 @@ public class AskCommandTests
     }
 
     [Test]
-    public void BuildTierModelOverrides_Higher_FallsBackToHighWhenNotMappedDirectly()
+    public void BuildTierModelOverrides_Higher_PinsAboveHighTier()
     {
-        // Higher tier walks down to High when not explicitly mapped — the
-        // catalog GetTieredModel guarantees this, but pin it here too so a
-        // refactor that strips the walk-down behavior breaks the test.
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Higher);
-        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-4-7[1m]"));
-        Assert.That(overrides["openai"], Is.EqualTo("o1"));
+        Assert.That(overrides["claude-api"], Is.EqualTo("claude-opus-4-8"));
+        Assert.That(overrides["openai"],     Is.EqualTo("gpt-5.5"));
     }
 
     // ── SnapToOption ───────────────────────────────────────────────────────

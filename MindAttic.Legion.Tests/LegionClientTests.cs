@@ -41,11 +41,11 @@ public class LegionClientTests
     [Test]
     public async Task CallAsync_ExplicitKey_DispatchesClaudeShape()
     {
-        var stubBody = """{"content":[{"text":"hi from claude"}]}""";
+        var stubBody = """{"content":[{"type":"text","text":"hi from claude"}]}""";
         var capture = new CapturingHandler(stubBody);
         var client  = new LegionClient(new HttpClient(capture));
 
-        var reply = await client.CallAsync("claude",
+        var reply = await client.CallAsync("claude-api",
             apiKey: "sk-ant-test",
             model: "claude-sonnet-4-6",
             systemPrompt: "be brief",
@@ -121,7 +121,7 @@ public class LegionClientTests
     {
         var client = new LegionClient(new HttpClient(new CapturingHandler("{}")));
         Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.CallAsync("claude", apiKey: "", model: "x", systemPrompt: "s", userMessage: "u"));
+            client.CallAsync("claude-api",apiKey: "", model: "x", systemPrompt: "s", userMessage: "u"));
     }
 
     [Test]
@@ -145,7 +145,7 @@ public class LegionClientTests
             systemPrompt: "s",
             userMessage: "u");
 
-        Assert.That(capture.LastBody, Does.Contain("\"model\":\"gpt-4.1-mini\""));
+        Assert.That(capture.LastBody, Does.Contain("\"model\":\"gpt-5.4-mini\""));
     }
 
     [Test]
@@ -154,7 +154,7 @@ public class LegionClientTests
         var failing = new HttpClient(new ErrorHandler(HttpStatusCode.Unauthorized));
         var client  = new LegionClient(failing);
         var ex = Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.CallAsync("claude", "k", "m", "s", "u"));
+            client.CallAsync("claude-api","k", "m", "s", "u"));
         Assert.That(ex!.Message, Does.Contain("401").Or.Contains("Unauthorized"));
     }
 }

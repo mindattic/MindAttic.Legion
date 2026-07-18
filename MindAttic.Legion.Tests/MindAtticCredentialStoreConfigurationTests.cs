@@ -51,14 +51,14 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void NoConfigRegistered_GetKey_ReadsFromFileStore()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-key");
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("file-key"));
+        MindAtticCredentialStore.SetKey("claude-api", "file-key");
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("file-key"));
     }
 
     [Test]
     public void NoConfigRegistered_GetKey_ReturnsNullWhenAbsent()
     {
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.Null);
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.Null);
     }
 
     // ── Config-first precedence ───────────────────────────────────────────────
@@ -66,11 +66,11 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void ConfigRegistered_WinsOverFileStore()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-key");
+        MindAtticCredentialStore.SetKey("claude-api", "file-key");
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
 
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("config-key"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("config-key"));
     }
 
     [Test]
@@ -78,7 +78,7 @@ public class MindAtticCredentialStoreConfigurationTests
     {
         MindAtticCredentialStore.SetKey("openai", "file-only");
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
 
         Assert.That(MindAtticCredentialStore.GetKey("openai"), Is.EqualTo("file-only"));
     }
@@ -86,20 +86,20 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void ConfigRegistered_FallsThroughToFile_WhenConfigValueIsWhitespace()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-key");
+        MindAtticCredentialStore.SetKey("claude-api", "file-key");
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "   ")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "   ")));
 
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("file-key"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("file-key"));
     }
 
     [Test]
     public void ConfigRegistered_TrimsConfigValue()
     {
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "  trimmed-key  ")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "  trimmed-key  ")));
 
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("trimmed-key"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("trimmed-key"));
     }
 
     // ── Reset semantics ───────────────────────────────────────────────────────
@@ -107,25 +107,25 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void UseConfigurationNull_RevertsToFileOnly()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-key");
+        MindAtticCredentialStore.SetKey("claude-api", "file-key");
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("config-key"));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("config-key"));
 
         MindAtticCredentialStore.UseConfiguration(null);
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("file-key"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("file-key"));
     }
 
     [Test]
     public void UseConfiguration_IsIdempotent_AndLatestWins()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-key");
+        MindAtticCredentialStore.SetKey("claude-api", "file-key");
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "first-config")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "first-config")));
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "second-config")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "second-config")));
 
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("second-config"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("second-config"));
     }
 
     // ── Env-var redirection still re-evaluated per call ───────────────────────
@@ -137,8 +137,8 @@ public class MindAtticCredentialStoreConfigurationTests
             BuildConfig(("MindAttic:Vault:LLM:openai:apiKey", "config-openai")));
 
         // Initial dir has a claude file key, no openai.
-        MindAtticCredentialStore.SetKey("claude", "first-dir-claude");
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("first-dir-claude"));
+        MindAtticCredentialStore.SetKey("claude-api", "first-dir-claude");
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("first-dir-claude"));
 
         // Swap to a fresh dir mid-test — the facade must pick it up on next call.
         var second = Path.Combine(Path.GetTempPath(), "legion-credstore-test-" + Guid.NewGuid().ToString("N"));
@@ -148,7 +148,7 @@ public class MindAtticCredentialStoreConfigurationTests
             Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", second);
 
             // claude no longer in the file store (new dir is empty), and not in config either.
-            Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.Null);
+            Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.Null);
 
             // openai still wins from config regardless of which dir is active.
             Assert.That(MindAtticCredentialStore.GetKey("openai"), Is.EqualTo("config-openai"));
@@ -166,7 +166,7 @@ public class MindAtticCredentialStoreConfigurationTests
     public void SetKey_WithConfigRegistered_WritesToFileStore_NotConfig()
     {
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
 
         // Write through the facade. Config view is read-only, so this lands on disk.
         MindAtticCredentialStore.SetKey("openai", "newly-written");
@@ -178,7 +178,7 @@ public class MindAtticCredentialStoreConfigurationTests
         Assert.That(raw, Does.Contain("newly-written"));
 
         // And reads still observe both layers correctly.
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("config-key"),    "config still wins for claude");
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("config-key"),    "config still wins for claude");
         Assert.That(MindAtticCredentialStore.GetKey("openai"), Is.EqualTo("newly-written"), "file holds the new openai key");
     }
 
@@ -186,14 +186,14 @@ public class MindAtticCredentialStoreConfigurationTests
     public void SetKey_WithConfigRegistered_DoesNotMutateConfig()
     {
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
 
         // Writing claude through the facade should hit the file store but
         // NOT shadow or overwrite the config view; reads must still show
         // the config value (config wins).
-        MindAtticCredentialStore.SetKey("claude", "file-attempt");
+        MindAtticCredentialStore.SetKey("claude-api", "file-attempt");
 
-        Assert.That(MindAtticCredentialStore.GetKey("claude"), Is.EqualTo("config-key"));
+        Assert.That(MindAtticCredentialStore.GetKey("claude-api"), Is.EqualTo("config-key"));
     }
 
     // ── Aggregate views (LoadAll / ListProviders / LoadAllRaw) ────────────────
@@ -201,16 +201,16 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void LoadAll_MergesAcrossLayers_ConfigWins()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-claude");
+        MindAtticCredentialStore.SetKey("claude-api", "file-claude");
         MindAtticCredentialStore.SetKey("gemini", "file-gemini");
         MindAtticCredentialStore.UseConfiguration(BuildConfig(
-            ("MindAttic:Vault:LLM:claude:apiKey", "config-claude"),
+            ("MindAttic:Vault:LLM:claude-api:apiKey", "config-claude"),
             ("MindAttic:Vault:LLM:openai:apiKey", "config-openai")));
 
         var all = MindAtticCredentialStore.LoadAll();
         Assert.Multiple(() =>
         {
-            Assert.That(all["claude"], Is.EqualTo("config-claude"), "config overrides file for claude");
+            Assert.That(all["claude-api"], Is.EqualTo("config-claude"), "config overrides file for claude");
             Assert.That(all["gemini"], Is.EqualTo("file-gemini"),   "file-only providers survive");
             Assert.That(all["openai"], Is.EqualTo("config-openai"), "config-only providers surface");
         });
@@ -235,7 +235,7 @@ public class MindAtticCredentialStoreConfigurationTests
         Assert.That(MindAtticCredentialStore.ProvidersFileExists(), Is.False, "sanity: no file yet");
 
         MindAtticCredentialStore.UseConfiguration(
-            BuildConfig(("MindAttic:Vault:LLM:claude:apiKey", "config-key")));
+            BuildConfig(("MindAttic:Vault:LLM:claude-api:apiKey", "config-key")));
 
         Assert.That(MindAtticCredentialStore.ProvidersFileExists(), Is.True);
     }
@@ -243,17 +243,17 @@ public class MindAtticCredentialStoreConfigurationTests
     [Test]
     public void LoadAllRaw_MergesShapedJson_ConfigWins()
     {
-        MindAtticCredentialStore.SetKey("claude", "file-claude");
+        MindAtticCredentialStore.SetKey("claude-api", "file-claude");
         MindAtticCredentialStore.UseConfiguration(BuildConfig(
-            ("MindAttic:Vault:LLM:claude:type",      "anthropic"),
-            ("MindAttic:Vault:LLM:claude:apiKey",    "config-claude"),
-            ("MindAttic:Vault:LLM:claude:model",     "claude-sonnet-4-6"),
-            ("MindAttic:Vault:LLM:claude:maxTokens", "2048")));
+            ("MindAttic:Vault:LLM:claude-api:type",      "anthropic"),
+            ("MindAttic:Vault:LLM:claude-api:apiKey",    "config-claude"),
+            ("MindAttic:Vault:LLM:claude-api:model",     "claude-sonnet-4-6"),
+            ("MindAttic:Vault:LLM:claude-api:maxTokens", "2048")));
 
         var raw = MindAtticCredentialStore.LoadAllRaw();
-        Assert.That(raw.ContainsKey("claude"), Is.True);
+        Assert.That(raw.ContainsKey("claude-api"), Is.True);
 
-        var json = raw["claude"];
+        var json = raw["claude-api"];
         // Config view serialises children as a nested JSON object.
         Assert.That(json, Does.Contain("config-claude"));
         Assert.That(json, Does.Contain("claude-sonnet-4-6"));

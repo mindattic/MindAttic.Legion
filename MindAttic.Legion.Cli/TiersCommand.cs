@@ -36,7 +36,7 @@ public static class TiersCommand
 {
     /// <summary>The same trust list as <see cref="AskCommand.TrustedProviderIds"/>.</summary>
     internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+        { "claude-api", "openai", "gemini", "deepseek" };
 
     /// <summary>Default tier set probed when <c>--tiers</c> isn't passed.</summary>
     internal static readonly ModelTier[] DefaultTiers =

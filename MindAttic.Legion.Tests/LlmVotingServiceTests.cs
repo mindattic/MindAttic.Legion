@@ -194,8 +194,8 @@ public class LlmVotingServiceTests
         var config = new VotingConfiguration
         {
             UseSharedCredentials = false,
-            ApiKeys = { ["claude"] = apiKey ?? "" },
-            JudgeProviderId = "claude",
+            ApiKeys = { ["claude-api"] = apiKey ?? "" },
+            JudgeProviderId = "claude-api",
         };
         var handler = new StubHttpHandler(stubResponse);
         var http    = new HttpClient(handler);
@@ -214,7 +214,7 @@ public class LlmVotingServiceTests
     public void GetActiveProviderIds_WithKey_ReturnsClaude()
     {
         var svc = BuildService("{}");
-        Assert.That(svc.GetActiveProviderIds(), Contains.Item("claude"));
+        Assert.That(svc.GetActiveProviderIds(), Contains.Item("claude-api"));
     }
 
     [Test]
@@ -229,7 +229,7 @@ public class LlmVotingServiceTests
     [Test]
     public async Task VoteAsync_ChoiceVote_ParsesDecision()
     {
-        var stubJson = """{"content":[{"text":"{\"decision\":\"Yes\",\"reasoning\":\"Makes sense.\",\"confidence\":8}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"Yes\",\"reasoning\":\"Makes sense.\",\"confidence\":8}"}]}""";
         var svc      = BuildService(stubJson);
         var request  = new VoteRequest
         {
@@ -250,7 +250,7 @@ public class LlmVotingServiceTests
     {
         // Model returned plain prose (no JSON object). Choice votes can't tally
         // raw text — must surface as IsError so refill / quorum logic can react.
-        var stubJson = """{"content":[{"text":"I'm not sure about this one."}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"I'm not sure about this one."}]}""";
         var svc      = BuildService(stubJson);
         var request  = new VoteRequest { Question = "Pick one", Options = ["A", "B"] };
 
@@ -265,7 +265,7 @@ public class LlmVotingServiceTests
     public async Task VoteAsync_FloatConfidence_DoesNotErrorOut()
     {
         // Models occasionally emit floats for confidence — we round, not crash.
-        var stubJson = """{"content":[{"text":"{\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8.5}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8.5}"}]}""";
         var svc      = BuildService(stubJson);
         var request  = new VoteRequest { Question = "Should we?", Options = ["Yes", "No"] };
 
@@ -297,7 +297,7 @@ public class LlmVotingServiceTests
     public async Task VoteAsync_FreeForm_SingleVoter_ReachesAnyQuorum()
     {
         // 1 voter trivially clears any quorum (1/1 = 100%).
-        var stubJson = """{"content":[{"text":"{\"decision\":\"go north\",\"reasoning\":\"shorter route\",\"confidence\":7}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"go north\",\"reasoning\":\"shorter route\",\"confidence\":7}"}]}""";
         var svc      = BuildService(stubJson);
 
         var result = await svc.VoteAsync("Which way?", "context", Quorum.Unanimous);
@@ -316,7 +316,7 @@ public class LlmVotingServiceTests
         // it actually passes — the stricter case would need multiple voters,
         // which BuildService doesn't support, but the pinning value here is
         // that we don't unconditionally claim quorum=true.)
-        var stubJson = """{"content":[{"text":"{\"decision\":\"go north\",\"reasoning\":\"r\",\"confidence\":7}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"go north\",\"reasoning\":\"r\",\"confidence\":7}"}]}""";
         var svc      = BuildService(stubJson);
 
         var result = await svc.VoteAsync(
@@ -342,7 +342,7 @@ public class LlmVotingServiceTests
     [Test]
     public async Task ScoreAsync_WithDimensions_ReturnsAggregateScores()
     {
-        var stubJson = """{"content":[{"text":"{\"scores\":{\"VOICE\":8,\"PACING\":6},\"reasoning\":\"Good voice.\",\"flags_good\":[\"strong opening\"],\"flags_bad\":[],\"improvement_directive\":\"Tighten act 2\"}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"scores\":{\"VOICE\":8,\"PACING\":6},\"reasoning\":\"Good voice.\",\"flags_good\":[\"strong opening\"],\"flags_bad\":[],\"improvement_directive\":\"Tighten act 2\"}"}]}""";
         var svc      = BuildService(stubJson);
         var request  = new ScoredVoteRequest
         {
@@ -366,7 +366,7 @@ public class LlmVotingServiceTests
         // Voter scores VOICE and PACING but omits TENSION. TENSION must not be
         // recorded as 0.0 (which would flag it failing, pick it weakest, and
         // drag OVERALL down to (8+6+0)/3).
-        var stubJson = """{"content":[{"text":"{\"scores\":{\"VOICE\":8,\"PACING\":6},\"reasoning\":\"x\",\"flags_good\":[],\"flags_bad\":[],\"improvement_directive\":\"\"}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"scores\":{\"VOICE\":8,\"PACING\":6},\"reasoning\":\"x\",\"flags_good\":[],\"flags_bad\":[],\"improvement_directive\":\"\"}"}]}""";
         var svc = BuildService(stubJson);
         var request = new ScoredVoteRequest
         {
@@ -398,7 +398,7 @@ public class LlmVotingServiceTests
         // The model prefixes a footnote "{1}" before the real JSON object. The
         // naive first-{…last-} slice produced invalid JSON ("{1}): {…}") and the
         // vote was lost; the balanced-region extractor must pick the real object.
-        var stubJson = """{"content":[{"text":"Sure — see note {1}: {\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"Sure — see note {1}: {\"decision\":\"Yes\",\"reasoning\":\"ok\",\"confidence\":8}"}]}""";
         var svc      = BuildService(stubJson);
         var request  = new VoteRequest { Question = "Proceed?", Options = ["Yes", "No"] };
 
@@ -415,7 +415,7 @@ public class LlmVotingServiceTests
         // (flags_bad) observation. The aggregate must file the good one under
         // ConsensusStrengths and the bad one under ConsensusFailures — never the
         // reverse (the old frequency-only split inverted them).
-        var stubJson = """{"content":[{"text":"{\"scores\":{\"VOICE\":7},\"reasoning\":\"r\",\"flags_good\":[\"Strong opening\"],\"flags_bad\":[\"Weak ending\"],\"improvement_directive\":\"Tighten act two\"}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"scores\":{\"VOICE\":7},\"reasoning\":\"r\",\"flags_good\":[\"Strong opening\"],\"flags_bad\":[\"Weak ending\"],\"improvement_directive\":\"Tighten act two\"}"}]}""";
         var svc      = BuildService(stubJson);
 
         // Two claude voters so both responses parse against the Claude-shaped stub
@@ -423,8 +423,8 @@ public class LlmVotingServiceTests
         // panel below minConsensus and defeating the point of the test).
         var voters = new[]
         {
-            new VoterProfile { ProviderId = "claude", Name = "claude#1", ApiKeyOverride = "k" },
-            new VoterProfile { ProviderId = "claude", Name = "claude#2", ApiKeyOverride = "k" },
+            new VoterProfile { ProviderId = "claude-api", Name = "claude#1", ApiKeyOverride = "k" },
+            new VoterProfile { ProviderId = "claude-api", Name = "claude#2", ApiKeyOverride = "k" },
         };
         var request = new ScoredVoteRequest
         {
@@ -444,13 +444,13 @@ public class LlmVotingServiceTests
     [Test]
     public async Task VoteWithProfilesAsync_UsesPersonality()
     {
-        var stubJson = """{"content":[{"text":"{\"decision\":\"Refuse\",\"reasoning\":\"Too risky.\",\"confidence\":9}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"Refuse\",\"reasoning\":\"Too risky.\",\"confidence\":9}"}]}""";
         var svc      = BuildService(stubJson);
 
         var persona = VoterProfile.ForCharacter(
             "Sable Chen",
             "Risk-averse. Never takes contracts without exit strategies.",
-            "claude",
+            "claude-api",
             apiKey: "test-key");
 
         var result = await svc.VoteWithProfilesAsync(
@@ -465,9 +465,9 @@ public class LlmVotingServiceTests
     [Test]
     public async Task VoteWithPersonasAsync_SimpleCall_DoesNotThrow()
     {
-        var stubJson = """{"content":[{"text":"{\"decision\":\"Yes\",\"reasoning\":\"Character reasoning.\",\"confidence\":7}"}]}""";
+        var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"Yes\",\"reasoning\":\"Character reasoning.\",\"confidence\":7}"}]}""";
         var svc      = BuildService(stubJson);
-        var persona  = VoterProfile.ForCharacter("Kyle", "Pragmatic.", "claude", "test-key");
+        var persona  = VoterProfile.ForCharacter("Kyle", "Pragmatic.", "claude-api", "test-key");
 
         Assert.DoesNotThrowAsync(async () =>
             await svc.VoteWithPersonasAsync("Act?", "context", Quorum.Plurality, [persona]));
@@ -561,12 +561,12 @@ public class MindAtticCredentialStoreTests
     [Test]
     public void VotingConfiguration_ResolvesKeyFromStore()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "shared-key");
+        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "shared-key");
 
         var cfg      = new VotingConfiguration(); // UseSharedCredentials defaults true
         var provider = new LlmVotingProvider(new HttpClient(new StubHttpHandler("{}")), cfg);
-        Assert.That(provider.GetApiKey("claude"), Is.EqualTo("shared-key"));
-        Assert.That(cfg.ActiveProviderIds, Contains.Item("claude"));
+        Assert.That(provider.GetApiKey("claude-api"), Is.EqualTo("shared-key"));
+        Assert.That(cfg.ActiveProviderIds, Contains.Item("claude-api"));
     }
 
     [Test]

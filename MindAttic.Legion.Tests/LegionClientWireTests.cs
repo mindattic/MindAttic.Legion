@@ -32,7 +32,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk-ant-key", "claude-sonnet-4-6", "be brief", "hi");
+        await client.CallAsync("claude-api","sk-ant-key", "claude-sonnet-4-6", "be brief", "hi");
 
         var req = handler.Requests.Single();
         Assert.That(req.Headers["x-api-key"], Is.EqualTo("sk-ant-key"));
@@ -46,7 +46,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-sonnet-4-6", "You are Claude.", "hi");
+        await client.CallAsync("claude-api","sk", "claude-sonnet-4-6", "You are Claude.", "hi");
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
         Assert.That(doc.RootElement.GetProperty("system").GetString(), Is.EqualTo("You are Claude."));
@@ -59,7 +59,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-sonnet-4-6", "", "hi");
+        await client.CallAsync("claude-api","sk", "claude-sonnet-4-6", "", "hi");
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
         Assert.That(doc.RootElement.TryGetProperty("system", out _), Is.False);
@@ -71,7 +71,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-sonnet-4-6", "s", "u",
+        await client.CallAsync("claude-api","sk", "claude-sonnet-4-6", "s", "u",
             maxTokens: 1234, temperature: 0.42);
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
@@ -89,7 +89,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-opus-4-7", "s", "u",
+        await client.CallAsync("claude-api","sk", "claude-opus-4-7", "s", "u",
             maxTokens: 1234, temperature: 0.42);
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
@@ -107,7 +107,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-opus-4-7[1m]", "s", "u",
+        await client.CallAsync("claude-api","sk", "claude-opus-4-7[1m]", "s", "u",
             maxTokens: 1234, temperature: 0.42);
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
@@ -165,7 +165,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-opus-4-8", "s", "u",
+        await client.CallAsync("claude-api","sk", "claude-opus-4-8", "s", "u",
             maxTokens: 1234, temperature: 0.42);
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
@@ -180,7 +180,7 @@ public class LegionClientWireTests
         var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk);
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
-        await client.CallAsync("claude", "sk", "claude-fable-5", "s", "u",
+        await client.CallAsync("claude-api","sk", "claude-fable-5", "s", "u",
             maxTokens: 1234, temperature: 0.42);
 
         using var doc = JsonDocument.Parse(handler.Bodies[0]);
@@ -391,7 +391,7 @@ public class LegionClientWireTests
         var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
 
         var ex = Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.CallAsync("claude", "k", "claude-sonnet-4-6", "s", "u"));
+            client.CallAsync("claude-api","k", "claude-sonnet-4-6", "s", "u"));
         Assert.That(ex!.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -487,7 +487,7 @@ public class LegionClientWireTests
     {
         var client = new LegionClient(new HttpClient(new FixedResponseHandler(HttpStatusCode.OK, "{}")));
         Assert.ThrowsAsync<ArgumentException>(() =>
-            client.EmbedAsync("claude", "k", "m", new[] { "x" }));
+            client.EmbedAsync("claude-api","k", "m", new[] { "x" }));
     }
 
     [Test]
@@ -505,12 +505,12 @@ public class LegionClientWireTests
         var client = new LegionClient(new HttpClient(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk)), options);
 
         for (var i = 0; i < 5; i++)
-            Assert.ThrowsAsync<ArgumentException>(() => client.EmbedAsync("claude", "k", "m", new[] { "x" }));
+            Assert.ThrowsAsync<ArgumentException>(() => client.EmbedAsync("claude-api","k", "m", new[] { "x" }));
 
-        Assert.That(CircuitBreaker.IsOpen("claude"), Is.False);
+        Assert.That(CircuitBreaker.IsOpen("claude-api"), Is.False);
 
         // And a real chat call still goes through (breaker not poisoned).
-        var reply = await client.CallAsync("claude", "sk", "claude-sonnet-4-6", "s", "u");
+        var reply = await client.CallAsync("claude-api","sk", "claude-sonnet-4-6", "s", "u");
         Assert.That(reply, Is.Not.Null);
     }
 
@@ -573,6 +573,6 @@ public class LegionClientWireTests
     {
         var client = new LegionClient(new HttpClient(new FixedResponseHandler(HttpStatusCode.OK, "{}")));
         Assert.ThrowsAsync<ArgumentException>(() =>
-            client.GenerateImageAsync("claude", "k", "m", "prompt"));
+            client.GenerateImageAsync("claude-api","k", "m", "prompt"));
     }
 }

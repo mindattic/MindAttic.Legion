@@ -48,8 +48,8 @@ public class PollCommandTests
     [Test]
     public void ResolveProviders_DropsUntrustedAndDeduplicates()
     {
-        var result = PollCommand.ResolveProviders(new[] { "Claude", "claude", "mistral", "OPENAI" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
+        var result = PollCommand.ResolveProviders(new[] { "Claude-Api", "claude-api", "mistral", "OPENAI" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     // ── AssignRoundRobin ───────────────────────────────────────────────────
@@ -98,11 +98,11 @@ public class PollCommandTests
     [Test]
     public void AssignRoundRobin_ResolvesTierModelPerAssignment()
     {
-        var providers = new[] { "claude", "openai" };
+        var providers = new[] { "claude-api", "openai" };
         var assignments = PollCommand.AssignRoundRobin(2, providers, ModelTier.High);
 
         Assert.That(assignments[0].Model, Is.EqualTo("claude-opus-4-7"));
-        Assert.That(assignments[1].Model, Is.EqualTo("gpt-4.1"));
+        Assert.That(assignments[1].Model, Is.EqualTo("gpt-5.4"));
     }
 
     [Test]

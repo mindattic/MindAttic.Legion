@@ -11,7 +11,7 @@ namespace MindAttic.Legion.Tests.TestSupport;
 internal static class Bodies
 {
     /// <summary>Claude success body whose extracted text is the probe answer "Hello World!".</summary>
-    public const string ClaudeOk      = """{"content":[{"text":"Hello World!"}]}""";
+    public const string ClaudeOk      = """{"content":[{"type":"text","text":"Hello World!"}]}""";
     /// <summary>OpenAI-compatible success body whose extracted text is "Hello World!".</summary>
     public const string OpenAiOk      = """{"choices":[{"message":{"content":"Hello World!"}}]}""";
     /// <summary>Gemini success body whose extracted text is "Hello World!".</summary>
@@ -20,7 +20,7 @@ internal static class Bodies
     public const string CohereOk      = """{"message":{"content":[{"text":"Hello World!"}]}}""";
 
     /// <summary>Claude success body whose extracted text deliberately fails the probe match.</summary>
-    public const string ClaudeWrong   = """{"content":[{"text":"goodbye"}]}""";
+    public const string ClaudeWrong   = """{"content":[{"type":"text","text":"goodbye"}]}""";
     /// <summary>OpenAI success body whose extracted text deliberately fails the probe match.</summary>
     public const string OpenAiWrong   = """{"choices":[{"message":{"content":"farewell"}}]}""";
 

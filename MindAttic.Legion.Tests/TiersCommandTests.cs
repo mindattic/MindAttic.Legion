@@ -53,8 +53,8 @@ public class TiersCommandTests
     [Test]
     public void ResolveProviders_NarrowsToRequestedSubset()
     {
-        var result = TiersCommand.ResolveProviders(new[] { "claude", "openai" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
+        var result = TiersCommand.ResolveProviders(new[] { "claude-api", "openai" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
@@ -62,8 +62,8 @@ public class TiersCommandTests
     {
         // Same security model as AskCommand: untrusted ids are silently
         // dropped, never widening the probe set.
-        var result = TiersCommand.ResolveProviders(new[] { "claude", "mistral", "ollama" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
+        var result = TiersCommand.ResolveProviders(new[] { "claude-api", "mistral", "ollama" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     [Test]
@@ -76,17 +76,17 @@ public class TiersCommandTests
     [Test]
     public void ResolveProviders_CaseInsensitive()
     {
-        var result = TiersCommand.ResolveProviders(new[] { "CLAUDE", "OpenAI" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
+        var result = TiersCommand.ResolveProviders(new[] { "CLAUDE-API", "OpenAI" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
     public void ResolveProviders_DeduplicatesRepeats()
     {
-        // A user passing --providers claude,claude,CLAUDE shouldn't get
+        // A user passing --providers claude-api,claude-api,CLAUDE-API shouldn't get
         // three identical probes back — that's just wasted API spend.
-        var result = TiersCommand.ResolveProviders(new[] { "claude", "claude", "CLAUDE" });
-        Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
+        var result = TiersCommand.ResolveProviders(new[] { "claude-api", "claude-api", "CLAUDE-API" });
+        Assert.That(result, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     [Test]

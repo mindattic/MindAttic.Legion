@@ -15,7 +15,7 @@ public class LlmProviderCatalogTests
     [Test]
     public void All_HasExpectedProviderCount()
     {
-        Assert.That(LlmProviderCatalog.All, Has.Count.EqualTo(11));
+        Assert.That(LlmProviderCatalog.All, Has.Count.EqualTo(13));
     }
 
     [Test]
@@ -23,8 +23,8 @@ public class LlmProviderCatalogTests
     {
         var expected = new[]
         {
-            "claude","openai","gemini","deepseek","mistral",
-            "xai","groq","together","openrouter","fireworks","cohere",
+            "claude-api","claude-team","openai","gemini","deepseek","mistral",
+            "xai","groq","together","openrouter","fireworks","cohere","kimi",
         };
         var actual = LlmProviderCatalog.AllIds.ToArray();
         Assert.That(actual, Is.EquivalentTo(expected));
@@ -33,14 +33,14 @@ public class LlmProviderCatalogTests
     [Test]
     public void Get_ByLowercaseId_ReturnsProvider()
     {
-        Assert.That(LlmProviderCatalog.Get("claude"), Is.Not.Null);
+        Assert.That(LlmProviderCatalog.Get("claude-api"), Is.Not.Null);
     }
 
     [Test]
     public void Get_IsCaseInsensitive()
     {
-        Assert.That(LlmProviderCatalog.Get("Claude")?.Id, Is.EqualTo("claude"));
-        Assert.That(LlmProviderCatalog.Get("CLAUDE")?.Id, Is.EqualTo("claude"));
+        Assert.That(LlmProviderCatalog.Get("Claude-Api")?.Id, Is.EqualTo("claude-api"));
+        Assert.That(LlmProviderCatalog.Get("CLAUDE-API")?.Id, Is.EqualTo("claude-api"));
     }
 
     [Test]
@@ -60,7 +60,7 @@ public class LlmProviderCatalogTests
     [Test]
     public void IsSupported_TruthTable()
     {
-        Assert.That(LlmProviderCatalog.IsSupported("claude"), Is.True);
+        Assert.That(LlmProviderCatalog.IsSupported("claude-api"), Is.True);
         Assert.That(LlmProviderCatalog.IsSupported("madeup"), Is.False);
     }
 
@@ -74,7 +74,9 @@ public class LlmProviderCatalogTests
             Assert.That(p.Vendor,       Is.Not.Empty, $"{p.Id}.Vendor");
             Assert.That(p.DefaultModel, Is.Not.Empty, $"{p.Id}.DefaultModel");
             Assert.That(p.DashboardUrl, Does.StartWith("https://"), $"{p.Id}.DashboardUrl");
-            Assert.That(p.KeysUrl,      Does.StartWith("https://"), $"{p.Id}.KeysUrl");
+            // claude-team is OAuth-only — it has no key-creation URL by design.
+            if (!string.Equals(p.Id, "claude-team", StringComparison.OrdinalIgnoreCase))
+                Assert.That(p.KeysUrl, Does.StartWith("https://"), $"{p.Id}.KeysUrl");
             Assert.That(p.AvailableModels, Is.Not.Empty, $"{p.Id}.AvailableModels");
         }
     }
@@ -90,7 +92,7 @@ public class LlmProviderCatalogTests
     [Test]
     public void IsKnownModel_RecognizesCatalogModels()
     {
-        Assert.That(LlmProviderCatalog.IsKnownModel("claude", "claude-sonnet-4-6"), Is.True);
+        Assert.That(LlmProviderCatalog.IsKnownModel("claude-api", "claude-sonnet-4-6"), Is.True);
         Assert.That(LlmProviderCatalog.IsKnownModel("openai", "gpt-4.1-mini"), Is.True);
         Assert.That(LlmProviderCatalog.IsKnownModel("openai", "GPT-4.1-MINI"), Is.True); // case-insensitive
     }
@@ -98,9 +100,9 @@ public class LlmProviderCatalogTests
     [Test]
     public void IsKnownModel_RejectsUnknown()
     {
-        Assert.That(LlmProviderCatalog.IsKnownModel("claude", "made-up-model"), Is.False);
+        Assert.That(LlmProviderCatalog.IsKnownModel("claude-api", "made-up-model"), Is.False);
         Assert.That(LlmProviderCatalog.IsKnownModel("madeup", "anything"), Is.False);
-        Assert.That(LlmProviderCatalog.IsKnownModel("claude", ""), Is.False);
+        Assert.That(LlmProviderCatalog.IsKnownModel("claude-api", ""), Is.False);
     }
 
     [Test]

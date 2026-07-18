@@ -45,7 +45,7 @@ public static class AskCommand
     /// without duplicating its membership.
     /// </summary>
     internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+        { "claude-api", "openai", "gemini", "deepseek" };
 
     /// <summary>
     /// Intersects <paramref name="requested"/> with <see cref="TrustedProviderIds"/>

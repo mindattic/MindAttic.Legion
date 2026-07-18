@@ -29,11 +29,13 @@ public static class LlmProviderCatalog
     private static readonly LlmProviderInfo[] providers =
     {
         new("claude-api", "Claude (API)", "Anthropic",
-            DefaultModel: "claude-sonnet-4-6",
+            DefaultModel: "claude-sonnet-5",
             DashboardUrl: "https://console.anthropic.com/",
             KeysUrl: "https://console.anthropic.com/settings/keys",
             AvailableModels: new[]
             {
+                "claude-fable-5",
+                "claude-sonnet-5",
                 "claude-opus-4-8",
                 "claude-opus-4-7",
                 "claude-opus-4-7[1m]",
@@ -47,11 +49,13 @@ public static class LlmProviderCatalog
             ModelsApiEndpoint: "https://api.anthropic.com/v1/models"),
 
         new("claude-team", "Claude (Team)", "Anthropic",
-            DefaultModel: "claude-sonnet-4-6",
+            DefaultModel: "claude-sonnet-5",
             DashboardUrl: "https://claude.ai/settings",
             KeysUrl: "",
             AvailableModels: new[]
             {
+                "claude-fable-5",
+                "claude-sonnet-5",
                 "claude-opus-4-8",
                 "claude-opus-4-7",
                 "claude-opus-4-7[1m]",
@@ -65,42 +69,53 @@ public static class LlmProviderCatalog
             ModelsApiEndpoint: "https://api.anthropic.com/v1/models"),
 
         new("openai", "ChatGPT", "OpenAI",
-            DefaultModel: "gpt-4.1-mini",
+            DefaultModel: "gpt-5.4-mini",
             DashboardUrl: "https://platform.openai.com/usage",
             KeysUrl: "https://platform.openai.com/api-keys",
             AvailableModels: new[]
             {
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+                "gpt-5.4",
+                "gpt-5.4-mini",
+                "gpt-5.4-nano",
                 "gpt-4.1",
                 "gpt-4.1-mini",
                 "gpt-4.1-nano",
                 "gpt-4o",
                 "gpt-4o-mini",
+                "o4-mini",
+                "o3",
+                "o3-pro",
                 "o3-mini",
                 "o1",
-                "o1-mini",
-                "gpt-3.5-turbo",
             },
             ModelsApiEndpoint: "https://api.openai.com/v1/models"),
 
         new("gemini", "Gemini", "Google",
-            DefaultModel: "gemini-2.5-flash",
+            DefaultModel: "gemini-3.5-flash",
             DashboardUrl: "https://aistudio.google.com/",
             KeysUrl: "https://aistudio.google.com/app/apikey",
             AvailableModels: new[]
             {
+                "gemini-3.5-flash",
+                "gemini-3.1-flash-lite",
                 "gemini-2.5-pro",
                 "gemini-2.5-flash",
                 "gemini-2.5-flash-lite",
-                "gemini-flash-latest",
             },
             ModelsApiEndpoint: "https://generativelanguage.googleapis.com/v1beta/models"),
 
         new("deepseek", "DeepSeek", "DeepSeek AI",
-            DefaultModel: "deepseek-chat",
+            DefaultModel: "deepseek-v4-flash",
             DashboardUrl: "https://platform.deepseek.com/usage",
             KeysUrl: "https://platform.deepseek.com/api_keys",
             AvailableModels: new[]
             {
+                "deepseek-v4-pro",
+                "deepseek-v4-flash",
                 "deepseek-chat",
                 "deepseek-reasoner",
             },
@@ -123,16 +138,18 @@ public static class LlmProviderCatalog
             ModelsApiEndpoint: "https://api.mistral.ai/v1/models"),
 
         new("xai", "Grok", "xAI",
-            DefaultModel: "grok-3-mini-fast",
+            DefaultModel: "grok-4.3",
             DashboardUrl: "https://console.x.ai/",
             KeysUrl: "https://console.x.ai/team/default/api-keys",
             AvailableModels: new[]
             {
+                "grok-4.5",
+                "grok-4.3",
+                "grok-4.20-0309-reasoning",
+                "grok-4.20-0309-non-reasoning",
                 "grok-3",
                 "grok-3-mini",
                 "grok-3-mini-fast",
-                "grok-2-1212",
-                "grok-2-vision-1212",
             },
             ModelsApiEndpoint: "https://api.x.ai/v1/models"),
 
@@ -214,12 +231,20 @@ public static class LlmProviderCatalog
             ModelsApiEndpoint: "https://api.cohere.com/v1/models"),
 
         new("kimi", "Kimi", "Moonshot AI",
-            DefaultModel: "kimi-k2",
+            DefaultModel: "kimi-k3",
             DashboardUrl: "https://platform.moonshot.cn/",
             KeysUrl: "https://platform.moonshot.cn/console/api-keys",
             AvailableModels: new[]
             {
+                "kimi-k3",
+                "kimi-k2.7-code",
+                "kimi-k2.7-code-highspeed",
+                "kimi-k2.6",
+                "kimi-k2.5",
                 "kimi-k2",
+                "moonshot-v1-128k-vision-preview",
+                "moonshot-v1-32k-vision-preview",
+                "moonshot-v1-8k-vision-preview",
                 "moonshot-v1-128k",
                 "moonshot-v1-32k",
                 "moonshot-v1-8k",
@@ -294,44 +319,42 @@ public static class LlmProviderCatalog
             ["claude-api"] = new Dictionary<ModelTier, string>
             {
                 [ModelTier.Low]     = "claude-haiku-4-5-20251001",
-                [ModelTier.Medium]  = "claude-sonnet-4-6",
+                [ModelTier.Medium]  = "claude-sonnet-5",
                 [ModelTier.High]    = "claude-opus-4-7",
-                [ModelTier.Higher]  = "claude-opus-4-7[1m]",
-                [ModelTier.Highest] = "claude-opus-4-7[1m]",
+                [ModelTier.Higher]  = "claude-opus-4-8",
+                [ModelTier.Highest] = "claude-fable-5",
             },
             ["claude-team"] = new Dictionary<ModelTier, string>
             {
                 [ModelTier.Low]     = "claude-haiku-4-5-20251001",
-                [ModelTier.Medium]  = "claude-sonnet-4-6",
+                [ModelTier.Medium]  = "claude-sonnet-5",
                 [ModelTier.High]    = "claude-opus-4-7",
-                [ModelTier.Higher]  = "claude-opus-4-7[1m]",
-                [ModelTier.Highest] = "claude-opus-4-7[1m]",
+                [ModelTier.Higher]  = "claude-opus-4-8",
+                [ModelTier.Highest] = "claude-fable-5",
             },
             ["openai"] = new Dictionary<ModelTier, string>
             {
                 [ModelTier.Low]     = "gpt-4.1-nano",
-                [ModelTier.Medium]  = "gpt-4.1-mini",
-                [ModelTier.High]    = "gpt-4.1",
-                [ModelTier.Higher]  = "o1",
-                [ModelTier.Highest] = "o1",
+                [ModelTier.Medium]  = "gpt-5.4-mini",
+                [ModelTier.High]    = "gpt-5.4",
+                [ModelTier.Higher]  = "gpt-5.5",
+                [ModelTier.Highest] = "gpt-5.6-sol",
             },
             ["gemini"] = new Dictionary<ModelTier, string>
             {
                 [ModelTier.Low]     = "gemini-2.5-flash-lite",
                 [ModelTier.Medium]  = "gemini-2.5-flash",
                 [ModelTier.High]    = "gemini-2.5-pro",
-                [ModelTier.Higher]  = "gemini-2.5-pro",
-                [ModelTier.Highest] = "gemini-2.5-pro",
+                [ModelTier.Higher]  = "gemini-3.1-flash-lite",
+                [ModelTier.Highest] = "gemini-3.5-flash",
             },
             ["deepseek"] = new Dictionary<ModelTier, string>
             {
-                // DeepSeek only has two production models — collapse Low/Medium
-                // onto chat and High+ onto reasoner.
-                [ModelTier.Low]     = "deepseek-chat",
-                [ModelTier.Medium]  = "deepseek-chat",
-                [ModelTier.High]    = "deepseek-reasoner",
-                [ModelTier.Higher]  = "deepseek-reasoner",
-                [ModelTier.Highest] = "deepseek-reasoner",
+                [ModelTier.Low]     = "deepseek-v4-flash",
+                [ModelTier.Medium]  = "deepseek-v4-flash",
+                [ModelTier.High]    = "deepseek-v4-pro",
+                [ModelTier.Higher]  = "deepseek-v4-pro",
+                [ModelTier.Highest] = "deepseek-v4-pro",
             },
         };
 

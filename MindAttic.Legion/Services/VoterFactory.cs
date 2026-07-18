@@ -24,7 +24,7 @@ public static class VoterFactory
     public static IReadOnlyList<VoterProfile> GenerateUniqueVoters(
         int count,
         IEnumerable<string> availableProviderIds,
-        string fallbackProviderId = "claude",
+        string fallbackProviderId = "claude-api",
         Random? rng = null)
     {
         if (count <= 0) return Array.Empty<VoterProfile>();
@@ -33,7 +33,7 @@ public static class VoterFactory
         var providers = NormalizeProviders(availableProviderIds);
 
         if (string.IsNullOrWhiteSpace(fallbackProviderId))
-            fallbackProviderId = "claude";
+            fallbackProviderId = "claude-api";
 
         var personas = PersonaLibrary.Sample(count, rng);
         var voters = new VoterProfile[Math.Min(count, personas.Count)];
@@ -67,7 +67,7 @@ public static class VoterFactory
         int count,
         IEnumerable<string> availableProviderIds,
         IReadOnlyDictionary<string, PsychometricProfile> profiles,
-        string fallbackProviderId = "claude",
+        string fallbackProviderId = "claude-api",
         Random? rng = null)
     {
         if (count <= 0) return Array.Empty<VoterProfile>();
@@ -76,7 +76,7 @@ public static class VoterFactory
             return GenerateUniqueVoters(count, availableProviderIds, fallbackProviderId, rng);
 
         var providers = NormalizeProviders(availableProviderIds);
-        if (string.IsNullOrWhiteSpace(fallbackProviderId)) fallbackProviderId = "claude";
+        if (string.IsNullOrWhiteSpace(fallbackProviderId)) fallbackProviderId = "claude-api";
 
         // Eligible candidates: library personas that have a profile, in stable order.
         var candidates = PersonaLibrary.All

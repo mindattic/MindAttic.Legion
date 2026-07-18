@@ -42,9 +42,9 @@ public class VotingConfigurationTests
         {
             UseSharedCredentials = false,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude"] = "k1", ["openai"] = "k2" },
+            ApiKeys              = { ["claude-api"] = "k1", ["openai"] = "k2" },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude", "openai" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
@@ -54,9 +54,9 @@ public class VotingConfigurationTests
         {
             UseSharedCredentials = false,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude"] = "k1", ["openai"] = "  " },
+            ApiKeys              = { ["claude-api"] = "k1", ["openai"] = "  " },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     [Test]
@@ -78,25 +78,24 @@ public class VotingConfigurationTests
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = false,
-            AllowedProviderIds   = new(StringComparer.OrdinalIgnoreCase) { "claude" },
+            AllowedProviderIds   = new(StringComparer.OrdinalIgnoreCase) { "claude-api" },
             ApiKeys              =
             {
-                ["claude"]   = "k1",
-                ["openai"]   = "k2",
-                ["deepseek"] = "k3",
+                ["claude-api"] = "k1",
+                ["openai"]     = "k2",
+                ["deepseek"]   = "k3",
             },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     [Test]
-    public void ActiveProviderIds_DefaultAllowedSet_IsTheTrustedFour()
+    public void ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders()
     {
-        // The default whitelist should be exactly the four trusted providers.
-        // A regression here would silently let untrusted providers join the
-        // panel for any caller that doesn't override AllowedProviderIds.
+        // The default whitelist: claude-api (API-key auth), claude-team (OAuth),
+        // openai, gemini, deepseek.
         Assert.That(new VotingConfiguration().AllowedProviderIds,
-            Is.EquivalentTo(new[] { "claude", "openai", "gemini", "deepseek" }));
+            Is.EquivalentTo(new[] { "claude-api", "claude-team", "openai", "gemini", "deepseek" }));
     }
 
     [Test]
@@ -105,14 +104,14 @@ public class VotingConfigurationTests
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = false,
-            // Default AllowedProviderIds = trusted four
+            // Default AllowedProviderIds = trusted providers
             ApiKeys              =
             {
-                ["claude"]  = "k1",
-                ["mistral"] = "k2", // untrusted; should not become active
+                ["claude-api"] = "k1",
+                ["mistral"]    = "k2", // untrusted; should not become active
             },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
     }
 
     // ── ActiveProviderIds: shared credentials + explicit keys interaction ──
@@ -120,7 +119,7 @@ public class VotingConfigurationTests
     [Test]
     public void ActiveProviderIds_SharedCredentialsDisabled_OnlyExplicitKeysCount()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = false,
@@ -133,28 +132,32 @@ public class VotingConfigurationTests
     [Test]
     public void ActiveProviderIds_SharedCredentialsEnabled_StoreContributes()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = true,
             AllowedProviderIds   = new(),
             ApiKeys              = { ["openai"] = "explicit" },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude", "openai" }));
+        // claude-team uses OAuth — it may be present on dev machines with a live token.
+        var active = cfg.ActiveProviderIds
+            .Where(id => !string.Equals(id, "claude-team", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.That(active, Is.EquivalentTo(new[] { "claude-api", "openai" }));
     }
 
     [Test]
     public void ActiveProviderIds_DedupesProvidersDeclaredInBothSources()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = true,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude"] = "from-explicit" },
+            ApiKeys              = { ["claude-api"] = "from-explicit" },
         };
-        // Claude shouldn't appear twice just because both sources name it.
-        Assert.That(cfg.ActiveProviderIds.Count(id => id == "claude"), Is.EqualTo(1));
+        // claude-api shouldn't appear twice just because both sources name it.
+        Assert.That(cfg.ActiveProviderIds.Count(id => string.Equals(id, "claude-api", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(1));
     }
 
     // ── Defaults sanity ────────────────────────────────────────────────────
@@ -163,8 +166,8 @@ public class VotingConfigurationTests
     public void Defaults_AreReasonable()
     {
         var cfg = new VotingConfiguration();
-        Assert.That(cfg.UseSharedCredentials, Is.True,         "UseSharedCredentials default");
-        Assert.That(cfg.JudgeProviderId,      Is.EqualTo("claude"), "JudgeProviderId default");
+        Assert.That(cfg.UseSharedCredentials, Is.True,              "UseSharedCredentials default");
+        Assert.That(cfg.JudgeProviderId,      Is.EqualTo("claude-api"), "JudgeProviderId default");
         Assert.That(cfg.ProviderTimeout,      Is.EqualTo(TimeSpan.FromMinutes(2)), "ProviderTimeout default");
         Assert.That(cfg.DefaultMaxTokens,     Is.EqualTo(2048),    "DefaultMaxTokens default");
         Assert.That(cfg.DefaultPersonalityMarkdown, Is.Empty,      "DefaultPersonalityMarkdown default");

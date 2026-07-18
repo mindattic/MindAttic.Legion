@@ -100,19 +100,19 @@ public class LegionClient
     /// </summary>
     public static IReadOnlyDictionary<string, string> DefaultModels { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        ["claude-api"]  = "claude-sonnet-4-6",
-        ["claude-team"] = "claude-sonnet-4-6",
-        ["openai"]     = "gpt-4.1-mini",
-        ["gemini"]     = "gemini-2.5-flash",
-        ["deepseek"]   = "deepseek-chat",
+        ["claude-api"]  = "claude-sonnet-5",
+        ["claude-team"] = "claude-sonnet-5",
+        ["openai"]     = "gpt-5.4-mini",
+        ["gemini"]     = "gemini-3.5-flash",
+        ["deepseek"]   = "deepseek-v4-flash",
         ["mistral"]    = "mistral-large-latest",
-        ["xai"]        = "grok-3-mini-fast",
+        ["xai"]        = "grok-4.3",
         ["groq"]       = "llama-3.3-70b-versatile",
         ["together"]   = "meta-llama/Llama-3-70b-chat-hf",
         ["openrouter"] = "meta-llama/llama-3.1-8b-instruct:free",
         ["fireworks"]  = "accounts/fireworks/models/llama-v3p1-70b-instruct",
         ["cohere"]     = "command-r-plus",
-        ["kimi"]       = "kimi-k2",
+        ["kimi"]       = "kimi-k3",
     };
 
     /// <summary>
