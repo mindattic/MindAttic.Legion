@@ -633,8 +633,7 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-            .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
+        return ExtractClaudeText(doc);
     }
 
     /// <summary>
@@ -919,8 +918,7 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-            .GetProperty("content")[0].GetProperty("text").GetString() ?? "";
+        return ExtractClaudeText(doc);
     }
 
     /// <summary>
@@ -941,6 +939,30 @@ public class LegionClient
     /// Sonnet 4.x, Haiku 4.x, and Opus 4.6 and earlier still accept
     /// <c>temperature</c> and must NOT be stripped.
     /// </summary>
+    /// <summary>
+    /// Extracts the assistant text from a Claude Messages response. Thinking-tier
+    /// models (Fable/Mythos, Sonnet 5+ with thinking) put a <c>thinking</c> block
+    /// FIRST in the content array — <c>content[0].text</c> throws KeyNotFound on
+    /// those responses (hit live 2026-07-18 on claude-sonnet-5; every 200 counted
+    /// as a provider failure and opened the circuit breaker). Concatenates every
+    /// <c>type=="text"</c> block instead.
+    /// </summary>
+    internal static string ExtractClaudeText(JsonDocument doc)
+    {
+        if (!doc.RootElement.TryGetProperty("content", out var content)
+            || content.ValueKind != JsonValueKind.Array)
+            return "";
+
+        var sb = new StringBuilder();
+        foreach (var block in content.EnumerateArray())
+        {
+            if (block.TryGetProperty("type", out var type) && type.GetString() == "text"
+                && block.TryGetProperty("text", out var text))
+                sb.Append(text.GetString());
+        }
+        return sb.ToString();
+    }
+
     internal static bool ClaudeModelDeprecatesTemperature(string? model)
     {
         if (string.IsNullOrWhiteSpace(model)) return false;

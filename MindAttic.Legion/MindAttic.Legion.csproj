@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,13 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
-    <!-- Whole-number versioning: major-only bumps (3.0.0 → 4.0.0 → 5.0.0). Minor/patch stay 0. -->
-    <Version>18.0.0</Version>
+    <!-- Whole-number versioning: major-only bumps (3.0.0 â†’ 4.0.0 â†’ 5.0.0). Minor/patch stay 0. -->
+    <Version>19.0.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
     <Company>MindAttic</Company>
-    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" — voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1024-persona library. Credential resolution flows through MindAttic.Vault: hosts call MindAtticCredentialStore.UseConfiguration(IConfiguration) to consume User Secrets / App Service Application Settings / Azure Key Vault, with the legacy %APPDATA%/MindAttic/LLM file kept as a backward-compat fallback. The bundled CLI wires this automatically.</Description>
+    <Description>One-stop shop for orchestrating groups of LLMs as a "legion" â€” voting, polling, scoring, proofreading, and persona-driven multi-voter workflows. Bundles a 1024-persona library. Credential resolution flows through MindAttic.Vault: hosts call MindAtticCredentialStore.UseConfiguration(IConfiguration) to consume User Secrets / App Service Application Settings / Azure Key Vault, with the legacy %APPDATA%/MindAttic/LLM file kept as a backward-compat fallback. The bundled CLI wires this automatically.</Description>
     <PackageTags>mindattic;legion;llm;anthropic;openai;voting;multi-llm;ai;agents</PackageTags>
     <PackageProjectUrl>https://github.com/mindattic/MindAttic.Legion</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mindattic/MindAttic.Legion.git</RepositoryUrl>
@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The 1024 personas' latest psychometric profiles (id → profile), so the
+    <!-- The 1024 personas' latest psychometric profiles (id â†’ profile), so the
          package delivers profile-carrying personas to consumers via
          PersonaLibrary.Profiles without any external data source. -->
     <EmbeddedResource Include="Resources\psychometric-profiles.json" />
