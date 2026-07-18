@@ -140,6 +140,13 @@ public class LegionClientWireTests
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-10"),      Is.True);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-5-0"),       Is.True);
 
+        // Claude 5 line: Sonnet 5+ / Haiku 5+ reject temperature (live 400 on
+        // claude-sonnet-5, 2026-07-18); dated snapshots and [1m] included.
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-sonnet-5"),          Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-sonnet-5-20260301"), Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-sonnet-5[1m]"),      Is.True);
+        Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-haiku-5"),           Is.True);
+
         // Still accept temperature → must NOT be stripped.
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-6"),       Is.False);
         Assert.That(LegionClient.ClaudeModelDeprecatesTemperature("claude-opus-4-5"),       Is.False);

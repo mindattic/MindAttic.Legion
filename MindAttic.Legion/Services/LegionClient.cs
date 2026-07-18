@@ -931,12 +931,15 @@ public class LegionClient
     ///     is always on and the sampling parameters are removed; and
     ///   • <b>Opus 4.7 and later</b> — every Opus 4.x minor ≥ 7 and every Opus
     ///     major ≥ 5, including the <c>[1m]</c> long-context and dated-snapshot
-    ///     suffixes.
+    ///     suffixes; and
+    ///   • <b>Sonnet 5 and later, Haiku 5 and later</b> — the Claude 5 line
+    ///     removes sampling parameters family-wide (confirmed live 2026-07-18:
+    ///     claude-sonnet-5 returns "`temperature` is deprecated for this model").
     /// The version is <i>parsed</i> rather than matched against a hard-coded id
-    /// list, so a future Opus launch (4.9, 4.10, 5.0, …) can't silently re-break
-    /// every Opus call the way appending a new literal each release would.
-    /// Sonnet, Haiku, and Opus 4.6 and earlier still accept <c>temperature</c>
-    /// and must NOT be stripped.
+    /// list, so a future launch (4.9, 4.10, 5.0, …) can't silently re-break
+    /// every call the way appending a new literal each release would.
+    /// Sonnet 4.x, Haiku 4.x, and Opus 4.6 and earlier still accept
+    /// <c>temperature</c> and must NOT be stripped.
     /// </summary>
     internal static bool ClaudeModelDeprecatesTemperature(string? model)
     {
@@ -947,6 +950,18 @@ public class LegionClient
         if (id.StartsWith("claude-fable-", StringComparison.OrdinalIgnoreCase)
          || id.StartsWith("claude-mythos-", StringComparison.OrdinalIgnoreCase))
             return true;
+
+        // Sonnet 5+ / Haiku 5+ — major-only ids ("claude-sonnet-5") and dated
+        // snapshots ("claude-sonnet-5-2026...") alike; 4.x keeps temperature.
+        foreach (var (prefix, threshold) in new[] { ("claude-sonnet-", 5), ("claude-haiku-", 5) })
+        {
+            if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            var rest = id.Substring(prefix.Length);
+            var k = 0;
+            while (k < rest.Length && char.IsDigit(rest[k])) k++;
+            if (k > 0 && int.TryParse(rest.Substring(0, k), out var familyMajor))
+                return familyMajor >= threshold;
+        }
 
         // Opus 4.7+ (and any later major). Parse "claude-opus-{major}-{minor}";
         // ignore any trailing suffix ([1m], -datestamp, etc.).
