@@ -212,6 +212,19 @@ public static class LlmProviderCatalog
                 "command-light",
             },
             ModelsApiEndpoint: "https://api.cohere.com/v1/models"),
+
+        new("kimi", "Kimi", "Moonshot AI",
+            DefaultModel: "kimi-k2",
+            DashboardUrl: "https://platform.moonshot.cn/",
+            KeysUrl: "https://platform.moonshot.cn/console/api-keys",
+            AvailableModels: new[]
+            {
+                "kimi-k2",
+                "moonshot-v1-128k",
+                "moonshot-v1-32k",
+                "moonshot-v1-8k",
+            },
+            ModelsApiEndpoint: "https://api.moonshot.cn/v1/models"),
     };
 
     /// <summary>Every supported provider in canonical order.</summary>

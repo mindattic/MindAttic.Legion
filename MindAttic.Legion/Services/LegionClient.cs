@@ -112,6 +112,7 @@ public class LegionClient
         ["openrouter"] = "meta-llama/llama-3.1-8b-instruct:free",
         ["fireworks"]  = "accounts/fireworks/models/llama-v3p1-70b-instruct",
         ["cohere"]     = "command-r-plus",
+        ["kimi"]       = "kimi-k2",
     };
 
     /// <summary>
@@ -137,6 +138,7 @@ public class LegionClient
         ["openrouter"] = "https://openrouter.ai/api/v1/chat/completions",
         ["fireworks"]  = "https://api.fireworks.ai/inference/v1/chat/completions",
         ["cohere"]     = "https://api.cohere.com/v2/chat",
+        ["kimi"]       = "https://api.moonshot.cn/v1/chat/completions",
     };
 
     /// <summary>True if Legion knows how to talk to this provider.</summary>
