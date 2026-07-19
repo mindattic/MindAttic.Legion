@@ -876,6 +876,14 @@ public class LegionClient
         // Older Claude models still accept it, so strip it only for Opus 4.7+.
         var omitTemperature = ClaudeModelDeprecatesTemperature(model);
 
+        // claude-sonnet-5+ (and claude-haiku-5+) run adaptive thinking by default
+        // when no `thinking` field is sent, consuming the entire token budget with
+        // thinking blocks and leaving zero text blocks.  Explicitly disable it for
+        // non-thinking calls.  Fable/Mythos always require thinking and reject
+        // {type:"disabled"} with a 400; Opus 4.7+ omit thinking safely without
+        // the field.
+        var disableThinking = ClaudeModelDefaultsAdaptiveThinking(model);
+
         // When a cached prefix is provided, send system as a content-block array:
         //   [{ type:"text", text:"<stable>", cache_control:{type:"ephemeral"} }, { type:"text", text:"<dynamic>" }]
         // Otherwise fall back to the plain string form.
@@ -898,9 +906,19 @@ public class LegionClient
         object payload;
         if (omitTemperature)
         {
-            payload = systemField is null
-                ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
-                : new { model, max_tokens = maxTokens, system = systemField, messages = apiMessages };
+            if (disableThinking)
+            {
+                var th = new { type = "disabled" };
+                payload = systemField is null
+                    ? new { model, max_tokens = maxTokens, thinking = th, messages = apiMessages } as object
+                    : new { model, max_tokens = maxTokens, thinking = th, system = systemField, messages = apiMessages };
+            }
+            else
+            {
+                payload = systemField is null
+                    ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
+                    : new { model, max_tokens = maxTokens, system = systemField, messages = apiMessages };
+            }
         }
         else
         {
@@ -1029,6 +1047,40 @@ public class LegionClient
                 if (j > 0 && int.TryParse(after.Substring(0, j), out var minor))
                     return major > 4 || (major == 4 && minor >= 7);
             }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the model omits <c>thinking</c> from
+    /// the request payload and the API runs adaptive thinking by default — which
+    /// exhausts the token budget with thinking blocks and yields empty text output.
+    /// For these models (claude-sonnet-5+, claude-haiku-5+) we must explicitly
+    /// send <c>thinking: {type: "disabled"}</c> on ordinary (non-thinking) calls.
+    /// Fable/Mythos are excluded: they always run thinking and reject
+    /// <c>{type: "disabled"}</c> with a 400.  Opus 4.7+ are excluded because
+    /// omitting the field correctly gives no-thinking behaviour on those models.
+    /// </summary>
+    internal static bool ClaudeModelDefaultsAdaptiveThinking(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        var id = model.Trim();
+
+        // Fable/Mythos: cannot disable thinking — {type:"disabled"} → 400.
+        if (id.StartsWith("claude-fable-", StringComparison.OrdinalIgnoreCase)
+         || id.StartsWith("claude-mythos-", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Sonnet 5+ and Haiku 5+: omitting thinking → adaptive ON by default.
+        foreach (var (prefix, threshold) in new[] { ("claude-sonnet-", 5), ("claude-haiku-", 5) })
+        {
+            if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            var rest = id.Substring(prefix.Length);
+            var k = 0;
+            while (k < rest.Length && char.IsDigit(rest[k])) k++;
+            if (k > 0 && int.TryParse(rest.Substring(0, k), out var familyMajor))
+                return familyMajor >= threshold;
         }
 
         return false;
