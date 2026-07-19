@@ -211,6 +211,12 @@ public static class LlmHealthDiagnoser
         if (code == 400 && LooksLikeQuotaSignal(msg))
             return (LlmHealthDiagnosis.QuotaExhausted, code);
 
+        // OpenAI returns 400 with error.code="model_not_found" when the model doesn't
+        // exist or the account lacks access. Classify as NotFound (same as HTTP 404)
+        // so callers can distinguish "unknown model" from "bad request payload".
+        if (code == 400 && LooksLikeModelNotFound(msg))
+            return (LlmHealthDiagnosis.NotFound, code);
+
         return code switch
         {
             400 => (LlmHealthDiagnosis.BadRequest, code),
@@ -243,6 +249,18 @@ public static class LlmHealthDiagnoser
             || lower.Contains("exceeded your current quota")
             || lower.Contains("api usage limits")      // Anthropic spend-limit 400
             || lower.Contains("usage limits");         // Anthropic spend-limit 400
+    }
+
+    private static bool LooksLikeModelNotFound(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        var lower = s.ToLowerInvariant();
+        // OpenAI: {"error":{"code":"model_not_found",...}} in the body, or the
+        // human-readable equivalents that appear in the message text.
+        return lower.Contains("model_not_found")
+            || lower.Contains("does not exist")
+            || lower.Contains("model does not exist")
+            || lower.Contains("no such model");
     }
 
     private static bool LooksLikeMissingCredential(string s)

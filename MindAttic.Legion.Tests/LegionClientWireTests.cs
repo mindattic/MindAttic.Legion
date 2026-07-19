@@ -158,6 +158,43 @@ public class LegionClientWireTests
     }
 
     [Test]
+    public void OpenAiModelDeprecatesTemperature_PinsTheModelFamilyExactly()
+    {
+        // o-series reasoning models.
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o1"),           Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o1-mini"),      Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o1-preview"),   Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o1-pro"),       Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o3"),           Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o3-mini"),      Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o3-pro"),       Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("o4-mini"),      Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("O4-MINI"),      Is.True,   // case-insensitive
+            "model id comparison must be case-insensitive");
+
+        // GPT-5 family (live 400 observed 2026-07-18 for temperature on gpt-5.4-mini).
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5"),        Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5.4"),      Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5.4-mini"), Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5.5"),      Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5.6-sol"),  Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-5.6-terra"),Is.True);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("GPT-5.4-MINI"), Is.True);
+
+        // Legacy chat models — still accept temperature; must NOT be stripped.
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-4o"),       Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-4o-mini"),  Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-4.1"),      Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-4.1-mini"), Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-4.1-nano"), Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("gpt-3.5-turbo"),Is.False);
+        // 'o' + letter is not an o-series model.
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature("omni-moderation-latest"), Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature(""),             Is.False);
+        Assert.That(LegionClient.OpenAiModelDeprecatesTemperature(null),           Is.False);
+    }
+
+    [Test]
     public async Task Claude_Opus48_OmitsTemperatureFromPayload()
     {
         // Regression guard for the stale-package bug: Opus 4.8 deprecates
@@ -217,6 +254,71 @@ public class LegionClientWireTests
         Assert.That(msgs[0].GetProperty("content").GetString(), Is.EqualTo("You help."));
         Assert.That(msgs[1].GetProperty("role").GetString(),    Is.EqualTo("user"));
         Assert.That(msgs[1].GetProperty("content").GetString(), Is.EqualTo("hi"));
+    }
+
+    [TestCase("gpt-5.4-mini")]
+    [TestCase("gpt-5.4")]
+    [TestCase("gpt-5")]
+    [TestCase("gpt-5.6-sol")]
+    [TestCase("o1")]
+    [TestCase("o1-mini")]
+    [TestCase("o3")]
+    [TestCase("o3-mini")]
+    [TestCase("o4-mini")]
+    public async Task OpenAi_ReasoningModels_OmitTemperatureAndUseMaxCompletionTokens(string model)
+    {
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.OpenAiOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("openai", "sk", model, "s", "u",
+            maxTokens: 512, temperature: 0.42);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.False,
+            $"{model} must not send temperature");
+        Assert.That(doc.RootElement.TryGetProperty("max_tokens", out _), Is.False,
+            $"{model} must use max_completion_tokens, not max_tokens");
+        Assert.That(doc.RootElement.GetProperty("max_completion_tokens").GetInt32(),
+            Is.EqualTo(512));
+    }
+
+    [TestCase("gpt-4.1-mini")]
+    [TestCase("gpt-4.1")]
+    [TestCase("gpt-4.1-nano")]
+    [TestCase("gpt-4o")]
+    [TestCase("gpt-4o-mini")]
+    public async Task OpenAi_LegacyModels_SendTemperatureAndMaxTokens(string model)
+    {
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.OpenAiOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        await client.CallAsync("openai", "sk", model, "s", "u",
+            maxTokens: 256, temperature: 0.7);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.True,
+            $"{model} must send temperature");
+        Assert.That(doc.RootElement.GetProperty("max_tokens").GetInt32(), Is.EqualTo(256));
+        Assert.That(doc.RootElement.TryGetProperty("max_completion_tokens", out _), Is.False,
+            $"{model} must use max_tokens, not max_completion_tokens");
+    }
+
+    [TestCase("deepseek")]
+    [TestCase("xai")]
+    [TestCase("groq")]
+    public async Task OpenAiCompatible_NonOpenAiProviders_AlwaysSendTemperature(string providerId)
+    {
+        // Temperature stripping is an openai-provider-only behaviour; other OpenAI-compatible
+        // providers (deepseek, xai, groq, etc.) do not reject temperature parameters.
+        var handler = new FixedResponseHandler(HttpStatusCode.OK, Bodies.OpenAiOk);
+        var client  = new LegionClient(new HttpClient(handler), TestOptions.Instant());
+
+        // o1-style model name — would be stripped for openai; must not strip for others.
+        await client.CallAsync(providerId, "k", "o1", "s", "u", temperature: 0.5);
+
+        using var doc = JsonDocument.Parse(handler.Bodies[0]);
+        Assert.That(doc.RootElement.TryGetProperty("temperature", out _), Is.True,
+            $"Provider {providerId} must not have temperature stripped (not openai)");
     }
 
     [TestCase("openai")]

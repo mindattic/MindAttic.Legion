@@ -965,6 +965,33 @@ public class LegionClient
         return sb.ToString();
     }
 
+    /// <summary>
+    /// True when the OpenAI model rejects the <c>temperature</c> parameter and requires
+    /// <c>max_completion_tokens</c> instead of <c>max_tokens</c>. Covers:
+    ///   • The <b>o-series reasoning models</b> — o1, o2, o3, o4 and variants such as
+    ///     o1-mini, o1-pro, o3-pro, o4-mini. These models fix temperature internally;
+    ///     sending a non-1.0 value returns HTTP 400 invalid_request_error.
+    ///   • The <b>GPT-5 family</b> — gpt-5, gpt-5.4-mini, gpt-5.4, gpt-5.5, gpt-5.6-sol, etc.
+    ///     GPT-5 deprecates temperature across all variants (live 400 observed 2026-07-18).
+    /// Standard chat models (gpt-4o, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, etc.) still
+    /// accept temperature and must NOT be stripped. Pattern-matched rather than enumerated
+    /// so future o5/gpt-6 launches can't silently re-break requests.
+    /// </summary>
+    internal static bool OpenAiModelDeprecatesTemperature(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        var id = model.Trim().ToLowerInvariant();
+        // o-series: o1, o1-mini, o1-preview, o1-pro, o2, o3, o3-mini, o3-pro, o4-mini, …
+        // Pattern: starts with 'o' + digit, then end-of-string or '-'.
+        if (id.Length >= 2 && id[0] == 'o' && char.IsDigit(id[1])
+            && (id.Length == 2 || id[2] == '-'))
+            return true;
+        // GPT-5.x: gpt-5, gpt-5.4-mini, gpt-5.4, gpt-5.5, gpt-5.6-sol, gpt-5.6-terra, …
+        if (id == "gpt-5" || id.StartsWith("gpt-5.") || id.StartsWith("gpt-5-"))
+            return true;
+        return false;
+    }
+
     internal static bool ClaudeModelDeprecatesTemperature(string? model)
     {
         if (string.IsNullOrWhiteSpace(model)) return false;
@@ -1152,7 +1179,13 @@ public class LegionClient
         foreach (var m in messages.Where(x => !string.Equals(x.Role, "system", StringComparison.OrdinalIgnoreCase)))
             apiMessages.Add(new { role = m.Role.ToLowerInvariant(), content = m.Content });
 
-        var payload = new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
+        // OpenAI o-series (o1/o3/o4) and GPT-5 models reject temperature and require
+        // max_completion_tokens instead of max_tokens — HTTP 400 otherwise.
+        var openAiReasoning = providerId.Equals("openai", StringComparison.OrdinalIgnoreCase)
+            && OpenAiModelDeprecatesTemperature(model);
+        object payload = openAiReasoning
+            ? new { model, max_completion_tokens = maxTokens, messages = apiMessages }
+            : new { model, max_tokens = maxTokens, temperature, messages = apiMessages };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
