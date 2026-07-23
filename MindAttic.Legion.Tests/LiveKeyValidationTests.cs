@@ -136,21 +136,25 @@ public class LiveKeyValidationTests
                                   $"({r.Diagnosis}) in {r.ElapsedMilliseconds}ms");
 
         // Hard block: key is demonstrably invalid or absent. Rotate before committing.
+        // Exception: claude-team authenticates via Claude Code CLI OAuth, not an API key.
+        // MissingCredential there just means the CLI isn't logged in on this machine — not a dead key.
+        static bool IsOAuthOnly(string id) =>
+            string.Equals(id, "claude-team", StringComparison.OrdinalIgnoreCase);
+
         var authBroken = results
-            .Where(r => r.Diagnosis is LlmHealthDiagnosis.AuthInvalid
-                                    or LlmHealthDiagnosis.AuthForbidden
-                                    or LlmHealthDiagnosis.MissingCredential)
+            .Where(r => r.Diagnosis is LlmHealthDiagnosis.AuthInvalid or LlmHealthDiagnosis.AuthForbidden
+                     || (r.Diagnosis == LlmHealthDiagnosis.MissingCredential && !IsOAuthOnly(r.ProviderId)))
             .Select(r => $"{r.ProviderId}: {r.Diagnosis} " +
                          $"(HTTP {r.HttpStatusCode?.ToString() ?? "n/a"}) — {r.ActionableMessage}")
             .ToList();
 
         // Soft warn: key proved itself valid but the account has an operational issue
         // (quota exhausted, rate-limited, provider offline, etc.). The commit may proceed.
+        // Also: claude-team MissingCredential = CLI not logged in via OAuth on this machine — expected.
         var operational = results
             .Where(r => !r.IsHealthy
-                     && r.Diagnosis is not (LlmHealthDiagnosis.AuthInvalid
-                                         or LlmHealthDiagnosis.AuthForbidden
-                                         or LlmHealthDiagnosis.MissingCredential))
+                     && r.Diagnosis is not (LlmHealthDiagnosis.AuthInvalid or LlmHealthDiagnosis.AuthForbidden)
+                     && !(r.Diagnosis == LlmHealthDiagnosis.MissingCredential && !IsOAuthOnly(r.ProviderId)))
             .ToList();
 
         foreach (var r in operational)
