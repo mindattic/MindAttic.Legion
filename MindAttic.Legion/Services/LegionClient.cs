@@ -169,7 +169,8 @@ public class LegionClient
         double temperature = 0.7,
         CancellationToken ct = default,
         string? cachedSystemPrefix = null,
-        bool cacheUserMessage = false)
+        bool cacheUserMessage = false,
+        CancellationToken? userCancelToken = null)
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
@@ -182,7 +183,8 @@ public class LegionClient
 
         return ExecuteWithResilienceAsync(providerId,
             () => DispatchAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage),
-            ct);
+            ct,
+            userCancelToken);
     }
 
     /// <summary>
@@ -695,7 +697,8 @@ public class LegionClient
     private async Task<T> ExecuteWithResilienceAsync<T>(
         string providerId,
         Func<Task<T>> action,
-        CancellationToken ct)
+        CancellationToken ct,
+        CancellationToken? userCancelToken = null)
     {
         var attempt = 0;
         var delay = options.InitialBackoff;
@@ -713,7 +716,12 @@ public class LegionClient
                 CircuitBreaker.RecordSuccess(providerId);
                 return result;
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            // Skip failure recording for genuine user cancellations. When the caller
+            // adds its own per-provider timeout via a linked CTS (e.g. LlmVotingProvider),
+            // ct.IsCancellationRequested is true for BOTH user cancel and timeout — use the
+            // original user token (userCancelToken) as the discriminant so timeouts do fall
+            // through to the transient handler and get recorded against the breaker.
+            catch (OperationCanceledException) when ((userCancelToken ?? ct).IsCancellationRequested) { throw; }
             catch (ArgumentException)
             {
                 // Client-side validation (e.g. unsupported provider / operation), not
@@ -1034,12 +1042,21 @@ public class LegionClient
 
         // Opus 4.7+ (and any later major). Parse "claude-opus-{major}-{minor}";
         // ignore any trailing suffix ([1m], -datestamp, etc.).
+        // Also handle bare-major IDs ("claude-opus-5") — major 5+ always deprecates temperature.
         const string opusPrefix = "claude-opus-";
         if (id.StartsWith(opusPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            var rest = id.Substring(opusPrefix.Length);          // "4-8", "4-7[1m]", "5-0-2026…"
+            var rest = id.Substring(opusPrefix.Length);          // "4-8", "4-7[1m]", "5", "5-0-2026…"
             var dash = rest.IndexOf('-');
-            if (dash > 0 && int.TryParse(rest.Substring(0, dash), out var major))
+            if (dash < 0)
+            {
+                // Bare major ("claude-opus-5") — digit-walk same as Sonnet/Haiku.
+                var k = 0;
+                while (k < rest.Length && char.IsDigit(rest[k])) k++;
+                if (k > 0 && int.TryParse(rest.Substring(0, k), out var bareMajor))
+                    return bareMajor >= 5;
+            }
+            else if (dash > 0 && int.TryParse(rest.Substring(0, dash), out var major))
             {
                 var after = rest.Substring(dash + 1);            // "8", "7[1m]", "0-2026…"
                 var j = 0;
@@ -1146,21 +1163,25 @@ public class LegionClient
         //
         // Gemini 2.5+ thinking models prepend a part with "thought": true that
         // contains internal reasoning, not the actual response. Skip all thought
-        // parts and return the first non-thought text part.
+        // parts and concatenate all non-thought text parts (a single response
+        // can legitimately span multiple parts; returning on the first would
+        // silently drop every subsequent part including the actual JSON payload).
         if (root.TryGetProperty("candidates", out var candidates)
             && candidates.ValueKind == JsonValueKind.Array && candidates.GetArrayLength() > 0
             && candidates[0].TryGetProperty("content", out var content)
             && content.TryGetProperty("parts", out var parts)
             && parts.ValueKind == JsonValueKind.Array)
         {
+            var sb = new StringBuilder();
             foreach (var part in parts.EnumerateArray())
             {
                 if (part.TryGetProperty("thought", out var thoughtEl)
                     && thoughtEl.ValueKind == JsonValueKind.True)
                     continue;
                 if (part.TryGetProperty("text", out var text))
-                    return text.GetString() ?? "";
+                    sb.Append(text.GetString());
             }
+            if (sb.Length > 0) return sb.ToString();
         }
         return "";
     }

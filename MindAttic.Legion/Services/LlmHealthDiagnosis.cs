@@ -101,7 +101,7 @@ public static class LlmHealthDiagnoser
                 return (LlmHealthDiagnosis.CancelledByUser, null);
 
             case TaskCanceledException:
-                return (LlmHealthDiagnosis.Timeout, 408);
+                return (LlmHealthDiagnosis.Timeout, null);
 
             case OperationCanceledException:
                 return (LlmHealthDiagnosis.Timeout, null);

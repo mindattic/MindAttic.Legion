@@ -48,7 +48,10 @@ public class LlmVotingProvider
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(config.ProviderTimeout);
-        return await client.CallAsync(providerId, key, model, systemPrompt, userMessage, maxTokens, temperature, cts.Token);
+        // Pass the original user token as userCancelToken so the resilience layer
+        // can distinguish a per-provider timeout (circuit-breaker failure) from a
+        // genuine user cancellation (no failure recorded).
+        return await client.CallAsync(providerId, key, model, systemPrompt, userMessage, maxTokens, temperature, cts.Token, userCancelToken: ct);
     }
 
     /// <summary>

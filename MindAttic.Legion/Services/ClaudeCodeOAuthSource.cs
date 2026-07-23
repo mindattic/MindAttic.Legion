@@ -89,13 +89,15 @@ internal static class ClaudeCodeOAuthSource
         lock (RefreshLock)
         {
             // Another thread may have refreshed while we waited for the lock.
-            var (existingAccess, _, existingExpiry) = ReadCredentials();
+            // Re-read the refresh token too — the Claude Code CLI may have rotated
+            // it in the window between our initial read and acquiring the lock.
+            var (existingAccess, freshRefresh, existingExpiry) = ReadCredentials();
             if (NotExpiredSoon(existingExpiry)) return existingAccess;
 
             var payload = JsonSerializer.Serialize(new
             {
                 grant_type    = "refresh_token",
-                refresh_token = refreshToken,
+                refresh_token = freshRefresh ?? refreshToken,
                 client_id     = ClientId,
             });
 
