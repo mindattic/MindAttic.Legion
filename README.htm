@@ -1,0 +1,1417 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MindAttic.Legion</title>
+<meta name="description" content="Multi-LLM consensus engine for .NET 10. Turn a panel of frontier models — Claude, ChatGPT, Gemini, DeepSeek, and ten more — into a single trustworthy answer with quorum, reasoning, and confidence. Vote, decide, score,...">
+<meta name="generator" content="MindAttic Codex build-readme.ps1">
+<meta name="generated" content="2026-08-14">
+<style>:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;
+  --border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;
+  --h1:#58a6ff;--h2:#79c0ff;--h3:#d2a8ff;
+  --link:#58a6ff;--code:#f0f6fc;
+  --sidebar-w:272px;--content-max:900px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);font-size:15px;line-height:1.8
+}
+#layout{display:flex;min-height:100vh}
+#sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+  background:var(--bg2);border-right:1px solid var(--border);
+  padding:1.5rem 0
+}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-track{background:transparent}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+#toc-inner{padding:0 .75rem}
+.toc-title{
+  display:block;font-size:.68rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.1em;padding:.1rem .5rem .9rem
+}
+.toc-a{
+  display:block;padding:.22rem .5rem;font-size:.79rem;color:var(--muted);
+  border-radius:4px;text-decoration:none;line-height:1.35;margin-bottom:1px;
+  transition:color .15s,background .15s
+}
+.toc-a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.toc-a.active{color:var(--h1);background:rgba(88,166,255,.12);font-weight:500}
+.toc-a.is-h3{padding-left:1.25rem;font-size:.75rem}
+.toc-sep{border:none;border-top:1px solid var(--border);margin:.6rem .5rem}
+#content{
+  flex:1;min-width:0;
+  max-width:calc(var(--sidebar-w) + var(--content-max));
+  padding:2.5rem 3.5rem 5rem
+}
+h1{color:var(--h1);font-size:2rem;font-weight:700;
+   border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1.25rem}
+h2{color:var(--h2);font-size:1.35rem;font-weight:600;
+   margin-top:2.75rem;margin-bottom:.75rem;
+   border-bottom:1px solid var(--border);padding-bottom:.3rem}
+h3{color:var(--h3);font-size:1.05rem;font-weight:600;margin-top:1.5rem;margin-bottom:.4rem}
+h4{color:var(--text);font-size:.95rem;font-weight:600;margin-top:1rem}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:.7rem 0}
+ul,ol{padding-left:1.75rem;margin:.4rem 0}
+li{margin:.2rem 0}
+li>ul,li>ol{padding-left:1.5rem;margin:.1rem 0}
+hr{border:none;border-top:1px solid var(--border);margin:2.25rem 0}
+blockquote{
+  border-left:3px solid var(--h1);background:var(--bg2);
+  color:var(--muted);padding:.65rem 1rem;margin:1rem 0;
+  border-radius:0 4px 4px 0;font-style:italic
+}
+blockquote p{margin:0}
+code{
+  background:var(--bg2);color:var(--code);
+  padding:.15em .45em;border-radius:4px;font-size:.84em;
+  font-family:'Cascadia Code','Fira Code','Consolas','SF Mono',monospace
+}
+pre{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:6px;padding:1rem 1.25rem;overflow-x:auto;
+  margin:1rem 0;position:relative
+}
+pre code{background:none;padding:0;font-size:.84rem;line-height:1.65;color:var(--code)}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.875rem;overflow-x:auto;display:block}
+thead th{
+  background:var(--bg3);color:var(--h2);font-weight:600;
+  text-align:left;padding:.5rem .75rem;border:1px solid var(--border)
+}
+tbody td{padding:.4rem .75rem;border:1px solid var(--border);vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+.cpbtn{
+  position:absolute;top:.5rem;right:.5rem;
+  background:var(--bg3);color:var(--muted);
+  border:1px solid var(--border);border-radius:4px;
+  padding:.15rem .55rem;font-size:.71rem;font-family:inherit;
+  cursor:pointer;opacity:0;transition:opacity .15s,color .15s;line-height:1.5
+}
+pre:hover .cpbtn{opacity:1}
+.cpbtn:hover{color:var(--text)}
+.cpbtn.ok{color:#7ee787}
+.codex-footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.78rem}
+@media(max-width:820px){
+  #sidebar{display:none}
+  #content{padding:1.5rem 1.25rem 3.5rem}
+}</style>
+</head>
+<body>
+<div id="layout">
+  <nav id="sidebar" aria-label="Table of contents">
+    <div id="toc-inner"></div>
+  </nav>
+  <main id="content">
+<h1 id="mindatticlegion">MindAttic.Legion</h1>
+<p><strong>Multi-LLM consensus engine for .NET 10.</strong> Turn a panel of frontier models — Claude, ChatGPT, Gemini, DeepSeek, and ten more — into a single trustworthy answer with quorum, reasoning, and confidence. Vote, decide, score, poll, generate, or persona-wear. One panel for the calls you can't afford to get wrong.</p>
+<p>One LLM is one opinion. When a contradiction, a misclassification, or a bad route is expensive, you don't want a single model that bluffs — you want a panel that votes. Legion is the panel: unified transport across fourteen provider connections, a voting layer with quorum and dissent, tiered model selection that survives version drift, automatic failover when a provider blips, a 1024-persona library, and a CLI (<code>legion.exe</code>) that lets shell scripts, CI jobs, and other coding agents call the panel directly.</p>
+<p>Portable: Legion has no dependency on any specific MindAttic project. Drop it into a <code>csproj</code>, register it via DI, hand it your API keys (or point it at the shared MindAttic keyring), and you have the panel.</p>
+<p>See also: <a href="docs/BIBLE.md">docs/BIBLE.md</a> (architecture canon and Laws), <a href="docs/AMENDMENTS.md">docs/AMENDMENTS.md</a> (change log), <a href="docs/USER<em>STORIES.md">docs/USER</em>STORIES.md</a> (test-cited stories).</p>
+<hr>
+<h2 id="why-legion">Why Legion</h2>
+<p>A single LLM is a single opinion. When the cost of a wrong answer is real — a story contradiction, a misclassified record, a bad route — you want a <em>panel</em> that votes, not one model that bluffs.</p>
+<p>Legion is the panel:</p>
+<ul>
+<li><strong>Multi-provider transport</strong> — one <code>LegionClient</code> talks to fourteen provider connections: Claude via a direct Anthropic API key (<code>claude-api</code>), Claude via the Claude Code CLI's own OAuth session (<code>claude-team</code>), ChatGPT, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together AI, OpenRouter, Fireworks AI, Cohere, Kimi (Moonshot AI), and Perplexity — plus an explicit-URL escape hatch for self-hosted OpenAI-compatible endpoints (Ollama, vLLM, RunPod, …).</li>
+<li><strong>Voting</strong> — call every active provider in parallel, tally their answers, return the consensus with reasoning + dissent.</li>
+<li><strong>Decision-making</strong> — <code>DecideAsync(question, options)</code> picks one option from a fixed list with confidence.</li>
+<li><strong>Scoring</strong> — multi-dimensional rubric evaluation (1–10 per dimension), aggregate scores, weakest-dimension feedback, ready-to-inject improvement directives.</li>
+<li><strong>Personas</strong> — every voter can wear a persona (a markdown system prompt). Use the bundled 1024-persona library, build a panel of N unique voices, or wrap a fictional character's psychology to vote <em>as</em> them.</li>
+<li><strong>Psychometric profiles</strong> — score the whole persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style), persisted as one faithful JSON file per persona. The model only answers items in-character; scoring is deterministic in code. Use the profiles to build trait-diverse panels and to segment a vote by composition. See <a href="#legionexe-psychometrics--score-the-persona-library">Psychometric persona profiles</a>.</li>
+<li><strong>Tiered model selection</strong> — every provider exposes a Low / Medium / High / Higher / Highest tier. The five providers Legion explicitly maps (<code>claude-api</code>, <code>claude-team</code>, <code>openai</code>, <code>gemini</code>, <code>deepseek</code>) resolve to a concrete model per tier; every other provider falls back to its single <code>DefaultModel</code> at any tier. Pick the tier that fits the work: Low for bulk polls, Medium for creative generation, High for architectural decisions. The catalog hides specific model versions behind tier names so a model-id rotation doesn't break callers.</li>
+<li><strong>Autonomous architectural decisions</strong> — <code>legion.exe ask</code> is purpose-built for the loop where another coding CLI (Claude Code, Codex) blocks on a user prompt: an outer monitor pipes the question to <code>ask</code>, the panel deliberates on the High tier, and the bare answer flows back to the blocked CLI. Architect-framed voters, auto-pulls <code>CLAUDE.md</code>/<code>README</code>/git as context, default panel is a four-provider trust list (<code>claude-api</code>, <code>openai</code>, <code>gemini</code>, <code>deepseek</code>) with automatic refill on outages.</li>
+<li><strong>Bulk distribution sampling</strong> — <code>legion.exe poll</code> round-robins N voters across the trusted four at a chosen tier (Low by default), reports a count-sorted distribution + plurality winner. The cheap fast tool for "how does the panel split on this?"</li>
+<li><strong>Bulk creative generation</strong> — <code>legion.exe generate</code> fans out one batched call per provider asking for that provider's share of N items, deduplicates across the merge, and emits newline-separated results to stdout. Built for <code>legion generate "100 hero-vibe names" | head -25 &gt; names.txt</code>.</li>
+<li><strong>On-demand connectivity probe</strong> — <code>legion.exe tiers</code> probes every (trusted-provider, tier) cell with a tiny prompt and prints a matrix. Use it before a critical session to confirm the panel is healthy.</li>
+<li><strong>Per-project panels via <code>legion.json</code></strong> — drop a <code>legion.json</code> at a project's root to declare that project's voter list, judge, model overrides, API keys, and concurrency cap without touching code. Currently consumed by the CLI's <code>vote</code> subcommand (walks up from cwd looking for the file); library consumers apply it explicitly via <code>LegionConfig.LoadFromDirectory()?.ApplyTo(config)</code>.</li>
+<li><strong>Direct transport for non-voting calls</strong> — <code>LegionClient</code> also does multi-turn chat, Anthropic prompt caching, OpenAI embeddings, OpenAI (DALL·E) image generation, Claude document input (native PDF, extracted DOCX/EPUB/text), and a fallback chain that tries providers in order until one answers.</li>
+<li><strong>CLI</strong> — <code>legion.exe status</code>, <code>providers</code>, <code>models</code>, <code>personas</code>, <code>panel</code>, <code>health</code>, <code>ping</code>, <code>vote</code>, <code>ask</code>, <code>poll</code>, <code>generate</code>, <code>tiers</code>, <code>psychometrics</code> — same engine, no .NET app required.</li>
+</ul>
+<hr>
+<h2 id="install">Install</h2>
+<p>The library is published as a NuGet package (<code>MindAttic.Legion</code>, MIT-licensed) and also consumable as a project reference from a sibling repo:</p>
+<pre><code class="language-xml">&lt;ItemGroup&gt;
+  &lt;ProjectReference Include="..\..\MindAttic.Legion\MindAttic.Legion\MindAttic.Legion.csproj" /&gt;
+&lt;/ItemGroup&gt;</code></pre>
+<p>Target framework: <strong>net10.0</strong>. The package depends on <code>MindAttic.Vault</code> and <code>Microsoft.Extensions.{DependencyInjection.Abstractions, Http, Logging.Abstractions}</code> only — no dependency on any specific MindAttic application (see <a href="docs/BIBLE.md#LEG-LAW-1"><code>docs/BIBLE.md#LEG-LAW-1</code></a>).</p>
+<hr>
+<h2 id="quick-start">Quick start</h2>
+<pre><code class="language-csharp">using MindAttic.Legion;
+using MindAttic.Legion.Providers;
+using Microsoft.Extensions.DependencyInjection;
+
+// 1) Configure
+var services = new ServiceCollection();
+services.AddLogging();
+services.AddLLMVoting(new VotingConfiguration
+{
+    ApiKeys =
+    {
+        ["claude-api"] = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "",
+        ["openai"]     = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "",
+    },
+    JudgeProviderId = "claude-api",
+});
+var sp = services.BuildServiceProvider();
+
+// 2) Vote
+var voting = sp.GetRequiredService&lt;LlmVotingService&gt;();
+var result = await voting.VoteAsync(
+    question: "Should Kyle take the contract?",
+    context : "Contract details: ...",
+    quorum  : Quorum.SimpleMajority);
+
+Console.WriteLine($"Consensus: {result.Consensus}  ({result.ConsensusStrength:P0})");
+Console.WriteLine(result.NarrativeSummary);</code></pre>
+<p><code>AddLLMVoting</code> (see <a href="MindAttic.Legion/Services/ServiceCollectionExtensions.cs"><code>ServiceCollectionExtensions</code></a>) registers <code>LlmVotingService</code>, <code>LlmVotingProvider</code>, and a <code>LegionClient</code> that shares the same key resolution as the voting layer, so a service that injects <code>LegionClient</code> directly sees the same keys as the voting service. Call <code>services.AddLegionClient()</code> instead if you only want the transport (health checks, direct provider calls) without the voting machinery.</p>
+<p>Zero-config also works: <code>new VotingConfiguration()</code> with empty <code>ApiKeys</code> resolves every key from the shared MindAttic credential store (<code>UseSharedCredentials</code> defaults to <code>true</code>).</p>
+<hr>
+<h2 id="voting-modes">Voting modes</h2>
+<h3 id="voteasync-open-ended-consensus"><code>VoteAsync</code> — open-ended consensus</h3>
+<p>The simplest call: ask a question, every voter writes a free-form answer, a judge LLM synthesizes the consensus.</p>
+<pre><code class="language-csharp">var r = await voting.VoteAsync("What weapon does Kyle carry?", canonContext, Quorum.Plurality);
+// r.Consensus == "Silence (a corundum-edged tantō)"</code></pre>
+<h3 id="voteasync-with-options-choice-vote"><code>VoteAsync</code> with <code>Options</code> — choice vote</h3>
+<p>When you want a vote among fixed options (much cheaper to tally — exact-match wins).</p>
+<pre><code class="language-csharp">var req = new VoteRequest
+{
+    Question = "Severity of this canon contradiction?",
+    Context  = chapterPlusCanon,
+    Options  = new() { "low", "medium", "high" },
+};
+var r = await voting.VoteAsync(req, Quorum.SimpleMajority);
+// r.Consensus is one of "low" | "medium" | "high"</code></pre>
+<h3 id="decideasync-judgment-call-with-reasoning"><code>DecideAsync</code> — judgment call with reasoning</h3>
+<p>Sugar over choice voting. <strong>Use this when an automated workflow has to pick one option and move on</strong> (route a request, fill in a field, resolve a tie). Returns a <code>DecisionResult</code> with <code>Choice</code>, <code>Reasoning</code>, <code>Confidence</code>, and <code>QuorumReached</code>.</p>
+<pre><code class="language-csharp">var d = await voting.DecideAsync(
+    question: "Which field in this entity record stores Kyle's primary weapon carry location?",
+    options : new[] { "personality", "equipment", "tags", "story_hooks" },
+    context : kyleEntityFileJson,
+    quorum  : Quorum.Plurality);
+
+if (d.QuorumReached)
+{
+    Console.WriteLine($"Use field: {d.Choice}  ({d.Confidence:P0})");
+    Console.WriteLine($"Why: {d.Reasoning}");
+}
+else
+{
+    // Panel was too divided — escalate to a human, or rerun with stricter quorum.
+}</code></pre>
+<p><code>DecideAsync</code> is the right entry point any time your code would otherwise have to hard-code a branch or guess. Hand the decision to the panel.</p>
+<h3 id="scoreasync-multi-dimensional-rubric"><code>ScoreAsync</code> — multi-dimensional rubric</h3>
+<p>Rate something across multiple dimensions (1–10 each). Returns aggregate scores, failing dimensions, per-dimension consensus strengths/failures, and synthesized improvement directives.</p>
+<pre><code class="language-csharp">var req = new ScoredVoteRequest
+{
+    Question         = "Score this scene against the rubric.",
+    Context          = sceneText,
+    Dimensions       = new() { "voice", "tension", "specificity", "clichéness" },
+    FailureThreshold = 6,
+};
+var r = await voting.ScoreAsync(req);
+
+foreach (var (dim, score) in r.AggregateScores)
+    Console.WriteLine($"  {dim,-15}  {score:0.0}");
+foreach (var directive in r.ImprovementDirectives)
+    Console.WriteLine($"  → {directive}");</code></pre>
+<p>A dimension that every voter omitted has no aggregate entry at all (never a phantom <code>0.0</code>), so it can't wrongly get flagged as failing or drag the average down. <code>ConsensusStrengths</code>/<code>ConsensusFailures</code> surface flags that at least half the panel raised.</p>
+<h3 id="votewithpersonasasync-character-panel-voices"><code>VoteWithPersonasAsync</code> — character / panel voices</h3>
+<p>Build a panel of unique voices (or a single character's psychology) and have <em>them</em> vote.</p>
+<pre><code class="language-csharp">// Generic 5-voice panel spread across active providers
+var panel = voting.CreatePanel(count: 5, fallbackProviderId: "claude-api");
+var r = await voting.VoteWithProfilesAsync(req, Quorum.TwoThirds, panel);
+
+// Or vote as a character
+var kylePsychology = File.ReadAllText("kyle-psychology.md");
+var kyleVoter = VoterProfile.ForCharacter("Kyle", kylePsychology, "claude-api", apiKey: claudeKey);
+var rk = await voting.VoteWithPersonasAsync(
+    "Would Kyle accept this contract?",
+    contractContext,
+    Quorum.Unanimous,
+    new[] { kyleVoter });</code></pre>
+<hr>
+<h2 id="quorum">Quorum</h2>
+<p><code>Quorum</code> controls how strict the agreement threshold is.</p>
+<table><thead><tr>
+<th>Value</th>
+<th>Threshold</th>
+<th>Use when</th>
+</tr></thead><tbody>
+<tr>
+<td><code>Plurality</code></td>
+<td>Any winning answer counts</td>
+<td>Cheapest. The vote <em>will</em> return something — even a 1-of-4 answer wins. Good for surfacing all viewpoints.</td>
+</tr>
+<tr>
+<td><code>SimpleMajority</code></td>
+<td>&gt; 50% must agree</td>
+<td>Default for most decisions. A 2-of-4 tie <strong>fails</strong> (strict <code>agree*2 &gt; total</code>, not <code>&gt;=</code>).</td>
+</tr>
+<tr>
+<td><code>TwoThirds</code></td>
+<td>≥ 66.7% must agree</td>
+<td>Computed as <code>agree*3 &gt;= total*2</code> (exact integer arithmetic), so a 2-of-3 panel clears it.</td>
+</tr>
+<tr>
+<td><code>Unanimous</code></td>
+<td>100% must agree</td>
+<td>Use for irreversible / canonical actions.</td>
+</tr>
+</tbody></table>
+<p>If quorum isn't reached, <code>result.QuorumReached == false</code> and <code>result.Consensus == ""</code>. Your code decides whether to escalate, retry with a different quorum, or accept the plurality answer anyway.</p>
+<hr>
+<h2 id="providers-and-models">Providers and models</h2>
+<p>Legion knows how to call <strong>14 provider connections</strong>, all through the single <code>LegionClient</code>. Configure them via <code>VotingConfiguration.ApiKeys</code>. A provider is "active" for voting when it has a non-empty key (explicit or from the shared store) <strong>and</strong> passes the <code>AllowedProviderIds</code> whitelist (see <a href="#trust-tiers-which-list-applies-where">Trust tiers</a> below). <code>GetActiveProviderIds()</code> lists which providers are actually voting.</p>
+<table><thead><tr>
+<th>Provider id</th>
+<th>Vendor</th>
+<th>Auth</th>
+<th>Default model</th>
+<th>Dashboard</th>
+</tr></thead><tbody>
+<tr>
+<td><code>claude-api</code></td>
+<td>Anthropic</td>
+<td>API key (<code>x-api-key</code> / <code>Authorization: Bearer sk-ant-oat...</code>)</td>
+<td><code>claude-sonnet-5</code></td>
+<td>console.anthropic.com</td>
+</tr>
+<tr>
+<td><code>claude-team</code></td>
+<td>Anthropic</td>
+<td>OAuth via the Claude Code CLI session (no API key)</td>
+<td><code>claude-sonnet-5</code></td>
+<td>claude.ai/settings</td>
+</tr>
+<tr>
+<td><code>openai</code></td>
+<td>OpenAI</td>
+<td>API key</td>
+<td><code>gpt-5.4-mini</code></td>
+<td>platform.openai.com</td>
+</tr>
+<tr>
+<td><code>gemini</code></td>
+<td>Google</td>
+<td>API key (<code>x-goog-api-key</code> header)</td>
+<td><code>gemini-3.5-flash</code></td>
+<td>aistudio.google.com</td>
+</tr>
+<tr>
+<td><code>deepseek</code></td>
+<td>DeepSeek AI</td>
+<td>API key</td>
+<td><code>deepseek-v4-flash</code></td>
+<td>platform.deepseek.com</td>
+</tr>
+<tr>
+<td><code>mistral</code></td>
+<td>Mistral AI</td>
+<td>API key</td>
+<td><code>mistral-large-latest</code></td>
+<td>console.mistral.ai</td>
+</tr>
+<tr>
+<td><code>xai</code></td>
+<td>xAI</td>
+<td>API key</td>
+<td><code>grok-4.3</code></td>
+<td>console.x.ai</td>
+</tr>
+<tr>
+<td><code>groq</code></td>
+<td>Groq</td>
+<td>API key</td>
+<td><code>llama-3.3-70b-versatile</code></td>
+<td>console.groq.com</td>
+</tr>
+<tr>
+<td><code>together</code></td>
+<td>Together AI</td>
+<td>API key</td>
+<td><code>meta-llama/Llama-3-70b-chat-hf</code></td>
+<td>api.together.xyz</td>
+</tr>
+<tr>
+<td><code>openrouter</code></td>
+<td>OpenRouter</td>
+<td>API key</td>
+<td><code>meta-llama/llama-3.1-8b-instruct:free</code></td>
+<td>openrouter.ai</td>
+</tr>
+<tr>
+<td><code>fireworks</code></td>
+<td>Fireworks AI</td>
+<td>API key</td>
+<td><code>accounts/fireworks/models/llama-v3p1-70b-instruct</code></td>
+<td>app.fireworks.ai</td>
+</tr>
+<tr>
+<td><code>cohere</code></td>
+<td>Cohere</td>
+<td>API key</td>
+<td><code>command-r-plus</code></td>
+<td>dashboard.cohere.com</td>
+</tr>
+<tr>
+<td><code>kimi</code></td>
+<td>Moonshot AI</td>
+<td>API key</td>
+<td><code>kimi-k3</code></td>
+<td>platform.moonshot.cn</td>
+</tr>
+<tr>
+<td><code>perplexity</code></td>
+<td>Perplexity AI</td>
+<td>API key</td>
+<td><code>sonar</code></td>
+<td>perplexity.ai/settings/api</td>
+</tr>
+</tbody></table>
+<p>Source of truth: <a href="MindAttic.Legion/Services/LlmProviderCatalog.cs"><code>LlmProviderCatalog</code></a> (metadata, dashboard/keys URLs, per-provider known-model lists) and <a href="MindAttic.Legion/Services/LegionClient.cs"><code>LegionClient.DefaultModels</code>/<code>Endpoints</code></a> (wire endpoints and fallback models). Use <code>legion.exe providers</code> from the CLI for the live list, or <code>legion.exe models &lt;provider&gt;</code> for a provider's full known-model catalog.</p>
+<p><code>claude-api</code> and <code>claude-team</code> are the same model family through two different doors: <code>claude-api</code> requires an Anthropic API key and bills against it; <code>claude-team</code> reads and auto-refreshes the OAuth token from the Claude Code CLI's own <code>~/.claude/.credentials.json</code>, so it authenticates as whatever Claude Code account is already logged in on that machine — no separate key, but it shares that session's rate limit (set <code>"maxConcurrency": 3</code> in <code>legion.json</code> when a panel includes <code>claude-team</code> alongside an active Claude Code session).</p>
+<p>Default model is what each provider falls back to when <strong>no</strong> model override is supplied and no <code>model</code> field is recorded in <code>providers.json</code>. For tier-aware selection (Low / Medium / High / Higher / Highest), use <code>LlmProviderCatalog.GetTieredModel(providerId, ModelTier)</code> — see <a href="#tier-system">Tier system</a>.</p>
+<p>To override the model for a specific provider:</p>
+<pre><code class="language-csharp">config.ModelOverrides["claude-api"] = "claude-opus-4-8";</code></pre>
+<p>To restrict voting to a subset:</p>
+<pre><code class="language-csharp">var r = await voting.VoteAsync(req, quorum, new[] { "claude-api", "openai" });</code></pre>
+<h3 id="self-hosted-local-models-ollama-vllm-runpod">Self-hosted / local models (Ollama, vLLM, RunPod, …)</h3>
+<p>Providers outside the catalog aren't voter-panel members, but <code>LegionClient</code> can still call them directly at an explicit URL using the OpenAI-compatible chat-completions shape:</p>
+<pre><code class="language-csharp">var client = new LegionClient(httpClient);
+var reply = await client.CallAsync(
+    providerId:  "local",                         // any stable id — used only for circuit-breaker tracking
+    apiKey:      "ollama",                         // any non-empty string for auth-less local servers
+    model:       "llama3.1:8b",
+    systemPrompt:"You are a helpful assistant.",
+    userMessage: "Summarize this paragraph...",
+    endpointUrl: "http://localhost:11434/v1/chat/completions");</code></pre>
+<hr>
+<h2 id="tier-system">Tier system</h2>
+<p><code>ModelTier</code> is the Legion abstraction for "the cheap one" / "the strong one" without naming model versions that drift. Only the five providers below have an explicit tier mapping in <a href="MindAttic.Legion/Services/LlmProviderCatalog.cs"><code>LlmProviderCatalog</code></a> — every other provider (<code>mistral</code>, <code>xai</code>, <code>groq</code>, <code>together</code>, <code>openrouter</code>, <code>fireworks</code>, <code>cohere</code>, <code>kimi</code>, <code>perplexity</code>) has no tier table and <code>GetTieredModel</code> simply returns that provider's <code>DefaultModel</code> at any tier:</p>
+<table><thead><tr>
+<th>Tier</th>
+<th><code>claude-api</code> / <code>claude-team</code></th>
+<th><code>openai</code></th>
+<th><code>gemini</code></th>
+<th><code>deepseek</code></th>
+</tr></thead><tbody>
+<tr>
+<td><code>Low</code></td>
+<td><code>claude-haiku-4-5-20251001</code></td>
+<td><code>gpt-4.1-nano</code></td>
+<td><code>gemini-2.5-flash-lite</code></td>
+<td><code>deepseek-v4-flash</code></td>
+</tr>
+<tr>
+<td><code>Medium</code></td>
+<td><code>claude-sonnet-5</code></td>
+<td><code>gpt-5.4-mini</code></td>
+<td><code>gemini-2.5-flash</code></td>
+<td><code>deepseek-v4-flash</code></td>
+</tr>
+<tr>
+<td><code>High</code></td>
+<td><code>claude-opus-4-7</code></td>
+<td><code>gpt-5.4</code></td>
+<td><code>gemini-2.5-pro</code></td>
+<td><code>deepseek-v4-pro</code></td>
+</tr>
+<tr>
+<td><code>Higher</code></td>
+<td><code>claude-opus-4-8</code></td>
+<td><code>gpt-5.5</code></td>
+<td><code>gemini-3.1-flash-lite</code></td>
+<td><code>deepseek-v4-pro</code></td>
+</tr>
+<tr>
+<td><code>Highest</code></td>
+<td><code>claude-fable-5</code></td>
+<td><code>gpt-5.6-sol</code></td>
+<td><code>gemini-3.5-flash</code></td>
+<td><code>deepseek-v4-pro</code></td>
+</tr>
+</tbody></table>
+<p>When a tier isn't directly mapped for a provider, <code>GetTieredModel</code> walks <strong>down</strong> the ladder (Highest → Higher → ... → Low) and returns the closest available model — so asking for Highest against a 3-tier provider gives you High, not null. Asking for a tier that's lower than every entry walks back <strong>up</strong> for symmetry. When the provider has no tier table at all, it returns the provider's <code>DefaultModel</code> unconditionally.</p>
+<pre><code class="language-csharp">// Pick the strong reasoning model for an architectural decision:
+var arch = LlmProviderCatalog.GetTieredModel("claude-api", ModelTier.High);
+// → "claude-opus-4-7"
+
+// Pick the cheap one for a 100-voter poll:
+var bulk = LlmProviderCatalog.GetTieredModel("claude-api", ModelTier.Low);
+// → "claude-haiku-4-5-20251001"
+
+// A provider with no tier table — always the default, regardless of tier:
+var m = LlmProviderCatalog.GetTieredModel("mistral", ModelTier.Highest);
+// → "mistral-large-latest"</code></pre>
+<p>The CLI commands embed sensible defaults: <code>legion ask</code> defaults to High (architecture wants flagship reasoning), <code>legion poll</code> defaults to Low (bulk distribution wants cheap), <code>legion generate</code> defaults to Medium (creative balance), <code>legion psychometrics score</code> defaults to High (Opus-class administering lens). All accept <code>--tier &lt;t&gt;</code> to override.</p>
+<p>To pin a whole panel to a tier inside the .NET API:</p>
+<pre><code class="language-csharp">config.ModelOverrides = new Dictionary&lt;string, string&gt;(StringComparer.OrdinalIgnoreCase)
+{
+    ["claude-api"] = LlmProviderCatalog.GetTieredModel("claude-api", ModelTier.High)!,
+    ["openai"]     = LlmProviderCatalog.GetTieredModel("openai",     ModelTier.High)!,
+    ["gemini"]     = LlmProviderCatalog.GetTieredModel("gemini",     ModelTier.High)!,
+    ["deepseek"]   = LlmProviderCatalog.GetTieredModel("deepseek",   ModelTier.High)!,
+};</code></pre>
+<p><code>AskCommand.BuildTierModelOverrides(ModelTier)</code> is the canonical helper for this in CLI code — copy its shape if you're building a similar command.</p>
+<h3 id="provider-quirks-handled-automatically">Provider quirks handled automatically</h3>
+<p><code>LegionClient</code> absorbs a handful of per-model wire-shape differences so callers never see them:</p>
+<ul>
+<li><strong>Temperature-deprecating models.</strong> Claude's Fable/Mythos families, Sonnet 5+/Haiku 5+, and Opus 4.7+ all reject the <code>temperature</code> field (HTTP 400). OpenAI's o-series (o1/o2/o3/o4…) and the GPT-5 family reject <code>temperature</code> too and require <code>max_completion_tokens</code> instead of <code>max_tokens</code>. Both are detected by parsing the model id (not a hard-coded list), so a future point release doesn't silently break.</li>
+<li><strong>Adaptive "thinking" on Claude 5+.</strong> <code>claude-sonnet-5+</code>/<code>claude-haiku-5+</code> run adaptive extended thinking by default when the <code>thinking</code> field is omitted, which can consume the entire token budget on reasoning and leave zero text. Legion explicitly sends <code>thinking: {type: "disabled"}</code> for ordinary (non-thinking) calls to these models. Fable/Mythos always think and reject that field, so they're excluded; Opus 4.7+ correctly default to no-thinking without it.</li>
+<li><strong>Gemini 2.5+ thinking budget.</strong> For <code>gemini-*-2.5*</code> models, Legion sends <code>thinkingConfig: { thinkingBudget: 0 }</code> so the full <code>maxOutputTokens</code> budget goes to the actual response instead of being eaten by internal reasoning tokens.</li>
+<li><strong>Claude response parsing.</strong> Thinking-tier Claude models put a <code>thinking</code> content block <em>before</em> the <code>text</code> block; Legion concatenates every <code>type: "text"</code> block rather than assuming <code>content[0]</code>.</li>
+<li><strong>Gemini response parsing.</strong> Skips any part flagged <code>"thought": true</code> and concatenates the remaining text parts; returns <code>""</code> (never throws) on a safety-blocked or <code>MAX_TOKENS</code> candidate with no content, so a benign refusal doesn't trip the circuit breaker.</li>
+</ul>
+<h3 id="trust-tiers-which-list-applies-where">Trust tiers: which list applies where</h3>
+<p>Legion has <strong>three different "which providers are eligible" lists</strong>, and they don't all agree — this matters when you're narrowing a panel:</p>
+<table><thead><tr>
+<th>List</th>
+<th>Members</th>
+<th>Applies to</th>
+</tr></thead><tbody>
+<tr>
+<td><code>LlmProviderCatalog.All</code> / <code>AllIds</code></td>
+<td>All 14 providers</td>
+<td>Everything Legion <em>can</em> call — <code>legion.exe providers</code>/<code>models</code>, direct <code>LegionClient</code> calls.</td>
+</tr>
+<tr>
+<td><code>LlmProviderCatalog.Default</code> / <code>DefaultIds</code></td>
+<td><code>claude-api</code>, <code>claude-team</code>, <code>openai</code>, <code>deepseek</code>, <code>gemini</code> (5)</td>
+<td>The first-party set apps are expected to surface by default in settings UIs.</td>
+</tr>
+<tr>
+<td><code>VotingConfiguration.AllowedProviderIds</code> (default)</td>
+<td><code>claude-api</code>, <code>claude-team</code>, <code>openai</code>, <code>gemini</code>, <code>deepseek</code> (5)</td>
+<td>Library voting (<code>LlmVotingService</code>) and the CLI's <code>vote</code> subcommand — the whitelist <code>ActiveProviderIds</code> intersects against.</td>
+</tr>
+<tr>
+<td>CLI <code>TrustedProviderIds</code> (hard-coded per command)</td>
+<td><code>claude-api</code>, <code>openai</code>, <code>gemini</code>, <code>deepseek</code> (4 — <strong>no <code>claude-team</code></strong>)</td>
+<td><code>legion ask</code>, <code>legion poll</code>, <code>legion generate</code>, <code>legion tiers</code>. <code>--providers</code> can only narrow <em>within</em> this set; an id outside it is silently dropped, even for callers who ask for it explicitly.</td>
+</tr>
+</tbody></table>
+<p>In short: the library's default voting whitelist includes <code>claude-team</code>, but the autonomous-decision CLI commands (<code>ask</code>/<code>poll</code>/<code>generate</code>/<code>tiers</code>) deliberately exclude it from their hard-coded trust list — those commands are meant to run unattended (CI, monitored agent loops) where an interactive Claude Code OAuth session may not exist.</p>
+<p>When a trusted provider errors mid-vote (network blip, rate limit, transient 5xx), <code>LlmVotingService.RefillFailedVotersAsync</code> automatically dispatches a fresh call to one of the <em>surviving</em> allowed providers (round-robin), so the panel never shrinks below quorum size. A failed Gemini slot becomes a second Claude or DeepSeek call rather than a missing vote. Refilled slots intentionally drop any persona overlay so a surviving voter doesn't get to "vote twice as the same character."</p>
+<p>To run the library with a different shortlist:</p>
+<pre><code class="language-csharp">config.AllowedProviderIds = new(StringComparer.OrdinalIgnoreCase) { "claude-api", "openai" };</code></pre>
+<p>Or via the CLI:</p>
+<pre><code class="language-bash">legion.exe ask "..." --providers claude-api,openai,gemini,deepseek</code></pre>
+<p>Set <code>AllowedProviderIds</code> to an empty set to disable filtering and let every provider with a key vote.</p>
+<hr>
+<h2 id="credential-storage">Credential storage</h2>
+<p>Legion can read keys from the shared credential store at <code>%APPDATA%/MindAttic/LLM/</code> (backed by <code>MindAttic.Vault</code>) so every MindAttic app shares one keyring. Set <code>VotingConfiguration.UseSharedCredentials = true</code> (the default) to opt in.</p>
+<p>Resolution order (see <a href="docs/BIBLE.md#LEG-LAW-2"><code>docs/BIBLE.md#LEG-LAW-2</code></a>):</p>
+<ol>
+<li>A per-voter <code>VoterProfile.ApiKeyOverride</code>.</li>
+<li>An explicit entry in <code>VotingConfiguration.ApiKeys</code>.</li>
+<li>The shared credential store — User Secrets / App Service settings / Azure Key Vault when a host has called <code>MindAtticCredentialStore.UseConfiguration(IConfiguration)</code>, falling back to the <code>%APPDATA%/MindAttic/LLM/providers.json</code> file.</li>
+</ol>
+<p><code>claude-team</code> is the one exception: it <strong>never</strong> reads from <code>providers.json</code> or <code>ApiKeys</code>. Its credential is the OAuth access token in <code>~/.claude/.credentials.json</code> (the Claude Code CLI's own session), resolved and auto-refreshed by <a href="MindAttic.Legion/Services/ClaudeCodeOAuthSource.cs"><code>ClaudeCodeOAuthSource</code></a>. Refresh is thread-safe — concurrent callers that all see a token within 60 seconds of expiry block on a single refresh attempt.</p>
+<p><code>MindAtticCredentialStore</code> is a static backward-compatible facade over <code>MindAttic.Vault</code>'s <code>LlmCredentialStore</code>/<code>CompositeCredentialStore</code>; new code may inject those types directly via DI instead of calling the static facade. The CLI always uses the shared store (plus environment variables for containerized deployments, e.g. <code>MindAttic__Vault__LLM__claude-api__apiKey</code>).</p>
+<h3 id="per-project-panels-legionjson">Per-project panels: <code>legion.json</code></h3>
+<p>Drop a <code>legion.json</code> file at a project's root to declare that project's voter panel without touching code:</p>
+<pre><code class="language-jsonc">// ThinkTank (every provider Legion knows):
+{ "voters": ["claude-api","openai","gemini","deepseek","mistral","xai",
+             "groq","together","openrouter","fireworks","cohere"] }
+
+// Tutor (two-vendor panel, explicit judge):
+{ "voters": ["openai","claude-api"], "judge": "claude-api" }
+
+// A panel that includes claude-team, sharing its Claude Code session's rate limit:
+{ "voters": ["claude-team","openai"], "maxConcurrency": 3 }</code></pre>
+<p>Fields: <code>voters</code> (replaces the default <code>AllowedProviderIds</code> whitelist), <code>judge</code> (<code>JudgeProviderId</code> override), <code>models</code> (per-provider <code>ModelOverrides</code>), <code>apiKeys</code> (per-project keys — win over the shared store), <code>maxConcurrency</code> (caps simultaneous ballot calls; use <code>3</code> when the panel includes <code>claude-team</code>, which shares its quota with the Claude Code CLI session it authenticates through).</p>
+<p><code>LegionConfig.LoadFromDirectory()</code> walks up from a starting directory (default: cwd) looking for <code>legion.json</code>, up to 12 levels, and returns <code>null</code> (falling back to <code>VotingConfiguration</code> defaults) when none is found or the file is malformed. Apply it with <code>LegionConfig.LoadFromDirectory()?.ApplyTo(config)</code>.</p>
+<p><strong>Current wiring:</strong> the CLI's <code>legion vote</code> subcommand calls this automatically before voting. <code>legion ask</code>/<code>poll</code>/<code>generate</code>/<code>tiers</code> build their <code>VotingConfiguration</code> directly and do <strong>not</strong> consult <code>legion.json</code> — those commands' provider set is always the hard-coded CLI trust list (see <a href="#trust-tiers-which-list-applies-where">Trust tiers</a>). Library consumers (a MindAttic app's own DI wiring) call <code>LegionConfig.LoadFromDirectory()?.ApplyTo(config)</code> explicitly wherever they want project-local configuration honored.</p>
+<hr>
+<h2 id="cli-legionexe">CLI: <code>legion.exe</code></h2>
+<p>The CLI exposes the same engine for shell scripts, CI, and rapid iteration. Every subcommand accepts <code>-h</code> / <code>--help</code> / <code>help</code> / <code>/?</code>.</p>
+<pre><code>legion — MindAttic.Legion CLI
+
+Commands:
+  health                       Probe every provider with a 'Hello World!' test
+  ping &lt;provider&gt;              Probe a single provider
+  status [opts] [provider...]  Show model inventory, config, and connectivity
+  providers                    List supported providers + dashboard URLs
+  models &lt;provider&gt;            Show known models for a provider
+  personas &lt;count&gt;              Sample N personas from the 1024-persona library
+  panel &lt;count&gt; [provider...]  Build a voter panel: spread across providers, backfill claude-api.
+                                --diverse picks personas that maximize psychometric spread.
+  vote &lt;question&gt; [opts]       Multi-LLM consensus vote on a question; outputs JSON.
+  ask &lt;question&gt; [opts]        Architect-framed decision; stdout = bare answer (or --json).
+  poll &lt;question&gt; [opts]       Bulk vote: N voters round-robined across trusted providers.
+  generate &lt;prompt&gt; [opts]     Bulk creative output: N distinct items, deduped, to stdout.
+  tiers [opts]                 Probe trusted providers × tier mapping (Low/Medium/High).
+  psychometrics &lt;sub&gt; [opts]   Score the persona library; subcommands init|score|rescore|show|stats|history|diff
+
+All commands read keys from the shared store at %APPDATA%/MindAttic/LLM/.</code></pre>
+<h3 id="discovery-commands">Discovery commands</h3>
+<pre><code class="language-bash">legion.exe status                 # model inventory, config, and connectivity
+legion.exe status --no-probe      # list live/static models without sending prompts
+legion.exe status --json          # machine-readable status output
+legion.exe status --timeout 30 claude-api openai   # narrow to specific providers, custom timeout
+
+legion.exe providers              # table of all 14 providers + vendor + default model + dashboard URL
+legion.exe models &lt;provider&gt;      # a provider's full known-model catalog, default marked, live endpoint if any
+legion.exe personas 10            # sample 10 personas from the 1024-persona library (id, name, first line)
+legion.exe panel 5                # build a 5-voter panel + show provider mix
+legion.exe panel 5 --diverse      # panel chosen to maximize psychometric spread (needs scored profiles)
+legion.exe panel 5 claude-api openai --store &lt;dir&gt;   # explicit provider list / psychometrics store dir</code></pre>
+<p><code>status</code> cross-references three signals per provider: the static catalog (<code>known models</code>), a live query against the provider's <code>/models</code>-style endpoint (<code>live models</code>), and — unless <code>--no-probe</code> is passed — an actual prompt-level connectivity probe. It prints the effective model (configured override, else <code>providers.json</code>, else the catalog default) and, on failure, an actionable next step from <code>LlmHealthDiagnoser</code> (e.g. "key looks revoked, mint a new one at …").</p>
+<p><code>panel</code> spreads voters across the supplied provider list (or every provider that currently has a key, when none is given), backfilling with <code>claude-api</code> once every provider has at least one voter. <code>--diverse</code> requires a psychometrics store with scored profiles (<code>legion psychometrics score</code> must have run first) and picks personas via greedy farthest-point selection over the OCEAN+HEXACO+DISC trait vector instead of random sampling.</p>
+<h3 id="health-connectivity">Health &amp; connectivity</h3>
+<pre><code class="language-bash">legion.exe health                 # probe every one of the 14 providers' DefaultModel with a hello-world
+legion.exe ping claude-api        # one-provider probe (DefaultModel)
+legion.exe tiers                  # probe trusted-four × Low/Medium/High = 12 cells</code></pre>
+<h3 id="vote-returns-json-on-stdout-one-voter-per-provider-consensus">Vote (returns JSON on stdout) — one-voter-per-provider consensus</h3>
+<pre><code class="language-bash">legion.exe vote "Is the sky blue today?" \
+    --context "Cloud cover is 100%." \
+    --quorum simplemajority \
+    --options yes,no,unclear \
+    --max-tokens 256 \
+    --no-narrative</code></pre>
+<p><code>vote</code> is the only CLI subcommand that honors a per-project <code>legion.json</code> (see <a href="#per-project-panels-legionjson">Per-project panels</a>) — it applies the file on top of the default <code>VotingConfiguration</code> before dispatching, so a project can declare its own voter list without <code>--providers</code>.</p>
+<h3 id="ask-architect-framed-stdout-bare-answer-json-for-full-audit">Ask (architect-framed; stdout = bare answer, --json for full audit)</h3>
+<pre><code class="language-bash"># Default tier = High (Opus-class / GPT-5.4 / Gemini 2.5 Pro / DeepSeek v4 Pro).
+legion.exe ask "Which DI lifetime for the new HttpClient wrapper?" \
+    --options "Singleton,Scoped,Transient"
+# → Singleton
+
+legion.exe ask "Best way to stream LLM tokens through SignalR without buffering?" --json
+
+# Override tier for cheaper one-shot decisions
+legion.exe ask "Use tabs or spaces?" --options "tabs,spaces" --tier low</code></pre>
+<h3 id="poll-n-voters-round-robined-across-providers-at-a-chosen-tier">Poll — N voters round-robined across providers at a chosen tier</h3>
+<pre><code class="language-bash">legion.exe poll "Pick 1, 2, or 3" --options "1,2,3" --count 100 --tier low
+# → distribution table + plurality winner</code></pre>
+<h3 id="generate-n-distinct-creative-items-deduped-newline-separated">Generate — N distinct creative items, deduped, newline-separated</h3>
+<pre><code class="language-bash">legion.exe generate "100 hero-vibe character names" --count 100 --tier medium
+# → newline list to stdout (pipe into head/shuf/grep/file)</code></pre>
+<p>Exit codes (<code>vote</code>/<code>ask</code>):</p>
+<ul>
+<li><code>0</code> — quorum reached</li>
+<li><code>1</code> — quorum not reached</li>
+<li><code>2</code> — pipeline error</li>
+</ul>
+<p>The JSON shape on stdout matches <code>VotingResult</code>/<code>ScoredVotingResult</code>, so other languages can parse it directly.</p>
+<h3 id="legionexe-ask-autonomous-decisions-for-monitored-agents"><code>legion.exe ask</code> — autonomous decisions for monitored agents</h3>
+<p><code>ask</code> is the variant tuned for the loop where you want a panel-voted answer to flow back into another coding CLI without a human in between.</p>
+<p>Differences from <code>vote</code>:</p>
+<ul>
+<li><strong>Stdout = bare answer by default.</strong> Choice mode prints exactly the picked option. Free-form mode prints the synthesized consensus prose. Add <code>--json</code> to get the full audit blob (votes, reasoning, confidence, dissent).</li>
+<li><strong>Architect-framed voters.</strong> Each voter is told to act as a senior software architect on this project: be decisive, prefer the boring/reversible/conventional choice, flag irreversible decisions, optimize for the developer's next 30 minutes.</li>
+<li><strong>Auto-context.</strong> When invoked inside a repo, <code>ask</code> prepends <code>CLAUDE.md</code>, <code>README.md</code>, and <code>git status -s</code> / <code>git log --oneline -10</code> to every voter's context so the panel sees the project shape. Disable with <code>--no-auto-context</code>. Each piece is independently capped (8 KB / 8 KB / 4 KB / 1 KB) so a 200 KB README can't blow the prompt budget.</li>
+<li><strong>Default quorum is <code>Plurality</code>.</strong> <code>ask</code> always emits <em>some</em> answer rather than blocking. Raise the bar with <code>--quorum twothirds</code> when dissent should fail closed.</li>
+<li><strong>Fixed 4-provider trust list.</strong> The panel is always the intersection of <code>--providers</code> (if given) with <code>claude-api, openai, gemini, deepseek</code> — <code>claude-team</code> is never included here, even if requested.</li>
+</ul>
+<pre><code class="language-bash">legion.exe ask &lt;question&gt; [opts]</code></pre>
+<table><thead><tr>
+<th>Option</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>--options A,B,C</code></td>
+<td>Force choice mode; voters must pick exactly one.</td>
+</tr>
+<tr>
+<td><code>--context &lt;text&gt;</code></td>
+<td>Extra context appended after auto-context.</td>
+</tr>
+<tr>
+<td><code>--context-file &lt;path&gt;</code></td>
+<td>Read extra context from a file (e.g. the file you're about to edit).</td>
+</tr>
+<tr>
+<td><code>--project-dir &lt;path&gt;</code></td>
+<td>Where to look for <code>CLAUDE.md</code>/<code>README</code>/git (default: cwd).</td>
+</tr>
+<tr>
+<td><code>--no-auto-context</code></td>
+<td>Skip the auto-include.</td>
+</tr>
+<tr>
+<td><code>--quorum &lt;q&gt;</code></td>
+<td><code>plurality</code> \</td>
+<td><code>simplemajority</code> \</td>
+<td><code>twothirds</code> \</td>
+<td><code>unanimous</code> (default <code>plurality</code>).</td>
+</tr>
+<tr>
+<td><code>--max-tokens N</code></td>
+<td>Per-voter cap (default 1024, must be &gt; 0).</td>
+</tr>
+<tr>
+<td><code>--timeout S</code></td>
+<td>Per-provider timeout in seconds (default 60).</td>
+</tr>
+<tr>
+<td><code>--providers a,b,c</code></td>
+<td>Narrow the panel <strong>within</strong> the trusted set (<code>claude-api, openai, gemini, deepseek</code>). Untrusted ids are silently dropped — the panel can never include a non-trusted provider, even if you ask.</td>
+</tr>
+<tr>
+<td><code>--tier &lt;t&gt;</code></td>
+<td><code>low</code> \</td>
+<td><code>medium</code> \</td>
+<td><code>high</code> \</td>
+<td><code>higher</code> \</td>
+<td><code>highest</code> (default <code>high</code>). High = flagship reasoning — the right tool for architectural decisions. Drop tier for cheaper one-shot calls.</td>
+</tr>
+<tr>
+<td><code>--must-answer</code></td>
+<td>On 0/N voter failure, retry with doubled budget and no auto-context; on second failure, fall back to a single-provider chain (<code>claude-api → openai → gemini → deepseek</code>) calling raw text (no JSON, no persona) until one replies. Use when the calling agent can't tolerate "no answer".</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Emit full vote audit JSON instead of bare answer.</td>
+</tr>
+</tbody></table>
+<p>Output contract:</p>
+<table><thead><tr>
+<th>stdout</th>
+<th>exit</th>
+<th>meaning</th>
+</tr></thead><tbody>
+<tr>
+<td>answer</td>
+<td><code>0</code></td>
+<td>panel agrees, act on it</td>
+</tr>
+<tr>
+<td>best-guess answer</td>
+<td><code>1</code></td>
+<td>panel split — re-ask with more context or escalate</td>
+</tr>
+<tr>
+<td>(empty)</td>
+<td><code>2</code></td>
+<td>unhandled error (network, etc.)</td>
+</tr>
+</tbody></table>
+<p>With <code>--must-answer</code>, exit <code>0</code> also covers the recovery cases (phase-2 retry, phase-3 single-provider chain). stderr will tell you which phase delivered (<code>ask: recovered in phase 3 via claude-api</code>) — log that line if you want a record of the degraded path. stderr carries warnings only; never parse it for the answer.</p>
+<h3 id="legionexe-psychometrics-score-the-persona-library"><code>legion.exe psychometrics</code> — score the persona library</h3>
+<p>Legion can administer five personality instruments to every persona and persist the results, so panels can be composed and votes read by <em>trait composition</em>, not just by provider. This is a separate subsystem from the decision commands (<code>ask</code>/<code>vote</code>/<code>poll</code> do <strong>not</strong> touch it) — it powers persona panels.</p>
+<p><strong>How scoring works.</strong> A single trusted model (default tier <strong>High</strong> / Opus-class) answers each instrument's 1–5 Likert items <strong>in character</strong> as the persona; the LLM never computes a score. Scoring is done deterministically in C# (<code>PsychometricScorer</code>) from those raw answers, so the same answers always yield the same profile and the maths is unit-tested. The five instruments are public-domain-derived (IPIP Big Five &amp; HEXACO, OEJTS-style Jungian axes, open DISC- and Enneagram-style banks); the trademarked questionnaires are never used, hence "-style".</p>
+<table><thead><tr>
+<th>Framework</th>
+<th>Output</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>OCEAN / Big Five</strong></td>
+<td>O, C, E, A, N — each 0–100</td>
+</tr>
+<tr>
+<td><strong>HEXACO</strong></td>
+<td>Honesty-Humility, Emotionality, eXtraversion, Agreeableness, Conscientiousness, Openness — 0–100</td>
+</tr>
+<tr>
+<td><strong>MBTI-style</strong></td>
+<td>4-letter type + per-axis lean (E/I, S/N, T/F, J/P)</td>
+</tr>
+<tr>
+<td><strong>Enneagram-style</strong></td>
+<td>dominant type 1–9, wing, triad (Gut/Heart/Head)</td>
+</tr>
+<tr>
+<td><strong>DISC-style</strong></td>
+<td>D, I, S, C scores + primary style</td>
+</tr>
+</tbody></table>
+<p><strong>Storage.</strong> Each persona is <strong>one faithful JSON file</strong> under the store's <code>personas/</code> directory (identity + structured traits + the full nested assessment history), with a small <code>runs.json</code> index alongside — no database. A persona is fully reconstructable from its single file: portable, git-diffable, human-readable. The administering LLM is recorded <strong>on each assessment, not on the persona</strong> — so re-scoring through a different provider records a new <em>variant</em> of the same person rather than overwriting it. Each run is stamped with the model and an <strong>instrument-set version</strong> (<code>PsychometricInstruments.SetVersion</code>) so re-runs stay comparable. Store location: an explicit <code>--store &lt;dir&gt;</code>, then the <code>MINDATTIC_LEGION_STORE</code> environment variable, then <code>%APPDATA%/MindAttic/Legion</code>. Writes are atomic (temp file + move); the store assumes a single writer at a time.</p>
+<pre><code class="language-bash">legion.exe psychometrics init                     # create the store + seed the persona files
+legion.exe psychometrics score --limit 8          # pilot: score 8 personas (resumable; default tier high)
+legion.exe psychometrics score                    # score everything still missing a current-version profile
+legion.exe psychometrics show persona-0000        # a persona's latest profile (--json for the raw record)
+legion.exe psychometrics stats                    # MBTI/DISC/Enneagram distribution + mean OCEAN/HEXACO
+legion.exe psychometrics history persona-0000      # every assessment run recorded for one persona
+legion.exe psychometrics rescore                  # fresh full versioned run — point cron/Task Scheduler at this
+legion.exe psychometrics diff 1 2                 # per-framework drift between two runs</code></pre>
+<table><thead><tr>
+<th><code>score</code> / <code>rescore</code> option</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>--provider &lt;id&gt;</code></td>
+<td>Administering lens (default <code>claude</code>); must be in the CLI's trusted set (<code>claude-api, openai, gemini, deepseek</code>) or the command errors out.</td>
+</tr>
+<tr>
+<td><code>--tier &lt;t&gt;</code></td>
+<td><code>low</code>…<code>highest</code> (default <code>high</code> = Opus class).</td>
+</tr>
+<tr>
+<td><code>--limit N</code></td>
+<td>Score at most N personas — use for a cheap pilot first.</td>
+</tr>
+<tr>
+<td><code>--concurrency N</code></td>
+<td>Personas assessed in parallel (default 4).</td>
+</tr>
+<tr>
+<td><code>--timeout S</code></td>
+<td>Per-provider timeout in seconds (default 120).</td>
+</tr>
+<tr>
+<td><code>--store-raw</code></td>
+<td>Also persist every raw item answer for audit.</td>
+</tr>
+<tr>
+<td><code>--notes &lt;text&gt;</code></td>
+<td>Free-form note recorded on the run (<code>rescore</code> sets this to <code>"rescore"</code> automatically).</td>
+</tr>
+<tr>
+<td><code>--store &lt;dir&gt;</code></td>
+<td>Override the store directory.</td>
+</tr>
+</tbody></table>
+<blockquote><p><strong>Caveat — check the <code>--provider</code> default.</strong> The command's default <code>--provider</code> value is the literal string <code>claude</code>, but the CLI's trust check (<code>AskCommand.TrustedProviderIds</code>) only recognizes <code>claude-api</code> (not bare <code>claude</code>) alongside <code>openai</code>, <code>gemini</code>, <code>deepseek</code>. Running <code>legion psychometrics score</code>/<code>rescore</code> with no <code>--provider</code> flag will therefore report <code>error: 'claude' is not a trusted provider</code> rather than silently defaulting to Claude — always pass <code>--provider claude-api</code> (or another trusted id) explicitly until this default is reconciled with the trust list.</p></blockquote>
+<p><code>score</code> is <strong>resumable</strong>: it skips personas that already have a profile at the current instrument-set version <em>for this provider/lens</em>, so re-running continues where it left off (and scoring through a different <code>--provider</code> produces a fresh variant instead of skipping). <code>rescore</code> forces a brand-new run scoring everyone (for drift tracking) and is the command an external scheduler should invoke. Scoring the full library is ≈ <code>personas × 5</code> model calls — pilot with <code>--limit</code> before committing to the whole run.</p>
+<p><strong>Using the profiles.</strong> Once scored:</p>
+<ul>
+<li><code>legion.exe panel N --diverse</code> builds a panel chosen to <strong>maximize psychometric spread</strong> (greedy farthest-point over the OCEAN+HEXACO+DISC vector) instead of sampling at random, and tags each voter with its type.</li>
+<li>In code, <code>VoterFactory.GenerateDiverseVoters(count, providers, profiles)</code> does the same and attaches each <code>PsychometricProfile</code> to its <code>VoterProfile</code>; <code>PsychometricVoteAnalysis.Segment(voters, result, selector)</code> then splits a completed <code>VotingResult</code> by trait (built-in selectors: <code>ByMbtiType</code>, <code>ByDiscPrimary</code>, <code>ByEnneagramTriad</code>, <code>ByOpennessHalf</code>) to see, e.g., whether high-Openness voters split from low-Openness ones.</li>
+</ul>
+<blockquote><p><strong>Caveat — self-report skew.</strong> Because a model answering "in character" still drifts toward dutiful, agreeable, conscientious self-presentation, LLM-administered profiles cluster toward a corner of the trait space (expect lots of *_STJ types and high Conscientiousness). Personas are still differentiated, just less than real humans would be. Sharper separation would need forced-choice/ipsative items or per-trait anchoring — a future instrument-set version, comparable to the current one via <code>diff</code>.</p></blockquote>
+<h3 id="legionexe-poll-bulk-distribution-sampling"><code>legion.exe poll</code> — bulk distribution sampling</h3>
+<p><code>poll</code> is a fan-out command, not a consensus command. It round-robins <strong>N independent voters</strong> across the trusted four, all on a single tier, and reports a <strong>count-sorted distribution + plurality winner</strong>. Use it for "how does the panel split on this?" when you want a sample, not a verdict.</p>
+<p>Distinct from <code>vote</code> (one voter per provider, requires quorum) and <code>ask</code> (one architect-framed answer): <code>poll</code> reports raw distributions, no quorum concept, plurality winner is whichever option got the most votes — even by 1.</p>
+<pre><code class="language-bash">legion.exe poll &lt;question&gt; [opts]</code></pre>
+<table><thead><tr>
+<th>Option</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>--count N</code></td>
+<td>Total voters across the panel (default 10). With four providers, count=100 → exactly 25 per provider; count=10 → 3,3,2,2.</td>
+</tr>
+<tr>
+<td><code>--tier &lt;t&gt;</code></td>
+<td><code>low</code> \</td>
+<td><code>medium</code> \</td>
+<td><code>high</code> \</td>
+<td><code>higher</code> \</td>
+<td><code>highest</code> (default <code>low</code>). Low scales cheaply for the "100 voters" use case.</td>
+</tr>
+<tr>
+<td><code>--options A,B,C</code></td>
+<td>Force choice mode; off-ballot replies count as errors (excluded from the distribution). Free-form mode is allowed when omitted.</td>
+</tr>
+<tr>
+<td><code>--providers a,b,c</code></td>
+<td>Narrow within the trusted set (untrusted ids are silently dropped).</td>
+</tr>
+<tr>
+<td><code>--context &lt;text&gt;</code></td>
+<td>Extra context appended to every voter's prompt.</td>
+</tr>
+<tr>
+<td><code>--max-tokens N</code></td>
+<td>Per-voter cap (default 200 — voters reply briefly).</td>
+</tr>
+<tr>
+<td><code>--timeout S</code></td>
+<td>Per-voter timeout in seconds (default 30).</td>
+</tr>
+<tr>
+<td><code>--concurrency N</code></td>
+<td>In-flight call cap (default 8) — prevents 100 voters from bursting all at once.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Emit full poll record (per-voter, distribution, summary) as JSON instead of a table.</td>
+</tr>
+</tbody></table>
+<p>Round-robin distribution: voter <code>i</code> goes to <code>providers[i % providers.Count]</code>. With four providers and count=100, each gets 25; with count=10 each gets 3,3,2,2 (front buckets get the remainder). Failures don't shift the index — we'd rather have an uneven distribution that's reproducible than a "rebalance on failure" rule that drifts under retry.</p>
+<pre><code class="language-bash"># 100 voters at Low — quick, cheap distribution
+legion.exe poll "Should this PR ship today?" --options "yes,no,not-yet" --count 100 --tier low
+
+# 30 free-form voters at Medium — cluster their answers afterward
+legion.exe poll "One word that describes this codebase" --count 30 --tier medium --json
+
+# 50 voters at High but only Claude+OpenAI (more careful sampling)
+legion.exe poll "Severity?" --options "low,medium,high,critical" --count 50 --tier high --providers claude-api,openai</code></pre>
+<p>Exit codes:</p>
+<ul>
+<li><code>0</code> — at least one voter replied; a winner was chosen</li>
+<li><code>1</code> — every voter errored (or usage error)</li>
+</ul>
+<h3 id="legionexe-generate-bulk-creative-output"><code>legion.exe generate</code> — bulk creative output</h3>
+<p><code>generate</code> produces <strong>N distinct creative items</strong> by fanning out one batched call per trusted provider, extracting line-separated items from each reply, deduping case-insensitively across all batches, and emitting newline-separated results to stdout (Unix-pipe convention). Built for <code>legion generate "100 hero-vibe names" | head -25 &gt; names.txt</code>.</p>
+<p>Distinct from <code>poll</code> (which counts votes) and <code>ask</code> (which seeks one decision): <code>generate</code> produces <em>many distinct items</em> on a single prompt — names, taglines, alternatives, function names, scenario hooks.</p>
+<pre><code class="language-bash">legion.exe generate &lt;prompt&gt; [opts]</code></pre>
+<table><thead><tr>
+<th>Option</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>--count N</code></td>
+<td>Total distinct items (default 10). Each provider gets a round-robin share via <code>SplitCount</code> — 100 → \[25, 25, 25, 25].</td>
+</tr>
+<tr>
+<td><code>--tier &lt;t&gt;</code></td>
+<td><code>low</code> \</td>
+<td><code>medium</code> \</td>
+<td><code>high</code> \</td>
+<td><code>higher</code> \</td>
+<td><code>highest</code> (default <code>medium</code>). Medium = creative balance; Low produces flat output for creative bulk.</td>
+</tr>
+<tr>
+<td><code>--providers a,b,c</code></td>
+<td>Narrow within the trusted set. Pass a single provider for stylistic consistency; default round-robin maximizes variety.</td>
+</tr>
+<tr>
+<td><code>--max-tokens N</code></td>
+<td>Per-batch cap (default 1500 ≈ 50 short items per provider).</td>
+</tr>
+<tr>
+<td><code>--timeout S</code></td>
+<td>Per-call timeout in seconds (default 60).</td>
+</tr>
+<tr>
+<td><code>--temperature T</code></td>
+<td>Sampling temperature (default <code>0.9</code> — favors creative variance, not consensus).</td>
+</tr>
+<tr>
+<td><code>--no-dedup</code></td>
+<td>Emit duplicates from across providers; default is dedup case-insensitively, first-seen wins.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Emit JSON record (prompt, requested, returned, items, per-provider batches) instead of newline list.</td>
+</tr>
+</tbody></table>
+<p>Item extraction is defensive: a model that ignores the "no markers" instruction still yields clean items because <code>ExtractItems</code> strips:</p>
+<ul>
+<li>Numbered markers: <code>1.</code>, <code>12.</code>, <code>1)</code>, <code>99)</code></li>
+<li>Bulleted markers: <code>- </code>, <code>* </code>, <code>• </code></li>
+<li>Wrapping quotes: <code>"</code>, <code>'</code>, <code>“…”</code>, <code>‘…’</code></li>
+</ul>
+<p>Diagnostics go to <strong>stderr</strong> so stdout stays clean for piping. The summary line ("19 unique item(s) from 4/4 provider(s) (1 dup/empty trimmed)") is informational only.</p>
+<pre><code class="language-bash"># 100 fantasy character names, deduped, fed straight into a names file
+legion.exe generate "single-word hero-vibe character names for a fantasy CLI" --count 100 &gt; names.txt
+
+# 30 product taglines on High tier (slower but more polished)
+legion.exe generate "product taglines for a calm-tech tea brand" --count 30 --tier high
+
+# Stylistic consistency: only Claude, smaller temperature
+legion.exe generate "function names for queue.dequeue helpers" --count 20 --providers claude-api --temperature 0.4
+
+# Pipe through standard tools
+legion.exe generate "fictional country names" --count 50 | shuf | head -10</code></pre>
+<p>Exit codes:</p>
+<ul>
+<li><code>0</code> — at least one item was produced</li>
+<li><code>1</code> — every provider's batch errored (or usage error)</li>
+</ul>
+<h3 id="legionexe-tiers-connectivity-probe-across-the-tier-matrix"><code>legion.exe tiers</code> — connectivity probe across the tier matrix</h3>
+<p><code>tiers</code> answers "is the panel ready to vote on High right now?" without spinning up a real <code>ask</code> or <code>vote</code>. It probes every (trusted-provider, tier) cell with a tiny "reply OK" prompt and prints a connectivity table, defaulting to the trusted four × Low/Medium/High = 12 calls. Distinct from <code>legion health</code>, which only probes per-provider <code>DefaultModel</code>, missing tier-mapping breakage.</p>
+<pre><code class="language-bash">legion.exe tiers [opts]</code></pre>
+<table><thead><tr>
+<th>Option</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>--providers a,b,c</code></td>
+<td>Narrow within the trusted set (untrusted ids dropped).</td>
+</tr>
+<tr>
+<td><code>--tiers low,medium,high</code></td>
+<td>Narrow the tier sweep. Default: <code>low,medium,high</code>.</td>
+</tr>
+<tr>
+<td><code>--all-tiers</code></td>
+<td>Shorthand for all five tiers (Low, Medium, High, Higher, Highest).</td>
+</tr>
+<tr>
+<td><code>--max-tokens N</code></td>
+<td>Token budget per probe (default 400 — large enough for thinking models like <code>gemini-2.5-pro</code> to actually emit text after reasoning).</td>
+</tr>
+<tr>
+<td><code>--timeout S</code></td>
+<td>Per-probe timeout in seconds (default 45).</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Emit JSON record (one entry per probe + summary) instead of a table.</td>
+</tr>
+</tbody></table>
+<p>Output is a one-row-per-probe table:</p>
+<pre><code>PROVIDER   TIER     MODEL                            STATUS  TIME     DETAIL
+────────────────────────────────────────────────────────────────────────────
+claude-api Low      claude-haiku-4-5-20251001        OK      2600ms   OK
+claude-api Medium   claude-sonnet-5                  OK      999ms    OK
+claude-api High     claude-opus-4-7                  OK      1404ms   OK
+...
+summary: 12/12 ok</code></pre>
+<p>Exit codes:</p>
+<ul>
+<li><code>0</code> — every probe succeeded</li>
+<li><code>1</code> — at least one probe failed</li>
+</ul>
+<p>Use it before a critical session, after a model-id rotation, or as a lightweight CI smoke-test (paid, so wire it behind a manual <code>workflow_dispatch</code>).</p>
+<hr>
+<h2 id="direct-legionclient-usage-no-voting">Direct <code>LegionClient</code> usage (no voting)</h2>
+<p>Apps that don't need voting/quorum can call <code>AddLegionClient()</code> and inject <code>LegionClient</code> directly for the same connection scaffolding (endpoints, auth headers, request/response shape, model defaults, shared-credential lookup, retry, circuit breaking) without pulling in the voting machinery:</p>
+<pre><code class="language-csharp">services.AddLegionClient();
+// ...
+public class MyService(LegionClient legion)
+{
+    public Task&lt;string&gt; AskClaude(string prompt) =&gt;
+        legion.CallAsync("claude-api", systemPrompt: "...", userMessage: prompt);
+}</code></pre>
+<p><code>LegionClient</code> covers more than single-turn text completions:</p>
+<pre><code class="language-csharp">// Multi-turn chat (shared-credential overload)
+var reply = await legion.CallChatAsync("openai",
+    new[] { new ChatTurn("user", "Hi"), new ChatTurn("assistant", "Hello!"), new ChatTurn("user", "What's 2+2?") },
+    systemPrompt: "Be terse.");
+
+// Anthropic prompt caching — cache a large stable prefix (e.g. story canon) once,
+// then reuse it across many calls that vary only the trailing instructions.
+var cached = await legion.CallAsync("claude-api", apiKey, model,
+    systemPrompt: dynamicInstructions, userMessage: userPrompt,
+    cachedSystemPrefix: stableCanonText, cacheUserMessage: false);
+
+// Fallback chain — try providers in order until one succeeds
+var (providerId, text) = await legion.CallWithFallbackAsync(
+    new[] { "claude-api", "openai", "gemini", "deepseek" },
+    systemPrompt: "...", userMessage: "...");
+
+// OpenAI embeddings
+var vectors = await legion.EmbedAsync("openai", apiKey, "text-embedding-3-small",
+    new[] { "first passage", "second passage" });
+
+// OpenAI (DALL·E) image generation
+var urls  = await legion.GenerateImageAsync("openai", apiKey, "dall-e-3", "a lighthouse at dusk, watercolor");
+var bytes = await legion.GenerateImageBytesAsync("openai", apiKey, "dall-e-3", "a lighthouse at dusk, watercolor");
+
+// Claude document input — native PDF, or extracted text for DOCX/EPUB/plain text
+var summary = await legion.CallWithDocumentAsync(apiKey, "claude-sonnet-5",
+    documentBytes: pdfBytes, mediaType: "application/pdf",
+    userPrompt: "Summarize this contract in 3 bullets.");</code></pre>
+<p><code>IsProviderConfigured(providerId)</code> reports whether a credential currently resolves (OAuth for <code>claude-team</code>, credential-store key for everything else); <code>LegionClient.IsSupported(providerId)</code> / the static <code>LegionClient.DefaultModels</code> dictionary are useful for building settings screens without an HTTP round-trip. <code>LlmProviderRuntimeConfigurationResolver.Get(providerId)</code> reads the optional <code>apiKey</code>/<code>type</code>/<code>model</code>/<code>maxTokens</code> fields recorded for a provider in <code>providers.json</code> without requiring callers to parse that file themselves.</p>
+<h3 id="resilience">Resilience</h3>
+<p><code>LegionClientOptions</code> tunes retry and circuit-breaker behavior per <code>LegionClient</code> instance:</p>
+<table><thead><tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>MaxRetries</code></td>
+<td>2</td>
+<td>Extra attempts after the first failure, on transient errors only (network errors, HTTP 408/429/5xx).</td>
+</tr>
+<tr>
+<td><code>InitialBackoff</code></td>
+<td>500ms</td>
+<td>Delay before the first retry.</td>
+</tr>
+<tr>
+<td><code>BackoffMultiplier</code></td>
+<td>2.0</td>
+<td>Multiplier applied to the backoff after each retry.</td>
+</tr>
+<tr>
+<td><code>CircuitBreakerThreshold</code></td>
+<td>5</td>
+<td>Consecutive failures that open the per-provider breaker.</td>
+</tr>
+<tr>
+<td><code>CircuitBreakerCooldown</code></td>
+<td>2 minutes</td>
+<td>How long the breaker stays open before allowing another attempt.</td>
+</tr>
+</tbody></table>
+<p><code>LegionClientOptions.NoResilience</code> (no retries, breaker effectively disabled) is what the CLI's <code>health</code>/<code>ping</code>/<code>poll</code>/<code>generate</code>/<code>tiers</code> commands use — those already fan out many parallel calls and want a clean per-call pass/fail rather than retry noise. The <code>CircuitBreaker</code> itself is <code>static</code> and process-wide: "Claude is down" means the same thing to every <code>LegionClient</code> instance in the process, so a sick provider fails fast everywhere rather than per-instance. Non-transient failures (e.g. 401 auth) and client-side validation errors (unsupported provider) are never retried.</p>
+<h3 id="health-checks-and-diagnosis">Health checks and diagnosis</h3>
+<p><code>LlmHealthCheck.CheckAsync</code>/<code>CheckOneAsync</code>/<code>CheckAllAsync</code> send a tiny "Reply with exactly the two words: Hello World!" probe and classify the outcome via <code>LlmHealthDiagnoser</code> into an <code>LlmHealthDiagnosis</code>:</p>
+<p><code>Healthy</code> · <code>ResponseMismatch</code> · <code>BadResponse</code> · <code>MissingCredential</code> · <code>AuthInvalid</code> (401) · <code>AuthForbidden</code> (403) · <code>QuotaExhausted</code> (402 / 429-with-quota) · <code>RateLimited</code> (429) · <code>BadRequest</code> (400) · <code>NotFound</code> (404) · <code>PayloadTooLarge</code> (413) · <code>ServerError</code> (5xx) · <code>ServiceUnavailable</code> (503) · <code>GatewayTimeout</code> (504/408) · <code>Timeout</code> · <code>Offline</code> (network error, no HTTP status) · <code>CircuitOpen</code> · <code>CancelledByUser</code></p>
+<p>Each <code>LlmHealthResult</code> carries an <code>ActionableMessage</code> — a human-readable next step ("rotate your key at …", "top up your account at …") built from the diagnosis plus the provider's dashboard/keys URLs, so a settings page can render a fix instead of a stack trace.</p>
+<p><code>LlmModelDiscovery.DiscoverAsync</code>/<code>DiscoverOneAsync</code>/<code>DiscoverAllAsync</code> queries a provider's live <code>/models</code>-style endpoint (when it has one) and normalizes the response shape (<code>data[]</code>, <code>models[]</code>, bare arrays, legacy <code>model_id</code>, …) into a plain model-id list, independent of <code>LegionClient</code> — useful for building a status screen without sending an actual prompt.</p>
+<hr>
+<h2 id="public-api-at-a-glance">Public API at a glance</h2>
+<pre><code class="language-csharp">// Voting
+Task&lt;VotingResult&gt;   VoteAsync(string question, string context, Quorum, CT)
+Task&lt;VotingResult&gt;   VoteAsync(VoteRequest, Quorum, CT)
+Task&lt;VotingResult&gt;   VoteAsync(VoteRequest, Quorum, IEnumerable&lt;string&gt; providerIds, CT)
+Task&lt;VotingResult&gt;   VoteWithProfilesAsync(VoteRequest, Quorum, IEnumerable&lt;VoterProfile&gt;, CT)
+Task&lt;VotingResult&gt;   VoteWithPersonasAsync(string question, string context, Quorum, IEnumerable&lt;VoterProfile&gt;, CT)
+
+// Decisions
+Task&lt;DecisionResult&gt; DecideAsync(string question, IEnumerable&lt;string&gt; options, string context, Quorum, int maxTokens, CT)
+
+// Scoring
+Task&lt;ScoredVotingResult&gt; ScoreAsync(ScoredVoteRequest, CT)
+Task&lt;ScoredVotingResult&gt; ScoreWithProfilesAsync(ScoredVoteRequest, IEnumerable&lt;VoterProfile&gt;, CT)
+
+// Panel construction
+List&lt;string&gt;                     GetActiveProviderIds()
+IReadOnlyList&lt;VoterProfile&gt;      CreatePanel(int count, string fallbackProviderId = "claude-api", Random?)</code></pre>
+<p><code>VoterProfile.ForCharacter(name, psychologyMarkdown, providerId, apiKey?, model?)</code> wraps a character's psychology into a voter profile suitable for in-story decisions.</p>
+<p><code>LegionClient</code> (direct transport, no voting):</p>
+<pre><code class="language-csharp">Task&lt;string&gt; CallAsync(providerId, apiKey, model, systemPrompt, userMessage, maxTokens, temperature, CT, cachedSystemPrefix?, cacheUserMessage, userCancelToken?)
+Task&lt;string&gt; CallAsync(providerId, systemPrompt, userMessage, maxTokens, temperature, modelOverride?, CT, cachedSystemPrefix?, cacheUserMessage)   // shared-credential lookup
+Task&lt;string&gt; CallAsync(providerId, apiKey, model, systemPrompt, userMessage, endpointUrl, maxTokens, temperature, CT)                              // explicit-URL / self-hosted
+Task&lt;string&gt; CallChatAsync(providerId, apiKey, model, IEnumerable&lt;ChatTurn&gt;, systemPrompt?, maxTokens, temperature, CT)
+Task&lt;string&gt; CallChatAsync(providerId, IEnumerable&lt;ChatTurn&gt;, systemPrompt?, maxTokens, temperature, modelOverride?, CT)                           // shared-credential lookup
+Task&lt;(string ProviderId, string Response)&gt; CallWithFallbackAsync(IEnumerable&lt;string&gt; fallbackChain, systemPrompt, userMessage, maxTokens, temperature, CT)
+Task&lt;string&gt; CallWithDocumentAsync(apiKey, model, documentBytes, mediaType, userPrompt, systemPrompt?, maxTokens, temperature, CT)                 // Claude only
+Task&lt;IReadOnlyList&lt;float[]&gt;&gt; EmbedAsync(providerId, apiKey, model, IReadOnlyList&lt;string&gt; inputs, dimensions?, CT)                                  // OpenAI only
+Task&lt;IReadOnlyList&lt;string&gt;&gt;  GenerateImageAsync(providerId, apiKey, model, prompt, size, n, CT)                                                    // OpenAI (DALL·E) only
+Task&lt;IReadOnlyList&lt;byte[]&gt;&gt;  GenerateImageBytesAsync(providerId, apiKey, model, prompt, size, quality, n, CT)                                      // OpenAI (DALL·E) only
+bool IsProviderConfigured(providerId)
+static bool IsSupported(providerId)
+static string? GetClaudeTeamOAuthToken()
+static IReadOnlyDictionary&lt;string,string&gt; DefaultModels</code></pre>
+<hr>
+<h2 id="architecture">Architecture</h2>
+<pre><code>┌─ Your app / legion.exe CLI
+│   └─ LlmVotingService     public API: VoteAsync / DecideAsync / ScoreAsync
+│         └─ VoterFactory   builds VoterProfile lists (CreatePanel, personas, diverse panels)
+│         └─ LlmVotingProvider
+│               └─ LegionClient   universal LLM transport
+│                     ├─ Claude wire shape (claude-api key auth / claude-team OAuth)
+│                     ├─ OpenAI-compatible wire shape (openai, deepseek, mistral, xai,
+│                     │    groq, together, openrouter, fireworks, kimi, perplexity,
+│                     │    and any self-hosted endpoint via an explicit URL)
+│                     ├─ Gemini wire shape
+│                     └─ Cohere wire shape
+│                     ├─ CircuitBreaker (process-static, per-provider)
+│                     └─ ClaudeCodeOAuthSource (~/.claude/.credentials.json, auto-refresh)
+├─ LegionConfig (legion.json — per-project voters/judge/models/apiKeys/maxConcurrency)
+└─ MindAtticCredentialStore (facade over MindAttic.Vault; shared keyring at %APPDATA%/MindAttic/LLM/)</code></pre>
+<p><code>LegionClient</code> owns the socket pool, retry policy, and circuit breaker. <code>LlmVotingProvider</code> adds vote-specific shaping and per-voter key resolution. <code>LlmVotingService</code> is the public API — you almost never need to touch the lower layers. See <a href="docs/BIBLE.md#LEG-§4"><code>docs/BIBLE.md §4</code></a> for the canonical architecture diagram and project layout, and <a href="docs/BIBLE.md#LEG-§5"><code>docs/BIBLE.md §5</code></a> for the Laws this design must never violate.</p>
+<hr>
+<h2 id="personas-the-1024-persona-library">Personas: the 1024-persona library</h2>
+<p><code>PersonaLibrary</code> (<code>MindAttic.Legion/Services/PersonaLibrary.cs</code>) is not a hand-authored list — it's a deterministic sample from a diversity skeleton:</p>
+<ul>
+<li><strong>40 vocational archetypes</strong> (retired schoolteacher, ER nurse, trial lawyer, software engineer, parish priest, long-haul truck driver, …)</li>
+<li><strong>16 worldviews</strong> (cautious traditionalist, dry-witted skeptic, data-driven empiricist, blunt populist, …)</li>
+<li><strong>16 cultural backgrounds</strong> (rural Midwestern, coastal urban, first-generation immigrant, Appalachian, Gulf Coast bayou, …)</li>
+</ul>
+<p>That 40×16×16 = 10,240-point cube is sampled down to a fixed <strong>1024</strong> personas using a hard-coded seed (<code>SampleSeed = 0x9E3779B1</code>), so the library is exactly reproducible build-to-build. Each persona is further enriched with a deterministic age, one of two pronoun sets (<code>she/her</code>, <code>he/him</code>), and one of 50 signature quirks (~20 personas per quirk) so neighboring entries in the catalog still read as distinct people. Every persona has a unique id and name (<code>PersonaLibraryShapeTests</code> asserts both). There are no per-provider "default" personas — a bare LLM voter with no persona is simply a <code>VoterProfile</code> with empty <code>PersonalityMarkdown</code>.</p>
+<p><code>PersonaLibrary.Sample(count, rng?)</code> draws <strong>without replacement</strong> via a partial Fisher-Yates shuffle, so a panel built through <code>VoterFactory</code> never repeats a persona in the same batch; pass a seeded <code>Random</code> for reproducible test panels. <code>PersonaLibrary.Profiles</code> embeds the persona library's latest psychometric scores directly in the NuGet package (<code>Resources/psychometric-profiles.json</code>), so consumers get profile-carrying personas with zero external data source — pair with <code>VoterFactory.GenerateDiverseVoters</code> to build trait-diverse panels out of the box.</p>
+<p><code>VoterFactory.GenerateUniqueVoters(count, providerIds, fallbackProviderId = "claude-api", rng?)</code> spreads voters across every supplied provider at least once before doubling up, backfilling extra slots with the fallback provider. <code>VoterFactory.GenerateDiverseVoters(count, providerIds, profiles, fallbackProviderId, rng?)</code> instead does greedy farthest-point selection over the 15-dimensional OCEAN+HEXACO+DISC trait vector — seeding on the persona farthest from the panel's centroid, then repeatedly adding whichever remaining candidate is farthest from everyone already chosen — so a small panel spans the trait space instead of clustering.</p>
+<hr>
+<h2 id="testing">Testing</h2>
+<p><code>MindAttic.Legion.Tests/</code> is a two-tier suite: a <strong>unit suite</strong> (461 tests, runs on every <code>dotnet test</code>, no network) and a <strong>live integration suite</strong> (21 explicit tests across four categories, runs only when filtered).</p>
+<h3 id="unit-suite-461-tests">Unit suite (461 tests)</h3>
+<p>Covers, with no network calls:</p>
+<ul>
+<li>Vote tally correctness (plurality, simple-majority, two-thirds, unanimous) and quorum enforcement at threshold edges</li>
+<li>Persona injection (system-prompt wrapping)</li>
+<li>Provider failover and refill (one voter erroring doesn't break the vote; failed slots are reissued against the surviving providers)</li>
+<li>Choice-option exact-match matching</li>
+<li>Scored-vote dimension aggregation</li>
+<li>Wire-format adapters per provider (Claude / OpenAI-compatible / Gemini / Cohere) — including the Opus 4.7+/Sonnet 5+/Haiku 5+ temperature-omission invariants and the Claude 5+ adaptive-thinking-disable invariant</li>
+<li>Resilience policy: retry / circuit-breaker / fallback-chain</li>
+<li>Health-check diagnosis classification (auth / quota / rate-limit / offline / wrong-reply)</li>
+<li>Live model discovery + JSON shape normalization (every wire shape Legion has met: OpenAI <code>data[]</code>, Gemini <code>models[]</code> with <code>models/</code> prefix trim, Cohere/Anthropic variants, bare arrays, <code>model_id</code> legacy, mixed-type arrays, malformed JSON soft-failure)</li>
+<li><code>VotingConfiguration.ActiveProviderIds</code> gating: explicit keys, blank-key filtering, default trusted-set whitelist, untrusted-provider rejection, shared-credential merging, dedup</li>
+<li><code>AskCommand</code> helpers: trust-list intersection, choice-mode option snapping, auto-context assembly + caps, architect-prompt heuristics, help-flag recognition, tier override map (<code>BuildTierModelOverrides</code> Low/Medium/High/Higher), default tier pin (High)</li>
+<li><code>TiersCommand</code> helpers: trust-list parity with <code>ask</code>, default tier sweep (Low/Medium/High), provider resolution, table truncation</li>
+<li><code>PollCommand</code> helpers: round-robin assignment math (<code>AssignRoundRobin</code> at counts 8, 10, 100), tier model resolution per assignment, case-insensitive distribution aggregation, off-ballot handling</li>
+<li><code>GenerateCommand</code> helpers: count-splitting math (with a property test that totals always equal N), every list-marker shape (<code>1.</code>, <code>1)</code>, <code>- </code>, <code>* </code>, <code>• </code>), every quote variant including curly, order preservation, case-insensitive dedup with first-seen-wins</li>
+<li>Persona-library shape (exactly 1024 personas, unique ids/names), persona-store round-tripping, psychometric instrument item parsing/scoring/model-shape tests</li>
+</ul>
+<p>Run from the repo root:</p>
+<pre><code class="language-bash">dotnet test MindAttic.Legion.Tests/MindAttic.Legion.Tests.csproj</code></pre>
+<p>Typical wall time: ~2s. Verified locally: <strong>461 passed / 0 failed / 0 skipped</strong>.</p>
+<h3 id="live-integration-suite-21-explicit-tests-four-categories">Live integration suite (21 explicit tests, four categories)</h3>
+<p>The live suite spans four categories, all marked <code>[Explicit]</code> so they do <strong>not</strong> run on normal <code>dotnet test</code> invocations (no surprise spend on CI). Run on demand to verify wire-shape, tier mapping, key validity, and psychometric scoring against live providers.</p>
+<p><strong><code>LiveApi</code> (17 tests) — <code>LiveApiIntegrationTests.cs</code>:</strong> End-to-end tests that hit the real trusted-provider APIs.</p>
+<ul>
+<li>12 per-(provider, tier) connectivity tests, one per cell of the trusted × Low/Medium/High matrix. A failure points at the exact cell.</li>
+<li>1 whole-matrix sanity check using <code>TiersCommand.ProbeMatrixAsync</code> — the "panel is healthy" assertion in one line.</li>
+<li>1 override-vs-catalog parity guard — pins that <code>BuildHighTierModelOverrides</code> matches <code>LlmProviderCatalog.GetTieredModel(..., High)</code> for every trusted provider.</li>
+<li>3 end-to-end smoke tests of <code>legion ask</code>, <code>legion poll</code>, <code>legion generate</code> at Low tier with tiny budgets.</li>
+</ul>
+<p><strong><code>LiveKeys</code> (3 tests) — <code>LiveKeyValidationTests.cs</code>:</strong> Verify the shared Vault keys actually authenticate against each provider they're present for — data-driven over whatever keys are currently in the store, so adding/removing a key adds/removes a test case with no edit required. One of the three is additionally tagged <code>LiveKeysTrusted</code> (a narrower run scoped to the trusted set).</p>
+<p><strong><code>LivePsychometrics</code> (1 test) — <code>PsychometricLiveTests.cs</code>:</strong> End-to-end persona scoring through a real provider (≈5 Opus-class calls).</p>
+<p>Run on demand:</p>
+<pre><code class="language-bash"># All live tests in a specific category
+dotnet test --filter "Category=LiveApi"
+dotnet test --filter "Category=LiveKeys"
+dotnet test --filter "Category=LiveKeysTrusted"
+dotnet test --filter "Category=LivePsychometrics"
+
+# One specific cell — useful when a single provider is flaky
+dotnet test --filter "FullyQualifiedName~LiveApi.Claude_High"
+
+# All Claude tiers
+dotnet test --filter "FullyQualifiedName~LiveApi.Claude_"</code></pre>
+<p>Cost is small (~12 tiny probes + 3 small smoke tests on Low tier for LiveApi) but real — wire it behind a manual GitHub Actions <code>workflow_dispatch</code> if you want it in CI without paying every run.</p>
+<p>The full offline filter used in CI/pre-release verification:</p>
+<pre><code class="language-bash">dotnet test MindAttic.Legion.Tests -c Release --filter "Category!=LiveKeys&amp;Category!=LiveKeysTrusted&amp;Category!=LiveApi&amp;Category!=LivePsychometrics"</code></pre>
+<hr>
+<h2 id="build-pack-publish">Build, pack, publish</h2>
+<pre><code class="language-bash"># Build the whole solution (library + CLI + tests)
+dotnet build MindAttic.Legion.slnx -c Release
+
+# Run the offline test suite
+dotnet test MindAttic.Legion.Tests/MindAttic.Legion.Tests.csproj
+
+# Pack the library as a NuGet package (+ .snupkg symbols)
+dotnet pack MindAttic.Legion/MindAttic.Legion.csproj -c Release -o pack-out
+
+# Build the CLI executable
+dotnet build MindAttic.Legion.Cli/MindAttic.Legion.Cli.csproj -c Release
+# → MindAttic.Legion.Cli/bin/Release/net10.0/legion.exe (also legion.dll, runnable via `dotnet legion.dll`)</code></pre>
+<p>Versioning is whole-number/major-only across every MindAttic project (see <a href="../MindAttic.HouseRules.md"><code>MindAttic.HouseRules.md</code></a>, inherited via <a href="docs/BIBLE.md#LEG-§5"><code>docs/BIBLE.md §5</code></a>): the package's <code>&lt;Version&gt;</code> bumps by a whole major number per release (<code>N.0.0</code>) and nothing else.</p>
+<p><code>docs/</code> canon has its own tooling, unrelated to the library build:</p>
+<pre><code class="language-bash">powershell -File tools/codex.ps1 digest   # regenerate docs/BIBLE.digest.md after editing BIBLE §1/§3/§5/§9 or the latest amendment
+powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, cited tests/paths, digest freshness — must exit 0</code></pre>
+<p>There is also a separate, unrelated Node-based landing-page renderer (<code>package.json</code>, <code>scripts/cli/</code>, <code>index.htm</code>) that turns this README into the <code>mindattic.com</code> landing page for the project; it is not part of the library/CLI build and is deployed by the sibling <code>MindAttic.Deploy</code> repo. <code>tools/build-readme.ps1</code> (this repo's copy of the shared Codex <code>README.md → README.htm</code> engine) is a separate, simpler doc-preview artifact and does not touch <code>index.htm</code>.</p>
+<hr>
+<h2 id="directory-layout">Directory layout</h2>
+<pre><code>MindAttic.Legion/                    the library (net10.0, PackageId MindAttic.Legion)
+  Models/                            Quorum, ModelTier, VoteRequest/Result, VoterProfile,
+                                      VotingConfiguration, LegionConfig, ChatTurn, Persona(Detail),
+                                      Psychometrics/ (OceanScores, HexacoScores, MbtiResult,
+                                      EnneagramResult, DiscResult, PersonaDocument, PsychometricProfile)
+  Providers/                         LlmVotingProvider — fans a vote across voters, resolves keys
+  Services/                          LlmVotingService, LegionClient, LlmProviderCatalog,
+                                      CircuitBreaker, ClaudeCodeOAuthSource, LegionClientOptions,
+                                      LlmHealthCheck, LlmHealthDiagnosis, LlmModelDiscovery,
+                                      MindAtticCredentialStore, LlmProviderRuntimeConfiguration,
+                                      PersonaLibrary, PersonaNames, VoterFactory, LegionJson,
+                                      Psychometrics/ (PersonaStore, PsychometricInstruments,
+                                      PsychometricScorer, LlmPsychometricAssessor, PsychometricVoteAnalysis)
+  Resources/psychometric-profiles.json   embedded id → latest-profile map shipped with the package
+MindAttic.Legion.Cli/                 legion.exe host
+  Program.cs, LegionCli.cs            entry point + health/ping/status/providers/models/personas/panel/vote
+  AskCommand.cs, PollCommand.cs, GenerateCommand.cs, TiersCommand.cs, PsychometricsCommand.cs
+MindAttic.Legion.Tests/                NUnit 4 test project (461 offline + 21 live-explicit)
+docs/                                 Codex canon — BIBLE.md (L0), AMENDMENTS.md (L1),
+                                       USER_STORIES.md (L2), rfc/, generated BIBLE.digest.md
+tools/codex.ps1                       digest + doctor tooling for docs/
+tools/build-readme.ps1                thin wrapper around the shared codex-standard README→HTML engine
+scripts/, package.json, index.htm     separate Node-based mindattic.com landing-page renderer (not part
+                                       of the library/CLI build)</code></pre>
+<hr>
+<h2 id="glossary">Glossary</h2>
+<ul>
+<li><strong>Panel</strong> — the set of active voters (provider × persona) participating in a vote.</li>
+<li><strong>Quorum</strong> — agreement threshold: <code>Plurality</code> (any winner) · <code>SimpleMajority</code> (&gt;50%) · <code>TwoThirds</code> (≥66.7%) · <code>Unanimous</code> (100%).</li>
+<li><strong>Voter</strong> — one <code>VoterProfile</code>: a provider id + optional persona + optional key/model/max-tokens override.</li>
+<li><strong>Persona</strong> — a markdown system-prompt worldview from the 1024-member <code>PersonaLibrary</code>.</li>
+<li><strong>Tier</strong> — a <code>ModelTier</code> (Low…Highest) the catalog maps to a concrete model per provider (five providers have an explicit map; the rest fall back to their single default model at every tier).</li>
+<li><strong>Trusted set(s)</strong> — see <a href="#trust-tiers-which-list-applies-where">Trust tiers</a>: the library's default voting whitelist is 5 providers (including <code>claude-team</code>); the CLI's autonomous-decision commands (<code>ask</code>/<code>poll</code>/<code>generate</code>/<code>tiers</code>) hard-code a stricter 4-provider list that excludes <code>claude-team</code>.</li>
+<li><strong>Judge</strong> — the LLM that synthesizes free-form votes into a consensus (<code>JudgeProviderId</code>).</li>
+<li><strong>Consensus / dissent</strong> — the agreed answer and the recorded minority positions.</li>
+<li><strong>Circuit breaker</strong> — per-provider fast-fail after repeated failures, shared process-wide.</li>
+<li><strong><code>legion.json</code></strong> — optional per-project config file (voters/judge/models/apiKeys/maxConcurrency), currently auto-applied only by the CLI's <code>vote</code> subcommand.</li>
+<li><strong>Psychometric instrument</strong> — one of five trait batteries (OCEAN, HEXACO, MBTI-style, Enneagram-style, DISC-style) scored deterministically from in-character answers.</li>
+</ul>
+<hr>
+<h2 id="license">License</h2>
+<p>MIT — see <a href="LICENSE">LICENSE</a>. Copyright (c) 2026 MindAttic.</p>
+<hr>
+<h2 id="briefing-another-coding-agent">Briefing another coding agent</h2>
+<p>When you want another LLM-driven CLI (Claude Code, Codex, Cursor agent, etc.) to reach for Legion instead of blocking on you, paste the block below into its memory or system prompt. It's self-contained and assumes nothing about the host except that it can run a <code>.exe</code>.</p>
+<pre><code>You now have a Legion panel for hard calls. Use it instead of blocking on me.
+
+Legion is a multi-LLM CLI at:
+  D:\Projects\MindAttic\MindAttic.Legion\MindAttic.Legion.Cli\bin\Release\net10.0\legion.exe
+
+The panel is HARDCODED to Claude (API key), ChatGPT, Gemini, DeepSeek — the four providers
+I trust for autonomous decisions. No untrusted provider can ever be added, even via --providers
+(untrusted ids get silently dropped). If a trusted provider is unreachable, Legion automatically
+refills the empty slot with another working provider so the panel never falls below quorum.
+
+CHOOSING THE COMMAND
+You have four primary commands. Pick by what shape of answer you need:
+
+  legion ask &lt;q&gt;        ONE decision, panel-voted, architect-framed.
+                        Default tier: HIGH (flagship reasoning class for every trusted provider).
+                        Use for: architectural choices, breaking-change tradeoffs, ambiguous specs.
+
+  legion poll &lt;q&gt;       N independent voters, count-sorted distribution, plurality winner.
+                        Default tier: LOW. Default count: 10.
+                        Use for: "how does the panel split?" sampling, sentiment polls, sanity
+                        checks where you want a count, not a verdict.
+
+  legion generate &lt;p&gt;   N distinct creative items, deduped, newline to stdout.
+                        Default tier: MEDIUM. Default count: 10.
+                        Use for: name lists, taglines, alternatives, function-name brainstorms.
+
+  legion tiers          Probe trusted-four × Low/Medium/High = 12 cells. No question, just connectivity.
+                        Use for: "is the panel healthy right now?" before a critical session,
+                        or after a model deprecation in the wild.
+
+WHEN TO CALL `ask`
+Whenever you would otherwise pause to ask me:
+  - An architectural choice (DI lifetime, library pick, schema shape, layering decision).
+  - A breaking-change tradeoff (rename now vs. soft-deprecate, migrate now vs. shim).
+  - An ambiguous spec where two reasonable readings exist and the next file you write depends on which one is right.
+  - Anything hard to reverse.
+
+Don't call `ask` for mechanical edits, formatting, or things where you already know the answer — each call costs ~3-8s and four flagship-tier LLM-API requests. For cheap one-shot decisions, use --tier low.
+
+HOW TO CALL `ask`
+  legion.exe ask "&lt;question&gt;" [opts]
+
+Modes:
+  - Choice (recommended when possible):
+      legion.exe ask "Pick the JSON serializer" --options "System.Text.Json,Newtonsoft.Json"
+      → stdout = exactly one option, exit 0 on quorum.
+  - Free-form:
+      legion.exe ask "Best way to stream LLM tokens through SignalR without buffering?"
+      → stdout = the synthesized answer.
+  - Audit: add --json to get votes, reasoning, confidence, dissent. Use this when you want to surface tradeoffs back to me.
+  - Strict consensus: add --quorum twothirds to fail closed (exit 1) if the panel splits. Use for irreversible decisions.
+  - Tier override: add --tier low|medium|high|higher|highest. Default is high (architecture). Drop tier for cheap one-shot decisions where flagship reasoning is overkill.
+  - MUST-ANSWER: add --must-answer when you absolutely cannot tolerate "no answer". Phase-2 retry doubles budget and drops auto-context; phase-3 falls back to a single-provider chain (claude-api → openai → gemini → deepseek) calling raw text. Always emits an answer if any one provider is reachable.
+
+Auto-context: by default `ask` reads CLAUDE.md, README.md, and `git status -s` / `git log --oneline -10` from cwd and prepends them so voters know the project. Pass --no-auto-context for a clean prompt, or --context-file &lt;path&gt; to inject a specific file (e.g. the file you're about to edit).
+
+`ask` OUTPUT CONTRACT
+  stdout              | exit | meaning
+  ------------------- | ---- | -------------------------------------------------------
+  answer              | 0    | panel agrees, act on it
+  best-guess answer   | 1    | panel split — re-ask with more context or escalate to me
+  (empty)             | 2    | unhandled error (network, etc.)
+
+With --must-answer, exit 0 also covers the recovery cases (phase-2 retry, phase-3 single-provider chain). stderr will tell you which phase delivered ("ask: recovered in phase 3 via claude-api") — log that line if you want a record of the degraded path. stderr carries warnings only; never parse it for the answer.
+
+WHEN TO CALL `poll`
+When you want to *sample* the panel rather than reach a verdict — e.g. "how confidently do they all agree?" — or when you want to feed a question to many voters at the cheapest tier and tally the result.
+
+  # 100 voters at Low — quick distribution
+  legion.exe poll "Should we ship today?" --options "yes,no,not-yet" --count 100 --tier low
+
+`poll` writes a distribution table to stdout (or full JSON via --json). Plurality winner is whichever option got the most votes; no quorum.
+
+WHEN TO CALL `generate`
+When you need many *distinct creative items* on a single prompt — names, taglines, alternatives, function-name brainstorms.
+
+  legion.exe generate "single-word hero-vibe character names" --count 100 &gt; names.txt
+
+`generate` writes newline-separated items to stdout (Unix-pipe convention) and diagnostics to stderr. Pipe through `head`, `shuf`, `grep`, or redirect to a file.
+
+WHEN TO CALL `tiers`
+Use it ONCE at the start of a session that depends on the panel being live, or after a model rotation in the wild. It probes 12 cells (4 providers × Low/Medium/High) with a tiny "reply OK" prompt.
+
+  legion.exe tiers
+  # → 12-row table; exit 0 if every cell is OK, 1 otherwise.
+
+Don't call it before every `ask` — that's wasted spend. Once per session is plenty.
+
+EXAMPLES
+  # Decide a DI lifetime
+  legion.exe ask "Which DI lifetime for the new HttpClient wrapper?" --options "Singleton,Scoped,Transient"
+
+  # Pick between two refactors with full reasoning
+  legion.exe ask "Should we extract Persona-rendering into a separate service?" --json
+
+  # Conservative: only act if 2/3+ agree
+  legion.exe ask "Migrate the credential store to DPAPI now?" --quorum twothirds
+
+  # Cheap one-shot, no need for flagship reasoning
+  legion.exe ask "Should the new flag default true or false?" --options "true,false" --tier low
+
+  # I can't proceed without an answer — pull every lever
+  legion.exe ask "Pick the cache key format" --options "user:{id},u-{id},user_{id}" --must-answer
+
+  # Bulk distribution sample
+  legion.exe poll "Severity?" --options "low,medium,high,critical" --count 50 --tier low
+
+  # Bulk creative generation
+  legion.exe generate "fictional country names with calm vibes" --count 30 --tier medium
+
+  # Pre-flight panel check
+  legion.exe tiers
+
+--providers exists but you almost never need it: it can only NARROW within the trusted four (e.g. --providers claude-api,openai). Passing untrusted ids is harmless (they're dropped) but pointless. Don't reach for it unless I specifically ask you to scope a panel.
+
+If `legion ask` exits 1 (no quorum) WITHOUT --must-answer, don't silently pick its best-guess answer for a structural decision — surface the dissent (re-run with --json, summarize the disagreement, ask me). If you used --must-answer and still got exit 1 or 2, the trusted panel is genuinely down — escalate to me, don't guess.</code></pre>
+<hr>
+<h2 id="contributing-notes-for-sibling-repos-using-legion">Contributing notes (for sibling repos using Legion)</h2>
+<ul>
+<li><strong>Always wrap judgment calls in <code>DecideAsync</code>.</strong> If your code has a hard-coded branch that picks among options based on heuristics, replace the heuristic with a Legion decision and pass the relevant context. The panel is cheap; bad decisions are expensive.</li>
+<li><strong>Prefer <code>Plurality</code> for surfacing all viewpoints, <code>SimpleMajority</code> for routine decisions, <code>TwoThirds</code>+ for canon-affecting actions.</strong> Don't reach for <code>Unanimous</code> unless the cost of a single dissent is real.</li>
+<li><strong>Pass real context.</strong> A vote without context is just a popularity contest. Bundle the canon, the prior chapters, the schema, the rubric — whatever the panel needs to be informed.</li>
+<li><strong>Watch the cost dial.</strong> A panel of 5 means 5× tokens. Use the <code>providerIds</code> overload to scope votes to 2–3 providers when you don't need the full panel.</li>
+<li><strong><code>QuorumReached == false</code> is a signal, not a failure.</strong> It means the panel saw a real ambiguity. Surface it to a human or escalate the question.</li>
+<li><strong>Know which trusted list you're in.</strong> The library's default <code>AllowedProviderIds</code> includes <code>claude-team</code>; the CLI's <code>ask</code>/<code>poll</code>/<code>generate</code>/<code>tiers</code> commands don't. If you're porting logic from one surface to the other, re-check which provider set actually applies (see <a href="#trust-tiers-which-list-applies-where">Trust tiers</a>).</li>
+</ul>
+
+    <p class="codex-footer">Generated 2026-08-14 by the shared MindAttic Codex engine (<code>codex-standard/build-readme.ps1</code>) from <code>README.md</code>. Edit the Markdown source, not this file.</p>
+  </main>
+</div>
+<script>(function(){
+  'use strict';
+  var inner   = document.getElementById('toc-inner');
+  var content = document.getElementById('content');
+  if(!inner||!content) return;
+
+  var headings = Array.from(content.querySelectorAll('h2,h3'));
+  if(headings.length){
+    var title = document.createElement('span');
+    title.className = 'toc-title';
+    title.textContent = 'Contents';
+    inner.appendChild(title);
+
+    headings.forEach(function(h){
+      var a = document.createElement('a');
+      a.href      = '#'+h.id;
+      a.textContent = h.textContent.replace(/[#¶]/g,'').trim();
+      a.className = 'toc-a'+(h.tagName==='H3'?' is-h3':'');
+      if(h.tagName==='H2' && inner.children.length>1){
+        var sep=document.createElement('hr');
+        sep.className='toc-sep';
+        inner.appendChild(sep);
+      }
+      inner.appendChild(a);
+    });
+  }
+
+  var tocLinks = inner.querySelectorAll('.toc-a');
+  if(tocLinks.length && 'IntersectionObserver' in window){
+    var idMap={};
+    tocLinks.forEach(function(l){idMap[decodeURIComponent(l.getAttribute('href').slice(1))]=l;});
+    var active=null;
+    var obs=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          if(active)active.classList.remove('active');
+          active=idMap[e.target.id]||null;
+          if(active){
+            active.classList.add('active');
+            var sidebar=document.getElementById('sidebar');
+            if(sidebar){
+              var ar=active.getBoundingClientRect();
+              var sr=sidebar.getBoundingClientRect();
+              if(ar.top<sr.top||ar.bottom>sr.bottom)
+                active.scrollIntoView({block:'nearest'});
+            }
+          }
+        }
+      });
+    },{rootMargin:'-8% 0px -78% 0px',threshold:0});
+    headings.forEach(function(h){obs.observe(h);});
+  }
+
+  content.querySelectorAll('pre').forEach(function(pre){
+    var btn=document.createElement('button');
+    btn.className='cpbtn';
+    btn.textContent='copy';
+    btn.setAttribute('aria-label','Copy code');
+    btn.addEventListener('click',function(){
+      var text=(pre.querySelector('code')||pre).textContent;
+      if(!navigator.clipboard){return;}
+      navigator.clipboard.writeText(text).then(function(){
+        btn.textContent='copied!';btn.classList.add('ok');
+        setTimeout(function(){btn.textContent='copy';btn.classList.remove('ok');},1800);
+      }).catch(function(){});
+    });
+    pre.appendChild(btn);
+  });
+}());</script>
+</body>
+</html>
