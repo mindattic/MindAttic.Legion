@@ -250,6 +250,19 @@ public static class LlmProviderCatalog
                 "moonshot-v1-8k",
             },
             ModelsApiEndpoint: "https://api.moonshot.cn/v1/models"),
+
+        new("perplexity", "Perplexity", "Perplexity AI",
+            DefaultModel: "sonar",
+            DashboardUrl: "https://www.perplexity.ai/account/api/group",
+            KeysUrl: "https://www.perplexity.ai/settings/api",
+            AvailableModels: new[]
+            {
+                "sonar",
+                "sonar-pro",
+                "sonar-reasoning",
+                "sonar-reasoning-pro",
+                "sonar-deep-research",
+            }),
     };
 
     /// <summary>Every supported provider in canonical order.</summary>

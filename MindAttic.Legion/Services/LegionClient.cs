@@ -113,6 +113,7 @@ public class LegionClient
         ["fireworks"]  = "accounts/fireworks/models/llama-v3p1-70b-instruct",
         ["cohere"]     = "command-r-plus",
         ["kimi"]       = "kimi-k3",
+        ["perplexity"] = "sonar",
     };
 
     /// <summary>
@@ -139,6 +140,7 @@ public class LegionClient
         ["fireworks"]  = "https://api.fireworks.ai/inference/v1/chat/completions",
         ["cohere"]     = "https://api.cohere.com/v2/chat",
         ["kimi"]       = "https://api.moonshot.cn/v1/chat/completions",
+        ["perplexity"] = "https://api.perplexity.ai/chat/completions",
     };
 
     /// <summary>True if Legion knows how to talk to this provider.</summary>

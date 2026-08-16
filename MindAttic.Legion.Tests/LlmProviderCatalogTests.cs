@@ -15,7 +15,7 @@ public class LlmProviderCatalogTests
     [Test]
     public void All_HasExpectedProviderCount()
     {
-        Assert.That(LlmProviderCatalog.All, Has.Count.EqualTo(13));
+        Assert.That(LlmProviderCatalog.All, Has.Count.EqualTo(14));
     }
 
     [Test]
@@ -24,7 +24,7 @@ public class LlmProviderCatalogTests
         var expected = new[]
         {
             "claude-api","claude-team","openai","gemini","deepseek","mistral",
-            "xai","groq","together","openrouter","fireworks","cohere","kimi",
+            "xai","groq","together","openrouter","fireworks","cohere","kimi","perplexity",
         };
         var actual = LlmProviderCatalog.AllIds.ToArray();
         Assert.That(actual, Is.EquivalentTo(expected));
