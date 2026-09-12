@@ -82,6 +82,19 @@ public class LegionClient
         var fromStore = MindAtticCredentialStore.GetKey(providerId);
         if (!string.IsNullOrWhiteSpace(fromStore)) return fromStore;
 
+        // "claude-api" is Legion's own dispatch id (required for endpoint routing —
+        // see the Endpoints/DefaultModels dictionaries), but several MindAttic apps
+        // (Tutor, ThinkTank, IdiotProof, TaxRateCollector) store their shared Claude
+        // key under the shorter "claude" instead. Recognize either convention here
+        // so a shared key set via any app's Settings UI is visible to every other
+        // app that calls through Legion, without requiring apps to agree on one
+        // literal id ahead of time.
+        if (string.Equals(providerId, "claude-api", StringComparison.OrdinalIgnoreCase))
+        {
+            var fromClaudeAlias = MindAtticCredentialStore.GetKey("claude");
+            if (!string.IsNullOrWhiteSpace(fromClaudeAlias)) return fromClaudeAlias;
+        }
+
         // claude-api requires an explicit API key — no OAuth fallback.
         return null;
     }
