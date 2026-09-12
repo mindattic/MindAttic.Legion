@@ -116,11 +116,7 @@ public class LlmHealthCheck
                           DefaultModel: "", DashboardUrl: "", KeysUrl: "",
                           AvailableModels: Array.Empty<string>());
 
-        // claude-team credential lives in ~/.claude/.credentials.json (OAuth), not providers.json.
-        // Use the same resolution path as LegionClient.ResolveKey so HasCredential stays in sync.
-        var key = string.Equals(providerId, "claude-team", StringComparison.OrdinalIgnoreCase)
-            ? ClaudeCodeOAuthSource.GetAccessToken()
-            : MindAtticCredentialStore.GetKey(providerId);
+        var key = MindAtticCredentialStore.GetKey(providerId);
         if (string.IsNullOrWhiteSpace(key))
         {
             return new LlmHealthResult(

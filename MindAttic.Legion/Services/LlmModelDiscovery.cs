@@ -226,8 +226,7 @@ public sealed class LlmModelDiscovery
         if (string.IsNullOrWhiteSpace(apiKey))
             return;
 
-        if (info.Id.Equals("claude-api", StringComparison.OrdinalIgnoreCase)
-         || info.Id.Equals("claude-team", StringComparison.OrdinalIgnoreCase))
+        if (info.Id.Equals("claude", StringComparison.OrdinalIgnoreCase))
         {
             req.Headers.Add("x-api-key", apiKey);
             req.Headers.Add("anthropic-version", "2023-06-01");

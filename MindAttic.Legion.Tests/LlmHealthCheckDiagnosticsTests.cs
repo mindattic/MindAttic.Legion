@@ -44,10 +44,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_HealthyProvider_IsHealthy()
     {
-        creds.WriteKey("claude-api", "sk-ant-good");
+        creds.WriteKey("claude", "sk-ant-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.True);
         Assert.That(r.RespondedCorrectly, Is.True);
@@ -59,10 +59,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_HealthyButWrongReply_IsResponseMismatch()
     {
-        creds.WriteKey("claude-api", "sk-ant-good");
+        creds.WriteKey("claude", "sk-ant-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeWrong));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.True, "the wire was healthy — the response just didn't match");
         Assert.That(r.RespondedCorrectly, Is.False);
@@ -76,7 +76,7 @@ public class LlmHealthCheckDiagnosticsTests
     public async Task Probe_NoKey_IsMissingCredential()
     {
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
-        var r  = await hc.CheckOneAsync("claude-api");
+        var r  = await hc.CheckOneAsync("claude");
 
         Assert.That(r.HasCredential, Is.False);
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.MissingCredential));
@@ -87,10 +87,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_401Unauthorized_IsAuthInvalid()
     {
-        creds.WriteKey("claude-api", "sk-ant-expired");
+        creds.WriteKey("claude", "sk-ant-expired");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.Unauthorized, Bodies.AuthInvalidBody));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.False);
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.AuthInvalid));
@@ -102,10 +102,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_403Forbidden_IsAuthForbidden()
     {
-        creds.WriteKey("claude-api", "sk-ant-disabled");
+        creds.WriteKey("claude", "sk-ant-disabled");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.Forbidden, "{}"));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.AuthForbidden));
         Assert.That(r.HttpStatusCode, Is.EqualTo(403));
@@ -114,10 +114,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_402PaymentRequired_IsQuotaExhausted()
     {
-        creds.WriteKey("claude-api", "sk-ant-broke");
+        creds.WriteKey("claude", "sk-ant-broke");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.PaymentRequired, Bodies.ClaudeCreditLow));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.QuotaExhausted));
         Assert.That(r.ActionableMessage, Does.Contain("Top up").IgnoreCase);
@@ -157,10 +157,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_500InternalError_IsServerError()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.InternalServerError, Bodies.ServerErrorBody));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.ServerError));
         Assert.That(r.HttpStatusCode, Is.EqualTo(500));
@@ -169,10 +169,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_502BadGateway_IsServerError()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.BadGateway, ""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.ServerError));
     }
@@ -180,10 +180,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_503ServiceUnavailable_IsServiceUnavailable()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.ServiceUnavailable, ""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.ServiceUnavailable));
         Assert.That(r.ActionableMessage, Does.Contain("offline").IgnoreCase
@@ -193,10 +193,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_504GatewayTimeout_IsGatewayTimeout()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.GatewayTimeout, ""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.GatewayTimeout));
     }
@@ -206,10 +206,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_NetworkDown_IsOffline()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new NetworkFailureHandler("No such host is known."));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.Offline));
         Assert.That(r.HttpStatusCode, Is.Null);
@@ -219,10 +219,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_LocalTimeout_IsTimeout()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new HangingHandler());
 
-        var r = await hc.CheckOneAsync("claude-api", timeout: TimeSpan.FromMilliseconds(50));
+        var r = await hc.CheckOneAsync("claude", timeout: TimeSpan.FromMilliseconds(50));
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.Timeout));
     }
@@ -230,11 +230,11 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_400BadRequest_IsBadRequest()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.BadRequest,
             """{"error":{"type":"invalid_request_error","message":"Invalid model specified"}}"""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.BadRequest));
     }
@@ -242,10 +242,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_404NotFound_IsNotFound()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.NotFound, "{}"));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.NotFound));
     }
@@ -253,10 +253,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_413PayloadTooLarge_IsPayloadTooLarge()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.RequestEntityTooLarge, ""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.PayloadTooLarge));
     }
@@ -266,10 +266,10 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_MalformedJson_IsBadResponse()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.MalformedJson));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.False);
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.BadResponse));
@@ -280,10 +280,10 @@ public class LlmHealthCheckDiagnosticsTests
     {
         // 200 OK with `{}` — valid JSON but no extractable text. ExtractClaudeText returns ""
         // (no throw), so the response is treated as a non-matching reply, not a parse error.
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.EmptyJsonObject));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.True, "wire was healthy (200 OK)");
         Assert.That(r.RespondedCorrectly, Is.False);
@@ -295,11 +295,11 @@ public class LlmHealthCheckDiagnosticsTests
     {
         // Provider returns `{"content":[]}` — ExtractClaudeText finds no text blocks
         // and returns "", which the health check treats as a non-matching reply.
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK,
             """{"content":[]}"""));
 
-        var r = await hc.CheckOneAsync("claude-api");
+        var r = await hc.CheckOneAsync("claude");
 
         Assert.That(r.IsHealthy, Is.True, "wire was healthy (200 OK)");
         Assert.That(r.RespondedCorrectly, Is.False);
@@ -311,12 +311,12 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task Probe_BreakerOpen_IsCircuitOpen()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         // Pre-trip the breaker
-        CircuitBreaker.RecordFailure("claude-api", threshold: 1, cooldown: TimeSpan.FromMinutes(5));
+        CircuitBreaker.RecordFailure("claude", threshold: 1, cooldown: TimeSpan.FromMinutes(5));
 
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
-        var r  = await hc.CheckOneAsync("claude-api");
+        var r  = await hc.CheckOneAsync("claude");
 
         Assert.That(r.Diagnosis, Is.EqualTo(LlmHealthDiagnosis.CircuitOpen),
             "when the breaker is open, the probe must surface CircuitOpen so the user can try a different provider");
@@ -339,9 +339,7 @@ public class LlmHealthCheckDiagnosticsTests
     {
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
         var all = await hc.CheckAllAsync();
-        // claude-team uses OAuth (not a file-based key), so it may have a live token on dev machines.
-        var keyBased = all.Where(r => !string.Equals(r.ProviderId, "claude-team", StringComparison.OrdinalIgnoreCase));
-        Assert.That(keyBased.All(r => r.Diagnosis == LlmHealthDiagnosis.MissingCredential), Is.True);
+        Assert.That(all.All(r => r.Diagnosis == LlmHealthDiagnosis.MissingCredential), Is.True);
     }
 
     [Test]
@@ -349,7 +347,7 @@ public class LlmHealthCheckDiagnosticsTests
     {
         // Drop keys for three providers and route each to a different failure mode
         // via ProviderAwareHandler — the canonical "give me a status board" use case.
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         creds.WriteKey("openai", "sk-broke");
         creds.WriteKey("gemini", "sk-server-issue");
 
@@ -359,10 +357,10 @@ public class LlmHealthCheckDiagnosticsTests
         routing.SetForUri("generativelanguage.googleapis.com", HttpStatusCode.ServiceUnavailable, "");
 
         var hc      = Build(routing);
-        var results = (await hc.CheckAsync(new[] { "claude-api", "openai", "gemini" }))
+        var results = (await hc.CheckAsync(new[] { "claude", "openai", "gemini" }))
                       .ToDictionary(r => r.ProviderId);
 
-        Assert.That(results["claude-api"].Diagnosis, Is.EqualTo(LlmHealthDiagnosis.Healthy));
+        Assert.That(results["claude"].Diagnosis, Is.EqualTo(LlmHealthDiagnosis.Healthy));
         Assert.That(results["openai"].Diagnosis, Is.EqualTo(LlmHealthDiagnosis.QuotaExhausted));
         Assert.That(results["gemini"].Diagnosis, Is.EqualTo(LlmHealthDiagnosis.ServiceUnavailable));
     }
@@ -370,9 +368,9 @@ public class LlmHealthCheckDiagnosticsTests
     [Test]
     public async Task CheckOneAsync_PreservesElapsedTime()
     {
-        creds.WriteKey("claude-api", "sk-good");
+        creds.WriteKey("claude", "sk-good");
         var hc = Build(new FixedResponseHandler(HttpStatusCode.OK, Bodies.ClaudeOk));
-        var r  = await hc.CheckOneAsync("claude-api");
+        var r  = await hc.CheckOneAsync("claude");
         Assert.That(r.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(0));
     }
 

@@ -38,58 +38,6 @@ public class LegionClientTests
             Assert.That(LegionClient.DefaultModels.ContainsKey(id), Is.True, $"expected default model for {id}");
     }
 
-    /// <summary>
-    /// "claude-api" is Legion's own dispatch id, but several MindAttic apps (Tutor, ThinkTank,
-    /// IdiotProof, TaxRateCollector) store their shared Claude key under the shorter "claude"
-    /// instead. <see cref="LegionClient.IsProviderConfigured"/> (which calls the same internal
-    /// ResolveKey every credential-store-backed CallAsync overload uses) must recognize either.
-    /// </summary>
-    [Test]
-    public void IsProviderConfigured_ClaudeApi_FallsBackToSharedClaudeAlias()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "legion-claude-alias-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var prev = Environment.GetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS");
-        Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", dir);
-        try
-        {
-            // Only the shared "claude" entry exists — no "claude-api" entry at all.
-            File.WriteAllText(Path.Combine(dir, "claude.key"), "shared-key");
-
-            var client = new LegionClient(new HttpClient());
-
-            Assert.That(client.IsProviderConfigured("claude-api"), Is.True);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", prev);
-            try { Directory.Delete(dir, recursive: true); } catch { }
-        }
-    }
-
-    [Test]
-    public void IsProviderConfigured_ClaudeApi_PrefersItsOwnEntryOverTheAlias()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "legion-claude-alias-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var prev = Environment.GetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS");
-        Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", dir);
-        try
-        {
-            File.WriteAllText(Path.Combine(dir, "claude.key"), "");        // present but empty
-            File.WriteAllText(Path.Combine(dir, "claude-api.key"), "own"); // the real entry
-
-            var client = new LegionClient(new HttpClient());
-
-            Assert.That(client.IsProviderConfigured("claude-api"), Is.True);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("MINDATTIC_LLM_CREDENTIALS", prev);
-            try { Directory.Delete(dir, recursive: true); } catch { }
-        }
-    }
-
     [Test]
     public async Task CallAsync_ExplicitKey_DispatchesClaudeShape()
     {
@@ -97,7 +45,7 @@ public class LegionClientTests
         var capture = new CapturingHandler(stubBody);
         var client  = new LegionClient(new HttpClient(capture));
 
-        var reply = await client.CallAsync("claude-api",
+        var reply = await client.CallAsync("claude",
             apiKey: "sk-ant-test",
             model: "claude-sonnet-4-6",
             systemPrompt: "be brief",
@@ -173,7 +121,7 @@ public class LegionClientTests
     {
         var client = new LegionClient(new HttpClient(new CapturingHandler("{}")));
         Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.CallAsync("claude-api",apiKey: "", model: "x", systemPrompt: "s", userMessage: "u"));
+            client.CallAsync("claude",apiKey: "", model: "x", systemPrompt: "s", userMessage: "u"));
     }
 
     [Test]
@@ -206,7 +154,7 @@ public class LegionClientTests
         var failing = new HttpClient(new ErrorHandler(HttpStatusCode.Unauthorized));
         var client  = new LegionClient(failing);
         var ex = Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.CallAsync("claude-api","k", "m", "s", "u"));
+            client.CallAsync("claude","k", "m", "s", "u"));
         Assert.That(ex!.Message, Does.Contain("401").Or.Contains("Unauthorized"));
     }
 }

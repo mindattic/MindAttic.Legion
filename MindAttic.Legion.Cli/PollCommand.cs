@@ -34,7 +34,7 @@ public static class PollCommand
 {
     /// <summary>Trust list — same as ask/tiers; never widens here.</summary>
     internal static readonly string[] TrustedProviderIds =
-        { "claude-api", "openai", "gemini", "deepseek" };
+        { "claude", "openai", "gemini", "deepseek" };
 
     /// <summary>
     /// Default tier when <c>--tier</c> isn't passed. Low is right for

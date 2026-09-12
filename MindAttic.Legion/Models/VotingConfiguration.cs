@@ -49,7 +49,7 @@ public class VotingConfiguration
     /// The provider to use as a "judge" when synthesizing consensus from
     /// free-form votes. Defaults to "claude". Falls back to first available.
     /// </summary>
-    public string JudgeProviderId { get; set; } = "claude-api";
+    public string JudgeProviderId { get; set; } = "claude";
 
     /// <summary>
     /// Global voter persona applied to all votes unless overridden per-request.
@@ -68,15 +68,14 @@ public class VotingConfiguration
     /// </summary>
     public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        "claude-api", "claude-team", "openai", "gemini", "deepseek",
+        "claude", "openai", "gemini", "deepseek",
     };
 
     /// <summary>
     /// Optional cap on simultaneous ballot calls. <c>null</c> means "use the
     /// app's default" (e.g. StreetSamurai's <c>ReviewMaxConcurrency</c>).
     /// Set this in <c>legion.json</c> via <c>"maxConcurrency"</c> when the
-    /// voter panel uses a provider with tighter rate limits (e.g. claude-team
-    /// shares its quota with the Claude Code CLI in the same session).
+    /// voter panel uses a provider with tighter rate limits.
     /// </summary>
     public int? MaxConcurrency { get; set; }
 
@@ -100,9 +99,6 @@ public class VotingConfiguration
             {
                 foreach (var id in MindAtticCredentialStore.ListProviders())
                     ids.Add(id);
-                // claude-team authenticates via OAuth (not the file-based store) — check separately.
-                if (ClaudeCodeOAuthSource.GetAccessToken() is not null)
-                    ids.Add("claude-team");
             }
             if (AllowedProviderIds is { Count: > 0 })
                 ids.IntersectWith(AllowedProviderIds);

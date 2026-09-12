@@ -28,30 +28,10 @@ public static class LlmProviderCatalog
 {
     private static readonly LlmProviderInfo[] providers =
     {
-        new("claude-api", "Claude (API)", "Anthropic",
+        new("claude", "Claude", "Anthropic",
             DefaultModel: "claude-sonnet-5",
             DashboardUrl: "https://console.anthropic.com/",
             KeysUrl: "https://console.anthropic.com/settings/keys",
-            AvailableModels: new[]
-            {
-                "claude-fable-5",
-                "claude-sonnet-5",
-                "claude-opus-4-8",
-                "claude-opus-4-7",
-                "claude-opus-4-7[1m]",
-                "claude-opus-4-6",
-                "claude-sonnet-4-6",
-                "claude-haiku-4-5-20251001",
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229",
-            },
-            ModelsApiEndpoint: "https://api.anthropic.com/v1/models"),
-
-        new("claude-team", "Claude (Team)", "Anthropic",
-            DefaultModel: "claude-sonnet-5",
-            DashboardUrl: "https://claude.ai/settings",
-            KeysUrl: "",
             AvailableModels: new[]
             {
                 "claude-fable-5",
@@ -271,7 +251,7 @@ public static class LlmProviderCatalog
     /// <summary>Provider IDs only (lowercase).</summary>
     public static IEnumerable<string> AllIds => providers.Select(p => p.Id);
 
-    private static readonly string[] defaultIds = { "claude-api", "claude-team", "openai", "deepseek", "gemini" };
+    private static readonly string[] defaultIds = { "claude", "openai", "deepseek", "gemini" };
 
     /// <summary>
     /// First-party frontier-lab provider set surfaced in app UIs by default.
@@ -329,15 +309,7 @@ public static class LlmProviderCatalog
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<ModelTier, string>> tieredModels =
         new Dictionary<string, IReadOnlyDictionary<ModelTier, string>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["claude-api"] = new Dictionary<ModelTier, string>
-            {
-                [ModelTier.Low]     = "claude-haiku-4-5-20251001",
-                [ModelTier.Medium]  = "claude-sonnet-5",
-                [ModelTier.High]    = "claude-opus-4-7",
-                [ModelTier.Higher]  = "claude-opus-4-8",
-                [ModelTier.Highest] = "claude-fable-5",
-            },
-            ["claude-team"] = new Dictionary<ModelTier, string>
+            ["claude"] = new Dictionary<ModelTier, string>
             {
                 [ModelTier.Low]     = "claude-haiku-4-5-20251001",
                 [ModelTier.Medium]  = "claude-sonnet-5",

@@ -194,8 +194,8 @@ public class LlmVotingServiceTests
         var config = new VotingConfiguration
         {
             UseSharedCredentials = false,
-            ApiKeys = { ["claude-api"] = apiKey ?? "" },
-            JudgeProviderId = "claude-api",
+            ApiKeys = { ["claude"] = apiKey ?? "" },
+            JudgeProviderId = "claude",
         };
         var handler = new StubHttpHandler(stubResponse);
         var http    = new HttpClient(handler);
@@ -214,7 +214,7 @@ public class LlmVotingServiceTests
     public void GetActiveProviderIds_WithKey_ReturnsClaude()
     {
         var svc = BuildService("{}");
-        Assert.That(svc.GetActiveProviderIds(), Contains.Item("claude-api"));
+        Assert.That(svc.GetActiveProviderIds(), Contains.Item("claude"));
     }
 
     [Test]
@@ -423,8 +423,8 @@ public class LlmVotingServiceTests
         // panel below minConsensus and defeating the point of the test).
         var voters = new[]
         {
-            new VoterProfile { ProviderId = "claude-api", Name = "claude#1", ApiKeyOverride = "k" },
-            new VoterProfile { ProviderId = "claude-api", Name = "claude#2", ApiKeyOverride = "k" },
+            new VoterProfile { ProviderId = "claude", Name = "claude#1", ApiKeyOverride = "k" },
+            new VoterProfile { ProviderId = "claude", Name = "claude#2", ApiKeyOverride = "k" },
         };
         var request = new ScoredVoteRequest
         {
@@ -450,7 +450,7 @@ public class LlmVotingServiceTests
         var persona = VoterProfile.ForCharacter(
             "Sable Chen",
             "Risk-averse. Never takes contracts without exit strategies.",
-            "claude-api",
+            "claude",
             apiKey: "test-key");
 
         var result = await svc.VoteWithProfilesAsync(
@@ -467,7 +467,7 @@ public class LlmVotingServiceTests
     {
         var stubJson = """{"content":[{"type":"text","text":"{\"decision\":\"Yes\",\"reasoning\":\"Character reasoning.\",\"confidence\":7}"}]}""";
         var svc      = BuildService(stubJson);
-        var persona  = VoterProfile.ForCharacter("Kyle", "Pragmatic.", "claude-api", "test-key");
+        var persona  = VoterProfile.ForCharacter("Kyle", "Pragmatic.", "claude", "test-key");
 
         Assert.DoesNotThrowAsync(async () =>
             await svc.VoteWithPersonasAsync("Act?", "context", Quorum.Plurality, [persona]));
@@ -561,12 +561,12 @@ public class MindAtticCredentialStoreTests
     [Test]
     public void VotingConfiguration_ResolvesKeyFromStore()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "shared-key");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "shared-key");
 
         var cfg      = new VotingConfiguration(); // UseSharedCredentials defaults true
         var provider = new LlmVotingProvider(new HttpClient(new StubHttpHandler("{}")), cfg);
-        Assert.That(provider.GetApiKey("claude-api"), Is.EqualTo("shared-key"));
-        Assert.That(cfg.ActiveProviderIds, Contains.Item("claude-api"));
+        Assert.That(provider.GetApiKey("claude"), Is.EqualTo("shared-key"));
+        Assert.That(cfg.ActiveProviderIds, Contains.Item("claude"));
     }
 
     [Test]

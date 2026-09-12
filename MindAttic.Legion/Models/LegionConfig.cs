@@ -49,9 +49,7 @@ public class LegionConfig
 
     /// <summary>
     /// Cap on simultaneous ballot calls for this project. Overrides the app's
-    /// default <c>ReviewMaxConcurrency</c> when set. Use <c>3</c> when the
-    /// voter panel is claude-team, which shares its quota with the Claude Code
-    /// CLI in the same session.
+    /// default <c>ReviewMaxConcurrency</c> when set.
     /// </summary>
     [JsonPropertyName("maxConcurrency")]
     public int? MaxConcurrency { get; set; }

@@ -42,9 +42,9 @@ public class VotingConfigurationTests
         {
             UseSharedCredentials = false,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude-api"] = "k1", ["openai"] = "k2" },
+            ApiKeys              = { ["claude"] = "k1", ["openai"] = "k2" },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api", "openai" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude", "openai" }));
     }
 
     [Test]
@@ -54,9 +54,9 @@ public class VotingConfigurationTests
         {
             UseSharedCredentials = false,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude-api"] = "k1", ["openai"] = "  " },
+            ApiKeys              = { ["claude"] = "k1", ["openai"] = "  " },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
     }
 
     [Test]
@@ -78,24 +78,23 @@ public class VotingConfigurationTests
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = false,
-            AllowedProviderIds   = new(StringComparer.OrdinalIgnoreCase) { "claude-api" },
+            AllowedProviderIds   = new(StringComparer.OrdinalIgnoreCase) { "claude" },
             ApiKeys              =
             {
-                ["claude-api"] = "k1",
+                ["claude"] = "k1",
                 ["openai"]     = "k2",
                 ["deepseek"]   = "k3",
             },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
     }
 
     [Test]
     public void ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders()
     {
-        // The default whitelist: claude-api (API-key auth), claude-team (OAuth),
-        // openai, gemini, deepseek.
+        // The default whitelist: claude, openai, gemini, deepseek.
         Assert.That(new VotingConfiguration().AllowedProviderIds,
-            Is.EquivalentTo(new[] { "claude-api", "claude-team", "openai", "gemini", "deepseek" }));
+            Is.EquivalentTo(new[] { "claude", "openai", "gemini", "deepseek" }));
     }
 
     [Test]
@@ -107,11 +106,11 @@ public class VotingConfigurationTests
             // Default AllowedProviderIds = trusted providers
             ApiKeys              =
             {
-                ["claude-api"] = "k1",
+                ["claude"] = "k1",
                 ["mistral"]    = "k2", // untrusted; should not become active
             },
         };
-        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude-api" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));
     }
 
     // ── ActiveProviderIds: shared credentials + explicit keys interaction ──
@@ -119,7 +118,7 @@ public class VotingConfigurationTests
     [Test]
     public void ActiveProviderIds_SharedCredentialsDisabled_OnlyExplicitKeysCount()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = false,
@@ -132,32 +131,28 @@ public class VotingConfigurationTests
     [Test]
     public void ActiveProviderIds_SharedCredentialsEnabled_StoreContributes()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = true,
             AllowedProviderIds   = new(),
             ApiKeys              = { ["openai"] = "explicit" },
         };
-        // claude-team uses OAuth — it may be present on dev machines with a live token.
-        var active = cfg.ActiveProviderIds
-            .Where(id => !string.Equals(id, "claude-team", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        Assert.That(active, Is.EquivalentTo(new[] { "claude-api", "openai" }));
+        Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude", "openai" }));
     }
 
     [Test]
     public void ActiveProviderIds_DedupesProvidersDeclaredInBothSources()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "from-store");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "from-store");
         var cfg = new VotingConfiguration
         {
             UseSharedCredentials = true,
             AllowedProviderIds   = new(),
-            ApiKeys              = { ["claude-api"] = "from-explicit" },
+            ApiKeys              = { ["claude"] = "from-explicit" },
         };
-        // claude-api shouldn't appear twice just because both sources name it.
-        Assert.That(cfg.ActiveProviderIds.Count(id => string.Equals(id, "claude-api", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(1));
+        // claude shouldn't appear twice just because both sources name it.
+        Assert.That(cfg.ActiveProviderIds.Count(id => string.Equals(id, "claude", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(1));
     }
 
     // ── Defaults sanity ────────────────────────────────────────────────────
@@ -167,7 +162,7 @@ public class VotingConfigurationTests
     {
         var cfg = new VotingConfiguration();
         Assert.That(cfg.UseSharedCredentials, Is.True,              "UseSharedCredentials default");
-        Assert.That(cfg.JudgeProviderId,      Is.EqualTo("claude-api"), "JudgeProviderId default");
+        Assert.That(cfg.JudgeProviderId,      Is.EqualTo("claude"), "JudgeProviderId default");
         Assert.That(cfg.ProviderTimeout,      Is.EqualTo(TimeSpan.FromMinutes(2)), "ProviderTimeout default");
         Assert.That(cfg.DefaultMaxTokens,     Is.EqualTo(2048),    "DefaultMaxTokens default");
         Assert.That(cfg.DefaultPersonalityMarkdown, Is.Empty,      "DefaultPersonalityMarkdown default");

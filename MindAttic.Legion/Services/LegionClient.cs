@@ -70,10 +70,6 @@ public class LegionClient
     /// </summary>
     private string? ResolveKey(string providerId)
     {
-        // claude-team uses ONLY the Claude Code CLI OAuth token — no API key store lookup.
-        if (string.Equals(providerId, "claude-team", StringComparison.OrdinalIgnoreCase))
-            return ClaudeCodeOAuthSource.GetAccessToken();
-
         if (keyResolver is not null)
         {
             var resolved = keyResolver(providerId);
@@ -82,30 +78,11 @@ public class LegionClient
         var fromStore = MindAtticCredentialStore.GetKey(providerId);
         if (!string.IsNullOrWhiteSpace(fromStore)) return fromStore;
 
-        // "claude-api" is Legion's own dispatch id (required for endpoint routing —
-        // see the Endpoints/DefaultModels dictionaries), but several MindAttic apps
-        // (Tutor, ThinkTank, IdiotProof, TaxRateCollector) store their shared Claude
-        // key under the shorter "claude" instead. Recognize either convention here
-        // so a shared key set via any app's Settings UI is visible to every other
-        // app that calls through Legion, without requiring apps to agree on one
-        // literal id ahead of time.
-        if (string.Equals(providerId, "claude-api", StringComparison.OrdinalIgnoreCase))
-        {
-            var fromClaudeAlias = MindAtticCredentialStore.GetKey("claude");
-            if (!string.IsNullOrWhiteSpace(fromClaudeAlias)) return fromClaudeAlias;
-        }
-
-        // claude-api requires an explicit API key — no OAuth fallback.
+        // claude requires an explicit API key — no OAuth fallback (a Claude Code Team
+        // subscription OAuth token cannot authenticate direct calls to the public
+        // Anthropic Messages API — that is a distinct credential for a distinct surface).
         return null;
     }
-
-    /// <summary>
-    /// Returns the current Claude Team OAuth access token from the Claude Code CLI
-    /// credentials file (<c>~/.claude/.credentials.json</c>), refreshing it
-    /// automatically when it is within 60 seconds of expiry.
-    /// Returns <c>null</c> when the file is absent, malformed, or refresh fails.
-    /// </summary>
-    public static string? GetClaudeTeamOAuthToken() => ClaudeCodeOAuthSource.GetAccessToken();
 
     /// <summary>
     /// Default model per provider. Used when no <c>model</c> override is supplied
@@ -113,8 +90,7 @@ public class LegionClient
     /// </summary>
     public static IReadOnlyDictionary<string, string> DefaultModels { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        ["claude-api"]  = "claude-sonnet-5",
-        ["claude-team"] = "claude-sonnet-5",
+        ["claude"]  = "claude-sonnet-5",
         ["openai"]     = "gpt-5.4-mini",
         ["gemini"]     = "gemini-3.5-flash",
         ["deepseek"]   = "deepseek-v4-flash",
@@ -140,8 +116,7 @@ public class LegionClient
     /// </summary>
     private static readonly Dictionary<string, string> Endpoints = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["claude-api"]  = "https://api.anthropic.com/v1/messages",
-        ["claude-team"] = "https://api.anthropic.com/v1/messages",
+        ["claude"]  = "https://api.anthropic.com/v1/messages",
         ["openai"]     = "https://api.openai.com/v1/chat/completions",
         ["gemini"]     = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         ["deepseek"]   = "https://api.deepseek.com/chat/completions",
@@ -160,10 +135,7 @@ public class LegionClient
     public static bool IsSupported(string providerId) =>
         !string.IsNullOrWhiteSpace(providerId) && LlmProviderCatalog.IsSupported(providerId);
 
-    /// <summary>
-    /// True if credentials are resolvable for <paramref name="providerId"/>:
-    /// OAuth token for claude-team, credential-store key for everything else.
-    /// </summary>
+    /// <summary>True if a credential-store key is resolvable for <paramref name="providerId"/>.</summary>
     public bool IsProviderConfigured(string providerId)
     {
         try { return !string.IsNullOrWhiteSpace(ResolveKey(providerId)); }
@@ -591,10 +563,10 @@ public class LegionClient
             throw new ArgumentException("User prompt is required.", nameof(userPrompt));
 
         var resolvedModel = string.IsNullOrWhiteSpace(model)
-            ? DefaultModels.GetValueOrDefault("claude-api", "")
+            ? DefaultModels.GetValueOrDefault("claude", "")
             : model;
 
-        return ExecuteWithResilienceAsync("claude-api",
+        return ExecuteWithResilienceAsync("claude",
             () => CallClaudeWithDocumentAsync(apiKey, resolvedModel!, documentBytes, mediaType,
                 userPrompt, systemPrompt, maxTokens, temperature, ct),
             ct);
@@ -642,7 +614,7 @@ public class LegionClient
                 : new { model, max_tokens = maxTokens, temperature, system = systemPrompt, messages = apiMessages };
         }
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude-api"]);
+        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
         AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         req.Headers.Add("anthropic-beta", "pdfs-2024-09-25");
@@ -837,29 +809,18 @@ public class LegionClient
         string? cachedSystemPrefix = null, bool cacheUserMessage = false)
         => providerId.ToLowerInvariant() switch
         {
-            "claude-api"  => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage),
-            "claude-team" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage),
+            "claude" => CallClaudeChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage),
             "gemini" => CallGeminiChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             "cohere" => CallCohereChatAsync(key, model, messages, systemPrompt, maxTokens, temperature, ct),
             _        => CallOpenAiCompatibleChatAsync(providerId, key, model, messages, systemPrompt, maxTokens, temperature, ct),
         };
 
-    /// <summary>
-    /// Adds the correct Anthropic auth header to <paramref name="req"/>.
-    /// OAuth access tokens (prefix <c>sk-ant-oat</c>) use
-    /// <c>Authorization: Bearer</c>; raw API keys use <c>x-api-key</c>.
-    /// </summary>
-    private static void AddClaudeAuth(HttpRequestMessage req, string key)
-    {
-        if (key.StartsWith(ClaudeCodeOAuthSource.OAuthTokenPrefix, StringComparison.OrdinalIgnoreCase))
-            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
-        else
-            req.Headers.Add("x-api-key", key);
-    }
+    /// <summary>Adds the Anthropic API key auth header to <paramref name="req"/>.</summary>
+    private static void AddClaudeAuth(HttpRequestMessage req, string key) =>
+        req.Headers.Add("x-api-key", key);
 
     /// <summary>
-    /// Anthropic Messages API call. Sends auth via <c>x-api-key</c> (or
-    /// <c>Authorization: Bearer</c> for OAuth tokens) +
+    /// Anthropic Messages API call. Sends auth via <c>x-api-key</c> +
     /// <c>anthropic-version</c> headers; routes the system prompt to the
     /// top-level <c>system</c> field (omitted when blank); strips any
     /// <c>system</c>-role turns from the messages array.
@@ -950,7 +911,7 @@ public class LegionClient
                 : new { model, max_tokens = maxTokens, temperature, system = systemField, messages = apiMessages };
         }
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude-api"]);
+        using var req = new HttpRequestMessage(HttpMethod.Post, Endpoints["claude"]);
         AddClaudeAuth(req, key);
         req.Headers.Add("anthropic-version", "2023-06-01");
         if (!string.IsNullOrWhiteSpace(cachedSystemPrefix) || cacheUserMessage)

@@ -35,7 +35,7 @@ public class LlmHealthCheckTests
     public async Task CheckOneAsync_NoKey_ReturnsMissingCredential()
     {
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("{}"))));
-        var r  = await hc.CheckOneAsync("claude-api");
+        var r  = await hc.CheckOneAsync("claude");
 
         Assert.That(r.HasCredential, Is.False);
         Assert.That(r.IsHealthy, Is.False);
@@ -47,10 +47,10 @@ public class LlmHealthCheckTests
     [Test]
     public async Task CheckOneAsync_KeyPresent_CorrectReply_IsOk()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "sk-ant-test");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "sk-ant-test");
         var stub = """{"content":[{"type":"text","text":"Hello World!"}]}""";
         var hc   = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler(stub))));
-        var r    = await hc.CheckOneAsync("claude-api");
+        var r    = await hc.CheckOneAsync("claude");
 
         Assert.That(r.HasCredential, Is.True);
         Assert.That(r.IsHealthy, Is.True);
@@ -75,9 +75,9 @@ public class LlmHealthCheckTests
     [Test]
     public async Task CheckOneAsync_HttpError_MarksUnhealthy()
     {
-        File.WriteAllText(Path.Combine(tempDir, "claude-api.key"), "k");
+        File.WriteAllText(Path.Combine(tempDir, "claude.key"), "k");
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new ErrorHandler(HttpStatusCode.Unauthorized))));
-        var r  = await hc.CheckOneAsync("claude-api");
+        var r  = await hc.CheckOneAsync("claude");
 
         Assert.That(r.HasCredential, Is.True);
         Assert.That(r.IsHealthy, Is.False);
@@ -90,16 +90,15 @@ public class LlmHealthCheckTests
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("{}"))));
         var all = await hc.CheckAllAsync();
         Assert.That(all, Has.Count.EqualTo(LlmProviderCatalog.All.Count));
-        // claude-team uses OAuth — it may have a live token on dev machines.
-        Assert.That(all.All(r => string.Equals(r.ProviderId, "claude-team", StringComparison.OrdinalIgnoreCase) || !r.HasCredential), Is.True,
-            "every catalog provider without a file key should be MISSING KEY (claude-team excluded — uses OAuth)");
+        Assert.That(all.All(r => !r.HasCredential), Is.True,
+            "every catalog provider without a file key should be MISSING KEY");
     }
 
     [Test]
     public async Task CheckAsync_OnSubset_OnlyRunsThose()
     {
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("{}"))));
-        var ids = new[] { "claude-api", "openai" };
+        var ids = new[] { "claude", "openai" };
         var subset = await hc.CheckAsync(ids);
         Assert.That(subset, Has.Count.EqualTo(2));
         Assert.That(subset.Select(r => r.ProviderId), Is.EquivalentTo(ids));
@@ -109,8 +108,8 @@ public class LlmHealthCheckTests
     public async Task CheckAsync_DedupesAndNormalizesIds()
     {
         var hc = new LlmHealthCheck(new LegionClient(new HttpClient(new CapturingHandler("{}"))));
-        var subset = await hc.CheckAsync(new[] { "Claude-Api", "claude-api", "  CLAUDE-API  " });
+        var subset = await hc.CheckAsync(new[] { "Claude", "claude", "  CLAUDE  " });
         Assert.That(subset, Has.Count.EqualTo(1));
-        Assert.That(subset[0].ProviderId, Is.EqualTo("claude-api"));
+        Assert.That(subset[0].ProviderId, Is.EqualTo("claude"));
     }
 }
