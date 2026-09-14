@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -66,22 +67,38 @@ public class LegionClient
     /// <summary>
     /// Resolves a provider's API key from the configured resolver (when set)
     /// or the shared MindAttic credential store. Returns <c>null</c> when both
-    /// sources are empty.
+    /// sources are empty. Equivalent to the first entry of <see cref="ResolveKeys"/>.
     /// </summary>
-    private string? ResolveKey(string providerId)
+    private string? ResolveKey(string providerId) => ResolveKeys(providerId).FirstOrDefault();
+
+    /// <summary>
+    /// Resolves every key configured for a provider, in priority order — the shared-
+    /// credential overloads (<see cref="CallAsync(string,string,string,int,double,string?,CancellationToken,string?,bool)"/>,
+    /// <see cref="CallChatAsync(string,IEnumerable{ChatTurn},string?,int,double,string?,CancellationToken)"/>)
+    /// try each key in order (sticky failover) when more than one is configured.
+    /// Returns an empty list when no key is configured anywhere.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="keyResolver"/> (an app's own single-key preference, e.g. an
+    /// app-scoped Vault store) is consulted first and, when it yields a key, wins
+    /// outright — it does not participate in the shared store's pool. Only the
+    /// shared <see cref="MindAtticCredentialStore"/> tier supports multiple keys
+    /// today.
+    /// </remarks>
+    private IReadOnlyList<string> ResolveKeys(string providerId)
     {
         if (keyResolver is not null)
         {
             var resolved = keyResolver(providerId);
-            if (!string.IsNullOrWhiteSpace(resolved)) return resolved;
+            if (!string.IsNullOrWhiteSpace(resolved)) return new[] { resolved };
         }
-        var fromStore = MindAtticCredentialStore.GetKey(providerId);
-        if (!string.IsNullOrWhiteSpace(fromStore)) return fromStore;
+        var fromStore = MindAtticCredentialStore.GetKeys(providerId);
+        if (fromStore.Count > 0) return fromStore.Select(k => k.Key).ToList();
 
         // claude requires an explicit API key — no OAuth fallback (a Claude Code Team
         // subscription OAuth token cannot authenticate direct calls to the public
         // Anthropic Messages API — that is a distinct credential for a distinct surface).
-        return null;
+        return Array.Empty<string>();
     }
 
     /// <summary>
@@ -157,7 +174,8 @@ public class LegionClient
         CancellationToken ct = default,
         string? cachedSystemPrefix = null,
         bool cacheUserMessage = false,
-        CancellationToken? userCancelToken = null)
+        CancellationToken? userCancelToken = null,
+        string? breakerKey = null)
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
@@ -171,12 +189,17 @@ public class LegionClient
         return ExecuteWithResilienceAsync(providerId,
             () => DispatchAsync(providerId, apiKey, resolvedModel, systemPrompt, userMessage, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage),
             ct,
-            userCancelToken);
+            userCancelToken,
+            breakerKey);
     }
 
     /// <summary>
-    /// Calls the provider, resolving the API key from the shared MindAttic credential
-    /// store at <c>%APPDATA%/MindAttic/LLM/</c>.
+    /// Calls the provider, resolving the API key(s) from the shared MindAttic
+    /// credential store at <c>%APPDATA%/MindAttic/LLM/</c>. When more than one key
+    /// is configured for the provider, a key that fails with an auth/rate-limit/
+    /// server error causes the NEXT key in the pool to be tried ("sticky failover" —
+    /// each key still gets its own retry+backoff cycle, and its own circuit-breaker
+    /// bucket, before the next key is attempted).
     /// </summary>
     public async Task<string> CallAsync(
         string providerId,
@@ -189,15 +212,25 @@ public class LegionClient
         string? cachedSystemPrefix = null,
         bool cacheUserMessage = false)
     {
-        var key = ResolveKey(providerId);
-        if (string.IsNullOrWhiteSpace(key))
+        var keys = ResolveKeys(providerId);
+        if (keys.Count == 0)
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 
         var model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride
                   : ResolveModelFromStore(providerId)
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
-        return await CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct, cachedSystemPrefix, cacheUserMessage);
+        // Only split the breaker into per-key buckets when there's actually more
+        // than one key — a provider with a single key keeps using the plain
+        // provider-id breaker bucket exactly as before this feature existed (health
+        // checks / diagnostics elsewhere pre-trip or inspect that bucket by provider id).
+        var breakerKeyFor = keys.Count > 1
+            ? (Func<string, string?>)(key => KeyBreakerKey(providerId, key))
+            : _ => null;
+
+        return await CallThroughKeyPoolAsync(keys, key =>
+            CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct,
+                cachedSystemPrefix, cacheUserMessage, userCancelToken: null, breakerKey: breakerKeyFor(key)));
     }
 
     /// <summary>
@@ -214,7 +247,8 @@ public class LegionClient
         string? systemPrompt = null,
         int maxTokens = 2048,
         double temperature = 0.7,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? breakerKey = null)
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider id is required.", nameof(providerId));
@@ -231,13 +265,16 @@ public class LegionClient
 
         return ExecuteWithResilienceAsync(providerId,
             () => DispatchChatAsync(providerId, apiKey, resolvedModel, turns, systemPrompt, maxTokens, temperature, ct),
-            ct);
+            ct,
+            userCancelToken: null,
+            breakerKey: breakerKey);
     }
 
     /// <summary>
     /// Multi-turn chat using shared-credential lookup. Mirrors
     /// <see cref="CallAsync(string, string, string, int, double, string?, CancellationToken)"/>
-    /// but accepts a conversation history.
+    /// but accepts a conversation history — including its sticky-failover behavior
+    /// when the provider has more than one key configured.
     /// </summary>
     public async Task<string> CallChatAsync(
         string providerId,
@@ -248,15 +285,23 @@ public class LegionClient
         string? modelOverride = null,
         CancellationToken ct = default)
     {
-        var key = ResolveKey(providerId);
-        if (string.IsNullOrWhiteSpace(key))
+        var keys = ResolveKeys(providerId);
+        if (keys.Count == 0)
             throw new InvalidOperationException($"No API key configured for provider '{providerId}' in shared store.");
 
         var model = !string.IsNullOrWhiteSpace(modelOverride) ? modelOverride
                   : ResolveModelFromStore(providerId)
                   ?? DefaultModels.GetValueOrDefault(providerId, "");
 
-        return await CallChatAsync(providerId, key, model!, messages, systemPrompt, maxTokens, temperature, ct);
+        // See the CallAsync shared-credential overload for why this only splits
+        // the breaker into per-key buckets when there's more than one key.
+        var breakerKeyFor = keys.Count > 1
+            ? (Func<string, string?>)(key => KeyBreakerKey(providerId, key))
+            : _ => null;
+
+        return await CallThroughKeyPoolAsync(keys, key =>
+            CallChatAsync(providerId, key, model!, messages, systemPrompt, maxTokens, temperature, ct,
+                breakerKey: breakerKeyFor(key)));
     }
 
     /// <summary>
@@ -685,8 +730,15 @@ public class LegionClient
         string providerId,
         Func<Task<T>> action,
         CancellationToken ct,
-        CancellationToken? userCancelToken = null)
+        CancellationToken? userCancelToken = null,
+        string? breakerKey = null)
     {
+        // Defaults to the provider id — every existing caller keeps today's
+        // per-provider breaker granularity. A pool-aware caller passes a
+        // per-key bucket (see KeyBreakerKey) so one bad key in a rotation pool
+        // can't trip the breaker for every other key sharing the same provider.
+        var effectiveBreakerKey = breakerKey ?? providerId;
+
         var attempt = 0;
         var delay = options.InitialBackoff;
         while (true)
@@ -695,12 +747,12 @@ public class LegionClient
             // tripped the threshold mid-retry causes this call to fail fast
             // instead of sleeping out the full backoff against a now-open
             // breaker — saves wall-clock for fallback chains.
-            CircuitBreaker.ThrowIfOpen(providerId);
+            CircuitBreaker.ThrowIfOpen(effectiveBreakerKey);
 
             try
             {
                 var result = await action();
-                CircuitBreaker.RecordSuccess(providerId);
+                CircuitBreaker.RecordSuccess(effectiveBreakerKey);
                 return result;
             }
             // Skip failure recording for genuine user cancellations. When the caller
@@ -723,7 +775,7 @@ public class LegionClient
             {
                 if (attempt >= options.MaxRetries)
                 {
-                    CircuitBreaker.RecordFailure(providerId, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
+                    CircuitBreaker.RecordFailure(effectiveBreakerKey, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
                     throw;
                 }
                 attempt++;
@@ -734,10 +786,61 @@ public class LegionClient
             catch (Exception)
             {
                 // Non-transient (e.g. 401 auth) — record and rethrow without retry
-                CircuitBreaker.RecordFailure(providerId, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
+                CircuitBreaker.RecordFailure(effectiveBreakerKey, options.CircuitBreakerThreshold, options.CircuitBreakerCooldown);
                 throw;
             }
         }
+    }
+
+    /// <summary>
+    /// A stable per-(provider, key) circuit-breaker bucket id. Hashes the key
+    /// value itself — not its position in the pool — so removing a key from the
+    /// middle of the list doesn't shift another key's breaker identity.
+    /// </summary>
+    private static string KeyBreakerKey(string providerId, string apiKey) =>
+        $"{providerId}#{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apiKey)))[..12]}";
+
+    /// <summary>
+    /// Tries each key in <paramref name="keys"/> in order (sticky failover): the
+    /// first key is used until it fails with a key-level error (see
+    /// <see cref="IsKeyLevelFailure"/>), then the next key is tried. Each key
+    /// still runs its own full retry+backoff cycle (via <see cref="ExecuteWithResilienceAsync{T}"/>,
+    /// inside <paramref name="callWithKey"/>) before being considered "failed".
+    /// </summary>
+    private static async Task<string> CallThroughKeyPoolAsync(IReadOnlyList<string> keys, Func<string, Task<string>> callWithKey)
+    {
+        for (var i = 0; i < keys.Count; i++)
+        {
+            try
+            {
+                return await callWithKey(keys[i]);
+            }
+            catch (Exception ex) when (i < keys.Count - 1 && IsKeyLevelFailure(ex))
+            {
+                // More keys remain and this one looks bad — fall through to try the next.
+            }
+        }
+        // Unreachable: for the last index the `when` guard above is always false,
+        // so that iteration always returns or rethrows. Kept for the compiler.
+        throw new InvalidOperationException("Key pool exhausted with no successful call.");
+    }
+
+    /// <summary>
+    /// True when a failure looks specific to the key that was used (bad/revoked
+    /// credential, rate-limited, the provider is erroring, or that key's own
+    /// circuit breaker is open) rather than a client-side bug that a different
+    /// key wouldn't fix.
+    /// </summary>
+    private static bool IsKeyLevelFailure(Exception ex)
+    {
+        if (ex is CircuitBreakerOpenException) return true;
+        if (ex is HttpRequestException hre)
+        {
+            if (hre.StatusCode is null) return true; // network error — worth trying another key
+            var code = (int)hre.StatusCode;
+            return code == 401 || code == 408 || code == 429 || code >= 500;
+        }
+        return ex is TaskCanceledException;
     }
 
     /// <summary>

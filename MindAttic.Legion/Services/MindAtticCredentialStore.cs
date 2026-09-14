@@ -69,6 +69,15 @@ public static class MindAtticCredentialStore
     /// <summary>Returns the key for a provider, or null if no credential is registered.</summary>
     public static string?                    GetKey(string providerId)             => Resolve().GetKey(providerId);
 
+    /// <summary>
+    /// Returns every key configured for a provider, in priority order (empty when
+    /// none are configured). Every store this facade can resolve to implements
+    /// <see cref="IRotatingKeyStore"/>, so this always reflects the full pool —
+    /// a provider with a single plain key yields a one-element list.
+    /// </summary>
+    public static IReadOnlyList<CredentialPoolEntry> GetKeys(string providerId) =>
+        Resolve() is IRotatingKeyStore rotating ? rotating.GetKeys(providerId) : Array.Empty<CredentialPoolEntry>();
+
     /// <summary>Writes a key for a provider, preserving any existing type/model/maxTokens fields. Lands in the writable file store.</summary>
     public static void                       SetKey(string providerId, string key) => Resolve().SetKey(providerId, key);
 
