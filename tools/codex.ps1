@@ -8,8 +8,8 @@
               story test tokens, cited paths, digest freshness). Exits non-zero on
               any hard error.
     digest  - regenerate docs/BIBLE.digest.md from BIBLE.md (the one sentence, what
-              it is NOT, the Laws, the glossary) plus a status index and the latest
-              amendment head.
+              it is NOT, the Laws, the glossary) plus a status index and any
+              pending decision heads from AMENDMENTS.md.
 .NOTES
   Pure PowerShell, no build step. Windows PowerShell 5.1 safe.
   Run:  powershell -NoProfile -ExecutionPolicy Bypass -File tools/codex.ps1 doctor
@@ -99,11 +99,11 @@ function Invoke-Digest {
         $cut     = ([regex]::Matches($stories, [regex]::Escape($GLYPH_CUT))).Count
     }
 
-    # Latest amendment head (first '## ' heading in AMENDMENTS.md)
-    $amendHead = ''
+    # Pending decision heads ('## LEG-A<n>' headings in AMENDMENTS.md; normally none)
+    $pending = @()
     if (Test-Path -LiteralPath $AmendPath) {
         $amend = Read-Text $AmendPath
-        if ($amend -match '(?m)^(##\s+.+)$') { $amendHead = $Matches[1].Trim() }
+        foreach ($m in [regex]::Matches($amend, "(?m)^##\s+$CODE-A\d+.*$")) { $pending += $m.Value.Trim() }
     }
 
     $today = (Get-Date).ToString('yyyy-MM-dd')
@@ -132,10 +132,11 @@ function Invoke-Digest {
     [void]$sb.AppendLine("- Done: $done")
     [void]$sb.AppendLine("- Partial: $partial")
     [void]$sb.AppendLine("- Planned: $planned")
-    [void]$sb.AppendLine("- Cut: $cut")
-    [void]$sb.AppendLine('')
-    [void]$sb.AppendLine('## Latest amendment')
-    [void]$sb.AppendLine($amendHead)
+    if ($pending.Count -gt 0) {
+        [void]$sb.AppendLine('')
+        [void]$sb.AppendLine('## Pending decisions (docs/AMENDMENTS.md)')
+        foreach ($h in $pending) { [void]$sb.AppendLine($h) }
+    }
 
     Set-Content -LiteralPath $DigestPath -Value $sb.ToString() -Encoding UTF8 -NoNewline
     Write-Host "digest: wrote $DigestPath"

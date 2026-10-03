@@ -4,7 +4,7 @@ project: MindAttic.Legion
 code: LEG
 layer: bible
 status: living
-updated: 2026-06-07
+updated: 2026-10-03
 ---
 
 # MindAttic.Legion — Project Bible
@@ -14,21 +14,21 @@ updated: 2026-06-07
 
 ## 1. The one sentence {#LEG-§1}
 
-MindAttic.Legion is a portable .NET 10 library (plus a `legion.exe` CLI) that turns a panel of frontier LLMs across eleven providers into one trustworthy answer — via voting, deciding, scoring, polling, generating, and persona-wearing, with quorum, failover, and confidence.
+MindAttic.Legion is a portable .NET 10 library (plus a `legion.exe` CLI) that turns a panel of frontier LLMs across thirteen providers into one trustworthy answer — via voting, deciding, scoring, polling, generating, and persona-wearing, with quorum, failover, and confidence.
 
 ## 2. The product promise {#LEG-§2}
 
 One LLM is one opinion; when a wrong answer is expensive you want a panel that votes, not a single model that bluffs. Legion delivers:
 
-- **Multi-provider transport** behind one [`LegionClient`](#LEG-§4) — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together, OpenRouter, Fireworks, Cohere.
+- **Multi-provider transport** behind one [`LegionClient`](#LEG-§4) — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together, OpenRouter, Fireworks, Cohere, Kimi (Moonshot AI), Perplexity — plus an explicit-URL path for self-hosted OpenAI-compatible endpoints.
 - **Consensus voting** — call all active providers in parallel, tally answers, return the consensus with reasoning + dissent under a chosen [Quorum](#LEG-§9).
 - **Decisions** — `DecideAsync(question, options)` picks one option with confidence and reasoning.
 - **Scoring** — multi-dimensional rubric evaluation (1–10/dimension) with aggregate scores, failing dimensions, and improvement directives.
-- **Personas** — a baked-in 1024-persona library (16 archetypes × 8 worldviews × 8 cultural backgrounds, enriched with age/pronouns/quirk); build trait-diverse panels or vote *as* a character.
+- **Personas** — a baked-in 1024-persona library (deterministically sampled from 40 archetypes × 16 worldviews × 16 cultural backgrounds, enriched with age/pronouns/quirk); build trait-diverse panels or vote *as* a character.
 - **Psychometric profiles** — score the persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style); the model answers items in-character, scoring is deterministic in code, persisted as one JSON profile per persona.
 - **Tiered model selection** — every provider exposes Low/Medium/High/Higher/Highest; tier names hide drifting model ids ([Law LEG-LAW-4](#LEG-LAW-4)).
 - **Resilience** — per-provider retry with backoff and a process-wide [circuit breaker](#LEG-§4); `CallWithFallbackAsync` walks a provider chain until one succeeds.
-- **CLI** — `legion.exe status | vote | ask | poll | generate | tiers | health | panel | psychometrics`, the same engine with no .NET host required.
+- **CLI** — `legion.exe health | ping | status | providers | models | personas | panel | vote | ask | poll | generate | tiers | psychometrics`, the same engine with no .NET host required.
 - **Portable** — no dependency on any specific MindAttic app; register via DI, hand it keys (or rely on the shared Vault store), and you have the panel.
 
 ## 3. What it is NOT {#LEG-§3}
@@ -63,18 +63,19 @@ One LLM is one opinion; when a wrong answer is expensive you want a panel that v
         ┌───────────┴───────────────────────────────────┐
         ▼                ▼              ▼                 ▼
    LlmProviderCatalog  ModelTier   MindAtticCredentialStore  PersonaLibrary
-   (11 providers,      (Low..       (facade over             (1024 personas
+   (13 providers,      (Low..       (facade over             (1024 personas
     tiered models)     Highest)      MindAttic.Vault)         + Profiles)
         │
         ▼
-   11 vendor HTTP APIs (Anthropic / OpenAI / Google / DeepSeek / …)
+   13 vendor HTTP APIs (Anthropic / OpenAI / Google / DeepSeek / …)
 ```
 
 ### 4.1 Projects
 - **`MindAttic.Legion`** — the library (`net10.0`, `PackageId` MindAttic.Legion). Depends on `MindAttic.Vault`, `Microsoft.Extensions.{DependencyInjection.Abstractions, Http, Logging.Abstractions}`. `InternalsVisibleTo` the test project. Path: `MindAttic.Legion/MindAttic.Legion.csproj`.
 - **`MindAttic.Legion.Cli`** — `legion.exe` host; command classes in `MindAttic.Legion.Cli/` (`AskCommand`, `PollCommand`, `GenerateCommand`, `TiersCommand`, `PsychometricsCommand`, `LegionCli`, `Program`).
 - **`MindAttic.Legion.Tests`** — NUnit 4 test project (`MindAttic.Legion.Tests/`).
-- Solution: `MindAttic.Legion.slnx`. A separate Node landing-page renderer (`package.json`, `scripts/`, `index.htm`) is *not* part of the library/runtime; deployment of the landing page is handled by the sibling `MindAttic.Deploy` repo (see `.claude/skills/deploy/SKILL.md`).
+- Solution: `MindAttic.Legion.slnx`. A separate Node README-to-HTML renderer (`package.json`, `scripts/`, `index.htm`) is *not* part of the library/runtime and is not deployed anywhere. Legion has no web deploy: its GitHub README is the project page.
+- **Docs canon** — `docs/` follows the MindAttic Codex standard (`BIBLE.md`, `AMENDMENTS.md`, `USER_STORIES.md`, `rfc/`, generated `BIBLE.digest.md`), maintained by `tools/codex.ps1` (`doctor`, `digest`) and injected at session start by `.claude/hooks/inject-digest.ps1`. There is no `docs/data/` canon-as-data: the provider catalog, persona library and psychometric instruments live in source/embedded resources and are covered by tests.
 
 ### 4.2 Domain model (NOUNS)
 - **Quorum** (`MindAttic.Legion/Models/Quorum.cs`) — `Plurality | SimpleMajority | TwoThirds | Unanimous`; `IsSatisfiedBy` uses exact integer arithmetic ([Law LEG-LAW-3](#LEG-LAW-3)).
@@ -92,7 +93,7 @@ One LLM is one opinion; when a wrong answer is expensive you want a panel that v
 - **`LlmVotingService`** (`Services/LlmVotingService.cs`) — `VoteAsync`, `DecideAsync`, `ScoreAsync`, `VoteWithPersonasAsync`, `VoteWithProfilesAsync`, `CreatePanel`.
 - **`LegionClient`** (`Services/LegionClient.cs`) — `CallAsync`, `CallWithFallbackAsync`, multi-turn chat; the universal transport.
 - **`LlmVotingProvider`** (`Providers/LlmVotingProvider.cs`) — fans a request across voters; resolves per-voter keys.
-- **`LlmProviderCatalog`** (`Services/LlmProviderCatalog.cs`) — `All`, `GetTieredModel`, tier-override builders; the eleven-provider catalog.
+- **`LlmProviderCatalog`** (`Services/LlmProviderCatalog.cs`) — `All`, `GetTieredModel`, tier-override builders; the thirteen-provider catalog.
 - **`CircuitBreaker`** (`Services/CircuitBreaker.cs`) — process-static per-provider failure tracking; opens after threshold, fails fast.
 - **`LlmHealthCheck` / `LlmHealthDiagnosis`** (`Services/LlmHealthCheck.cs`, `Services/LlmHealthDiagnosis.cs`) — probe keys/connectivity and classify failure modes with actionable URLs.
 - **`LlmModelDiscovery`** (`Services/LlmModelDiscovery.cs`) — fetch a provider's live model list.
@@ -118,17 +119,17 @@ These project laws are *in addition to* the house rules, which are INHERITED, no
 
 ## 6. Verified state {#LEG-§6}
 
-Build: `dotnet build MindAttic.Legion.slnx -c Release` — ✅ **clean** (0 warnings, 0 errors; SDK 10.0.300, target `net10.0`; verified 2026-06-07).
-Tests: `dotnet test MindAttic.Legion.Tests` (NUnit 4). Offline run ✅ **441 passed / 0 failed / 0 skipped** (verified 2026-06-07, ~6s). The suite separates **offline** tests (default) from **live** tests gated by category (`LiveKeys`, `LiveKeysTrusted`, `LiveApi`, `LivePsychometrics`) that require real provider keys + network. Offline run command:
+Build: `dotnet build MindAttic.Legion.slnx -c Release` — ✅ **builds** (target `net10.0`; verified 2026-10-03 as part of the offline test run).
+Tests: `dotnet test MindAttic.Legion.Tests` (NUnit 4). Offline run ✅ **466 passed / 0 failed / 0 skipped** (verified 2026-10-03, ~5s). The suite separates **offline** tests (default) from **live** tests gated by category (`LiveKeys`, `LiveKeysTrusted`, `LiveApi`, `LivePsychometrics`) that require real provider keys + network. Offline run command:
 `dotnet test MindAttic.Legion.Tests -c Release --filter "Category!=LiveKeys&Category!=LiveKeysTrusted&Category!=LiveApi&Category!=LivePsychometrics"`.
 
 Proven-working units (offline, fakes via `TestSupport/FakeLlmHandlers.cs`): quorum arithmetic, provider catalog shape & tier overrides, active-provider resolution, circuit breaker open/reset, per-provider wire shapes (Claude/OpenAI/Gemini/Cohere headers & payloads), model-discovery extraction, health-check classification & actionable URLs, persona library uniqueness, voter round-robin distribution, psychometric instruments/answer-parsing/scoring, and the CLI command smoke/aggregation tests.
 
-The live categories (real keys) cover end-to-end consensus, key validation, and live psychometrics; their status is environment-dependent and therefore **not asserted ✅ here** — see [USER_STORIES](#) statuses.
+The live categories (real keys) cover end-to-end consensus, key validation, and live psychometrics; their status is environment-dependent and therefore **not asserted ✅ here** — see [USER_STORIES](USER_STORIES.md) statuses.
 
 ## 7. Active frontier {#LEG-§7}
 
-- Design notes live in `docs/rfc/`. See `docs/rfc/0001-codex-documentation-standard.md` (the documentation standard itself).
+- Open design notes live in `docs/rfc/` (none are open right now).
 - Backlog and epic status: `docs/USER_STORIES.md`.
 
 ## 8. Quality bar {#LEG-§8}

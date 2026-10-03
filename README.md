@@ -799,8 +799,6 @@ That 40 × 16 × 16 = 10,240-point cube is sampled down to a fixed 1024 personas
 
 `VoterFactory.GenerateUniqueVoters(count, providerIds, fallbackProviderId = "claude", rng?)` spreads voters across every supplied provider at least once before doubling up, backfilling extra slots with the fallback provider. `VoterFactory.GenerateDiverseVoters(count, providerIds, profiles, fallbackProviderId, rng?)` instead does greedy farthest-point selection over the 15-dimensional OCEAN, HEXACO and DISC trait vector: it seeds on the persona farthest from the centroid, then repeatedly adds the remaining candidate farthest from everyone already chosen, so a small panel spans the trait space.
 
-The sibling MindAttic.Legion.PersonaGallery project is a Blazor browser for these personas and their profiles.
-
 ## Testing
 
 `MindAttic.Legion.Tests/` is an NUnit 4 project with two tiers: an offline unit suite that runs on every `dotnet test`, and a live integration suite marked `[Explicit]` that runs only when filtered.
@@ -872,12 +870,12 @@ Versioning is whole-number, major-only across every MindAttic project (inherited
 The `docs/` canon has its own tooling, unrelated to the library build:
 
 ```powershell
-powershell -File tools/codex.ps1 digest   # regenerate docs/BIBLE.digest.md after editing BIBLE §1/§3/§5/§9 or the latest amendment
+powershell -File tools/codex.ps1 digest   # regenerate docs/BIBLE.digest.md after editing BIBLE §1/§3/§5/§9 or docs/AMENDMENTS.md
 powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, cited tests/paths, digest freshness; must exit 0
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-readme.ps1   # regenerate README.htm from this file
 ```
 
-`package.json`, `scripts/cli/` and `index.htm` are a separate, older Node-based renderer that turned this README into a static landing page. They are not part of the library or CLI build.
+`package.json`, `scripts/cli/` and `index.htm` are a separate Node-based renderer that turns this README into a static HTML page. They are not part of the library or CLI build, and the page is not deployed: the GitHub README is the project page.
 
 ## Project layout
 
@@ -904,7 +902,7 @@ docs/                                Codex canon: BIBLE.md, AMENDMENTS.md, USER_
                                       generated BIBLE.digest.md
 tools/codex.ps1                      digest + doctor tooling for docs/
 tools/build-readme.ps1               wrapper around the shared codex-standard README → HTML engine
-scripts/, package.json, index.htm    older Node-based landing-page renderer (not part of the build)
+scripts/, package.json, index.htm    Node-based README-to-HTML renderer (not part of the build, not deployed)
 ```
 
 ## Glossary
@@ -1003,9 +1001,8 @@ structural decision: re-run with --json, summarize the disagreement, ask me. If 
 
 - [docs/BIBLE.md](docs/BIBLE.md): architecture canon and the Laws.
 - [docs/BIBLE.digest.md](docs/BIBLE.digest.md): generated digest of the BIBLE.
-- [docs/AMENDMENTS.md](docs/AMENDMENTS.md): change log.
+- [docs/AMENDMENTS.md](docs/AMENDMENTS.md): pending decisions not yet folded into the bible (normally empty).
 - [docs/USER_STORIES.md](docs/USER_STORIES.md): test-cited user stories.
-- [docs/rfc/0001-codex-documentation-standard.md](docs/rfc/0001-codex-documentation-standard.md): the documentation standard this repo follows.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repo.
 
 ## License

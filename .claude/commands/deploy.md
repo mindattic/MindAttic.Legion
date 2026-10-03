@@ -2,6 +2,6 @@
 
 **MindAttic.Legion has no web deploy.** Its README on GitHub -- https://github.com/mindattic/MindAttic.Legion -- is the project page. To update the project page, edit `README.md` and push to `main`.
 
-The README-driven landing page `mindattic.com/mindatticlegion.htm` was retired together with MindAttic.Deploy's catalog mode (amendment DEP-A6 in `MindAttic.Deploy/docs/AMENDMENTS.md`, 2026-10-03). `npm run deploy -- --only mindatticlegion` is now rejected, so do not run MindAttic.Deploy for this project.
+There is no mindattic.com landing page for Legion, and MindAttic.Deploy has no catalog mode: `npm run deploy -- --only mindatticlegion` is rejected, so do not run MindAttic.Deploy for this project.
 
 When invoked, tell the user the above and stop.

@@ -4,12 +4,12 @@ project: MindAttic.Legion
 code: LEG
 layer: stories
 status: living
-updated: 2026-06-07
+updated: 2026-10-03
 ---
 
 # MindAttic.Legion — User Stories
 
-> ✅ done (shipped & tested) · 🟡 partial · ⬜ planned · 🗑️ cut. Every ✅ cites the test that proves it.
+> ✅ done (shipped & tested) · 🟡 partial · ⬜ planned. Every ✅ cites the test that proves it.
 > "Verified" here means an **offline** NUnit test (fakes via `TestSupport/FakeLlmHandlers.cs`) proves the logic without live keys, unless noted. Stories that can only be proven with live provider keys are marked 🟡 (logic proven offline; end-to-end unproven in this environment).
 
 ## Epic A — Consensus voting
@@ -64,7 +64,3 @@ updated: 2026-06-07
 1. **LEG-US-B1** — add a dedicated offline `Decide*` test and promote to ✅.
 2. **LEG-US-B2** — add a dedicated offline `Score*` rubric test and promote to ✅.
 3. **LEG-US-A3 / F2** — wire a CI secret-bearing job (or documented local run) so the live categories can be exercised and reported, promoting these from 🟡.
-
-### Audit log
-
-No stories have been rewritten since adoption of the Codex standard; original asks were derived directly from README.md and the test suite. Any future change to a story above must preserve the original wording here, marked "(original spec — audit log)".
