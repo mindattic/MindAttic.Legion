@@ -875,7 +875,7 @@ powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, c
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-readme.ps1   # regenerate README.htm from this file
 ```
 
-`package.json`, `scripts/cli/` and `index.htm` are a separate Node-based renderer that turns this README into a static HTML page. They are not part of the library or CLI build, and the page is not deployed: the GitHub README is the project page.
+The project page is this README on GitHub; there is no web deploy.
 
 ## Project layout
 
@@ -902,7 +902,6 @@ docs/                                Codex canon: BIBLE.md, AMENDMENTS.md, USER_
                                       generated BIBLE.digest.md
 tools/codex.ps1                      digest + doctor tooling for docs/
 tools/build-readme.ps1               wrapper around the shared codex-standard README → HTML engine
-scripts/, package.json, index.htm    Node-based README-to-HTML renderer (not part of the build, not deployed)
 ```
 
 ## Glossary

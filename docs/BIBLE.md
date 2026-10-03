@@ -74,7 +74,7 @@ One LLM is one opinion; when a wrong answer is expensive you want a panel that v
 - **`MindAttic.Legion`** — the library (`net10.0`, `PackageId` MindAttic.Legion). Depends on `MindAttic.Vault`, `Microsoft.Extensions.{DependencyInjection.Abstractions, Http, Logging.Abstractions}`. `InternalsVisibleTo` the test project. Path: `MindAttic.Legion/MindAttic.Legion.csproj`.
 - **`MindAttic.Legion.Cli`** — `legion.exe` host; command classes in `MindAttic.Legion.Cli/` (`AskCommand`, `PollCommand`, `GenerateCommand`, `TiersCommand`, `PsychometricsCommand`, `LegionCli`, `Program`).
 - **`MindAttic.Legion.Tests`** — NUnit 4 test project (`MindAttic.Legion.Tests/`).
-- Solution: `MindAttic.Legion.slnx`. A separate Node README-to-HTML renderer (`package.json`, `scripts/`, `index.htm`) is *not* part of the library/runtime and is not deployed anywhere. Legion has no web deploy: its GitHub README is the project page.
+- Solution: `MindAttic.Legion.slnx`. Legion has no web deploy: its GitHub README is the project page.
 - **Docs canon** — `docs/` follows the MindAttic Codex standard (`BIBLE.md`, `AMENDMENTS.md`, `USER_STORIES.md`, `rfc/`, generated `BIBLE.digest.md`), maintained by `tools/codex.ps1` (`doctor`, `digest`) and injected at session start by `.claude/hooks/inject-digest.ps1`. There is no `docs/data/` canon-as-data: the provider catalog, persona library and psychometric instruments live in source/embedded resources and are covered by tests.
 
 ### 4.2 Domain model (NOUNS)
