@@ -9,17 +9,17 @@ using MindAttic.Legion;
 /// <see cref="LlmProviderCatalog.GetTieredModel">tier mapping</see>.
 ///
 /// Probes every (provider, tier) pair the catalog exposes for the trusted
-/// four (claude, openai, gemini, deepseek) by default — Low / Medium / High
-/// — using a tiny "reply OK" prompt. Use it to answer "is the panel
-/// actually ready to vote on High?" without spinning up a real <c>ask</c>
-/// or <c>vote</c>. Distinct from <c>legion health</c>, which only probes
-/// the per-provider DefaultModel.
+/// nine (claude, openai, gemini, deepseek, xai, cohere, mistral, together,
+/// fireworks) by default — Low / Medium / High — using a tiny "reply OK"
+/// prompt. Use it to answer "is the panel actually ready to vote on High?"
+/// without spinning up a real <c>ask</c> or <c>vote</c>. Distinct from
+/// <c>legion health</c>, which only probes the per-provider DefaultModel.
 ///
 /// Defaults are chosen for human use (table output, 45s per-call timeout,
-/// trusted four). All flags are optional:
+/// trusted nine). All flags are optional:
 ///   <list type="bullet">
 ///     <item><c>--providers a,b,c</c> — narrow the provider set
-///       (intersected with the trusted four).</item>
+///       (intersected with the trusted nine).</item>
 ///     <item><c>--tiers low,medium,high,higher,highest</c> — narrow the
 ///       tier set. Default: low,medium,high.</item>
 ///     <item><c>--all-tiers</c> — shorthand for all five tiers.</item>
@@ -35,8 +35,7 @@ using MindAttic.Legion;
 public static class TiersCommand
 {
     /// <summary>The same trust list as <see cref="AskCommand.TrustedProviderIds"/>.</summary>
-    internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+    internal static readonly string[] TrustedProviderIds = LlmProviderCatalog.DefaultIds.ToArray();
 
     /// <summary>Default tier set probed when <c>--tiers</c> isn't passed.</summary>
     internal static readonly ModelTier[] DefaultTiers =
@@ -272,7 +271,8 @@ public static class TiersCommand
         Console.WriteLine("usage: legion tiers [--providers a,b,c] [--tiers low,medium,high] [--all-tiers]");
         Console.WriteLine("                    [--json] [--timeout SECONDS] [--max-tokens N]");
         Console.WriteLine();
-        Console.WriteLine("Defaults: probes claude/openai/gemini/deepseek × low,medium,high (12 calls).");
+        Console.WriteLine("Defaults: probes the trusted-nine panel (claude/openai/gemini/deepseek/xai/");
+        Console.WriteLine("cohere/mistral/together/fireworks) × low,medium,high (27 calls).");
         Console.WriteLine("Exit 0 if every probe succeeded, 1 otherwise.");
     }
 }

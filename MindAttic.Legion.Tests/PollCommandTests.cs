@@ -48,7 +48,7 @@ public class PollCommandTests
     [Test]
     public void ResolveProviders_DropsUntrustedAndDeduplicates()
     {
-        var result = PollCommand.ResolveProviders(new[] { "Claude", "claude", "mistral", "OPENAI" });
+        var result = PollCommand.ResolveProviders(new[] { "Claude", "claude", "groq", "OPENAI" });
         Assert.That(result, Is.EquivalentTo(new[] { "claude", "openai" }));
     }
 

@@ -18,9 +18,9 @@ using MindAttic.Legion;
 /// got the most votes, even by 1).
 ///
 /// Round-robin distribution: voter <c>i</c> goes to <c>providers[i % N]</c>
-/// where <c>providers</c> is the active trusted set. With four providers
-/// and count=100 you get 25 per provider; with count=10 you get
-/// (3, 3, 2, 2). Failed voters do NOT shift the index — we'd rather have
+/// where <c>providers</c> is the active trusted set. With nine providers
+/// and count=100 you get 11 or 12 per provider; with count=10 you get
+/// 1 or 2 per provider. Failed voters do NOT shift the index — we'd rather have
 /// an uneven distribution that's reproducible than a "rebalance on
 /// failure" rule that drifts under retry.
 ///
@@ -33,8 +33,7 @@ using MindAttic.Legion;
 public static class PollCommand
 {
     /// <summary>Trust list — same as ask/tiers; never widens here.</summary>
-    internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+    internal static readonly string[] TrustedProviderIds = LlmProviderCatalog.DefaultIds.ToArray();
 
     /// <summary>
     /// Default tier when <c>--tier</c> isn't passed. Low is right for
@@ -442,7 +441,8 @@ public static class PollCommand
         Console.WriteLine("  --count N          Total voters (default 10).");
         Console.WriteLine("  --tier <t>         low | medium | high | higher | highest (default low).");
         Console.WriteLine("  --options A,B,C    Force choice mode; off-ballot replies count as errors.");
-        Console.WriteLine("  --providers a,b,c  Narrow within trusted set (claude, openai, gemini, deepseek).");
+        Console.WriteLine("  --providers a,b,c  Narrow within trusted set (claude, openai, gemini, deepseek,");
+        Console.WriteLine("                     xai, cohere, mistral, together, fireworks).");
         Console.WriteLine("  --context <text>   Extra context appended to every voter's prompt.");
         Console.WriteLine("  --max-tokens N     Per-voter cap (default 200).");
         Console.WriteLine("  --timeout S        Per-voter timeout in seconds (default 30).");

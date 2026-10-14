@@ -28,7 +28,7 @@ using MindAttic.Legion.Providers;
 ///       <em>some</em> answer; raise the bar with <c>--quorum twothirds</c>
 ///       when dissent should fail closed.</item>
 ///     <item>Every voter is pinned to <see cref="DefaultTier"/> = High
-///       (claude-opus-4-7, gpt-4.1, gemini-2.5-pro, deepseek-reasoner) so
+///       (claude-opus-4-7, gpt-5.4, gemini-2.5-pro, deepseek-v4-pro) so
 ///       architecture calls run on flagship reasoning rather than each
 ///       provider's cheap default. Override with <c>--tier low|medium|
 ///       high|higher|highest</c> when a cheaper or longer-context tier
@@ -41,11 +41,11 @@ public static class AskCommand
     /// The only providers permitted to generate voters. Even when callers
     /// pass <c>--providers</c>, the result is intersected with this set —
     /// no untrusted provider can ever be added to the panel from the CLI.
-    /// Exposed <c>internal</c> so the test suite can verify the trust list
-    /// without duplicating its membership.
+    /// Sourced from <see cref="LlmProviderCatalog.DefaultIds"/> so every
+    /// first-party surface (library and CLI) shares one trust list instead
+    /// of each declaring its own copy.
     /// </summary>
-    internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+    internal static readonly string[] TrustedProviderIds = LlmProviderCatalog.DefaultIds.ToArray();
 
     /// <summary>
     /// Intersects <paramref name="requested"/> with <see cref="TrustedProviderIds"/>
@@ -68,7 +68,7 @@ public static class AskCommand
     /// <summary>
     /// Default tier used by <c>legion ask</c> when <c>--tier</c> is not
     /// supplied. High = flagship reasoning models (claude-opus-4-7,
-    /// gpt-4.1, gemini-2.5-pro, deepseek-reasoner) — the right tool for
+    /// gpt-5.4, gemini-2.5-pro, deepseek-v4-pro) — the right tool for
     /// architectural / CLI-shape decisions. Cheaper tiers can be chosen
     /// explicitly with <c>--tier low|medium|high|higher|highest</c>.
     /// </summary>
@@ -722,7 +722,8 @@ public static class AskCommand
     {
         Console.WriteLine("legion ask <question> [opts]");
         Console.WriteLine();
-        Console.WriteLine("  Ask the trusted panel (Claude, ChatGPT, Gemini, DeepSeek) a single decision");
+        Console.WriteLine("  Ask the trusted panel (Claude, ChatGPT, Gemini, DeepSeek, Grok, Cohere, Mistral,");
+        Console.WriteLine("  Together AI, Fireworks) a single decision");
         Console.WriteLine("  question. Architect-framed voters. Stdout = bare answer; --json for full audit.");
         Console.WriteLine("  Designed for piping back into a monitored Claude Code or Codex session that's");
         Console.WriteLine("  blocking on a user prompt.");
@@ -737,13 +738,15 @@ public static class AskCommand
         Console.WriteLine("  --max-tokens N         Per-voter cap (default 1024).");
         Console.WriteLine("  --timeout S            Per-provider timeout in seconds (default 60).");
         Console.WriteLine("  --providers a,b,c      Narrow the panel WITHIN the trusted set. Untrusted ids are dropped.");
-        Console.WriteLine("                         Trusted: claude, openai, gemini, deepseek.");
+        Console.WriteLine("                         Trusted: claude, openai, gemini, deepseek, xai, cohere,");
+        Console.WriteLine("                         mistral, together, fireworks.");
         Console.WriteLine("  --tier <t>             low | medium | high | higher | highest (default high).");
-        Console.WriteLine("                         High = flagship reasoning (Opus 4.7, GPT-4.1, Gemini 2.5 Pro,");
-        Console.WriteLine("                         DeepSeek Reasoner). Drop tier for cheaper/faster decisions.");
+        Console.WriteLine("                         High = flagship reasoning (Opus 4.7, GPT-5.4, Gemini 2.5 Pro,");
+        Console.WriteLine("                         DeepSeek V4 Pro). Drop tier for cheaper/faster decisions.");
         Console.WriteLine("  --must-answer          On 0/N voter failure, retry with doubled budget and no auto-context;");
         Console.WriteLine("                         on second failure, single-provider chain (claude → openai → gemini →");
-        Console.WriteLine("                         deepseek) until one replies. Always emit an answer if any provider works.");
+        Console.WriteLine("                         deepseek → xai → cohere → mistral → together → fireworks) until one");
+        Console.WriteLine("                         replies. Always emit an answer if any provider works.");
         Console.WriteLine("  --json                 Emit full vote audit JSON instead of bare answer.");
         Console.WriteLine();
         Console.WriteLine("Exit codes:");

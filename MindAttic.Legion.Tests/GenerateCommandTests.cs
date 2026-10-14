@@ -49,7 +49,7 @@ public class GenerateCommandTests
     [Test]
     public void ResolveProviders_DropsUntrustedAndDeduplicates()
     {
-        var result = GenerateCommand.ResolveProviders(new[] { "Claude", "claude", "mistral" });
+        var result = GenerateCommand.ResolveProviders(new[] { "Claude", "claude", "groq" });
         Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
     }
 

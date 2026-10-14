@@ -103,24 +103,16 @@ public class LegionClient
 
     /// <summary>
     /// Default model per provider. Used when no <c>model</c> override is supplied
-    /// and the providers.json store has no model recorded.
+    /// and the providers.json store has no model recorded. Derived from
+    /// <see cref="LlmProviderCatalog.All"/> so there is exactly one place that
+    /// records each provider's default model instead of a second copy drifting
+    /// out of sync with the catalog.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> DefaultModels { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["claude"]  = "claude-sonnet-5",
-        ["openai"]     = "gpt-5.4-mini",
-        ["gemini"]     = "gemini-3.5-flash",
-        ["deepseek"]   = "deepseek-v4-flash",
-        ["mistral"]    = "mistral-large-latest",
-        ["xai"]        = "grok-4.3",
-        ["groq"]       = "llama-3.3-70b-versatile",
-        ["together"]   = "meta-llama/Llama-3-70b-chat-hf",
-        ["openrouter"] = "meta-llama/llama-3.1-8b-instruct:free",
-        ["fireworks"]  = "accounts/fireworks/models/llama-v3p1-70b-instruct",
-        ["cohere"]     = "command-r-plus",
-        ["kimi"]       = "kimi-k3",
-        ["perplexity"] = "sonar",
-    };
+    public static IReadOnlyDictionary<string, string> DefaultModels { get; } =
+        LlmProviderCatalog.All.ToDictionary(
+            p => p.Id,
+            p => p.DefaultModel,
+            StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Hard-coded chat-completions endpoint per provider. Claude and Cohere
@@ -995,7 +987,8 @@ public class LegionClient
         {
             if (disableThinking)
             {
-                var th = new { type = "disabled" };
+                var thinkingType = ClaudeModelRequiresBetweenToolsThinking(model) ? "between_tools" : "disabled";
+                var th = new { type = thinkingType };
                 payload = systemField is null
                     ? new { model, max_tokens = maxTokens, thinking = th, messages = apiMessages } as object
                     : new { model, max_tokens = maxTokens, thinking = th, system = systemField, messages = apiMessages };
@@ -1177,6 +1170,44 @@ public class LegionClient
             while (k < rest.Length && char.IsDigit(rest[k])) k++;
             if (k > 0 && int.TryParse(rest.Substring(0, k), out var familyMajor))
                 return familyMajor >= threshold;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when the model must receive <c>thinking: {type:"between_tools"}</c>
+    /// instead of <c>{type:"disabled"}</c> to turn extended thinking off. The
+    /// Claude 5.5 line (<c>claude-sonnet-5-5</c>, <c>claude-haiku-5-5</c>, …)
+    /// rejects "disabled" with a 400 ("To turn thinking off on this model,
+    /// send \"thinking\": {\"type\": \"between_tools\"} instead" — confirmed
+    /// live). Earlier Sonnet/Haiku 5.x releases without a minor segment (e.g.
+    /// the bare <c>claude-sonnet-5</c>) still accept "disabled". Only called
+    /// when <see cref="ClaudeModelDefaultsAdaptiveThinking"/> is already true.
+    /// </summary>
+    internal static bool ClaudeModelRequiresBetweenToolsThinking(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        var id = model.Trim();
+
+        foreach (var prefix in new[] { "claude-sonnet-", "claude-haiku-" })
+        {
+            if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            var rest = id.Substring(prefix.Length);     // "5-5", "5", "5-5-2026…"
+            var dash = rest.IndexOf('-');
+            if (dash < 0) return false;                  // bare major — pre-5.5, still "disabled".
+
+            var majorPart = rest.Substring(0, dash);
+            var mk = 0;
+            while (mk < majorPart.Length && char.IsDigit(majorPart[mk])) mk++;
+            if (mk == 0 || !int.TryParse(majorPart.Substring(0, mk), out var major)) return false;
+
+            var minorPart = rest.Substring(dash + 1);
+            var nk = 0;
+            while (nk < minorPart.Length && char.IsDigit(minorPart[nk])) nk++;
+            if (nk == 0 || !int.TryParse(minorPart.Substring(0, nk), out var minor)) return false;
+
+            return major > 5 || (major == 5 && minor >= 5);
         }
 
         return false;

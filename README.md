@@ -43,7 +43,7 @@ One LLM is one opinion. When a contradiction, a misclassification or a bad route
 ### Providers and tiers
 
 - Multi-provider transport: one `LegionClient` talks to thirteen provider connections: Claude (`claude`, a direct Anthropic API key), ChatGPT, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together AI, OpenRouter, Fireworks AI, Cohere, Kimi (Moonshot AI) and Perplexity, plus an explicit-URL escape hatch for self-hosted OpenAI-compatible endpoints (Ollama, vLLM, RunPod).
-- Tiered model selection: every provider exposes a Low, Medium, High, Higher and Highest tier. The four providers Legion explicitly maps (`claude`, `openai`, `gemini`, `deepseek`) resolve to a concrete model per tier; every other provider falls back to its single default model at any tier.
+- Tiered model selection: every provider exposes a Low, Medium, High, Higher and Highest tier. The nine providers Legion explicitly maps (`claude`, `openai`, `gemini`, `deepseek`, `xai`, `cohere`, `mistral`, `together`, `fireworks`) resolve to a concrete model per tier; every other provider falls back to its single default model at any tier.
 - Per-project panels via `legion.json`: declare a project's voters, judge, model overrides, API keys and concurrency cap without touching code.
 - Resilience: retry with backoff on transient errors, a process-wide per-provider circuit breaker, and a fallback chain that tries providers in order until one answers.
 
@@ -55,8 +55,8 @@ One LLM is one opinion. When a contradiction, a misclassification or a bad route
 
 ### CLI
 
-- `legion.exe ask`: an architect-framed decision for the loop where another coding CLI blocks on a user prompt. Auto-pulls `CLAUDE.md`, `README.md` and git state as context, defaults to the High tier and the trusted four providers, with automatic refill on outages.
-- `legion.exe poll`: round-robins N voters across the trusted four and reports a count-sorted distribution and plurality winner.
+- `legion.exe ask`: an architect-framed decision for the loop where another coding CLI blocks on a user prompt. Auto-pulls `CLAUDE.md`, `README.md` and git state as context, defaults to the High tier and the trusted-nine providers, with automatic refill on outages.
+- `legion.exe poll`: round-robins N voters across the trusted nine and reports a count-sorted distribution and plurality winner.
 - `legion.exe generate`: fans out one batched call per provider for that provider's share of N items, deduplicates, and prints newline-separated results.
 - `legion.exe tiers`: probes every trusted provider and tier with a tiny prompt and prints a matrix.
 - Also `status`, `providers`, `models`, `personas`, `panel`, `health`, `ping`, `vote` and `psychometrics`: the same engine, no .NET app required.
@@ -255,19 +255,21 @@ Legion calls 13 provider connections, all through the single `LegionClient`. Con
 
 | Provider id | Vendor | Auth | Default model | Dashboard |
 |---|---|---|---|---|
-| `claude` | Anthropic | API key (`x-api-key`) | `claude-sonnet-5` | console.anthropic.com |
+| `claude` | Anthropic | API key (`x-api-key`) | `claude-sonnet-5-5` | console.anthropic.com |
 | `openai` | OpenAI | API key | `gpt-5.4-mini` | platform.openai.com |
-| `gemini` | Google | API key (`x-goog-api-key` header) | `gemini-3.5-flash` | aistudio.google.com |
-| `deepseek` | DeepSeek AI | API key | `deepseek-v4-flash` | platform.deepseek.com |
-| `mistral` | Mistral AI | API key | `mistral-large-latest` | console.mistral.ai |
+| `gemini` | Google | API key (`x-goog-api-key` header) | `gemini-2.5-flash` | aistudio.google.com |
+| `deepseek` | DeepSeek AI | API key | `deepseek-flash` | platform.deepseek.com |
+| `mistral` | Mistral AI | API key | `mistral-medium-latest` | console.mistral.ai |
 | `xai` | xAI | API key | `grok-4.3` | console.x.ai |
 | `groq` | Groq | API key | `llama-3.3-70b-versatile` | console.groq.com |
-| `together` | Together AI | API key | `meta-llama/Llama-3-70b-chat-hf` | api.together.xyz |
+| `together` | Together AI | API key | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | api.together.xyz |
 | `openrouter` | OpenRouter | API key | `meta-llama/llama-3.1-8b-instruct:free` | openrouter.ai |
-| `fireworks` | Fireworks AI | API key | `accounts/fireworks/models/llama-v3p1-70b-instruct` | app.fireworks.ai |
-| `cohere` | Cohere | API key | `command-r-plus` | dashboard.cohere.com |
+| `fireworks` | Fireworks AI | API key | `accounts/fireworks/models/glm-5p3-flash` | app.fireworks.ai |
+| `cohere` | Cohere | API key | `command-a-03-2025` | dashboard.cohere.com |
 | `kimi` | Moonshot AI | API key | `kimi-k3` | platform.moonshot.cn |
 | `perplexity` | Perplexity AI | API key | `sonar` | perplexity.ai/settings/api |
+
+Groq, OpenRouter, and Kimi are in the catalog but excluded from the default trusted set — the keys on file for them are currently rejected by the vendor (401); rotate them in the Vault to bring those three back into the panel. Perplexity has no key configured at all.
 
 Source of truth: [LlmProviderCatalog](MindAttic.Legion/Services/LlmProviderCatalog.cs) (metadata, dashboard and keys URLs, per-provider known-model lists) and [LegionClient](MindAttic.Legion/Services/LegionClient.cs) `DefaultModels` and `Endpoints` (wire endpoints and fallback models). Run `legion.exe providers` for the live list, or `legion.exe models <provider>` for a provider's full known-model catalog.
 
@@ -302,15 +304,25 @@ var reply = await client.CallAsync(
 
 ### Tier system
 
-`ModelTier` is the Legion abstraction for "the cheap one" and "the strong one" without naming model versions that drift. Only the four providers below have an explicit tier mapping in [LlmProviderCatalog](MindAttic.Legion/Services/LlmProviderCatalog.cs). Every other provider (`mistral`, `xai`, `groq`, `together`, `openrouter`, `fireworks`, `cohere`, `kimi`, `perplexity`) has no tier table, and `GetTieredModel` returns its `DefaultModel` at any tier.
+`ModelTier` is the Legion abstraction for "the cheap one" and "the strong one" without naming model versions that drift. Only the nine providers below have an explicit tier mapping in [LlmProviderCatalog](MindAttic.Legion/Services/LlmProviderCatalog.cs). Every other provider (`groq`, `openrouter`, `kimi`, `perplexity`) has no tier table, and `GetTieredModel` returns its `DefaultModel` at any tier.
 
 | Tier | `claude` | `openai` | `gemini` | `deepseek` |
 |---|---|---|---|---|
-| `Low` | `claude-haiku-4-5-20251001` | `gpt-4.1-nano` | `gemini-2.5-flash-lite` | `deepseek-v4-flash` |
-| `Medium` | `claude-sonnet-5` | `gpt-5.4-mini` | `gemini-2.5-flash` | `deepseek-v4-flash` |
+| `Low` | `claude-haiku-5-5` | `gpt-4.1-nano` | `gemini-2.5-flash-lite` | `deepseek-flash` |
+| `Medium` | `claude-sonnet-5-5` | `gpt-5.4-mini` | `gemini-2.5-flash` | `deepseek-flash` |
 | `High` | `claude-opus-4-7` | `gpt-5.4` | `gemini-2.5-pro` | `deepseek-v4-pro` |
-| `Higher` | `claude-opus-4-8` | `gpt-5.5` | `gemini-3.1-flash-lite` | `deepseek-v4-pro` |
-| `Highest` | `claude-fable-5` | `gpt-5.6-sol` | `gemini-3.5-flash` | `deepseek-v4-pro` |
+| `Higher` | `claude-opus-5-5` | `gpt-5.5` | `gemini-3.5-flash` | `deepseek-v4-pro` |
+| `Highest` | `claude-fable-5-1` | `gpt-6.1-sol` | `gemini-3.8-flash` | `deepseek-v4-pro` |
+
+| Tier | `xai` | `cohere` | `mistral` | `together` | `fireworks` |
+|---|---|---|---|---|---|
+| `Low` | `grok-4.20-0309-non-reasoning` | `command-r7b-12-2024` | `ministral-3b-latest` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `accounts/fireworks/models/glm-5p3-flash` |
+| `Medium` | `grok-4.3` | `command-r-plus-08-2024` | `mistral-small-latest` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | `accounts/fireworks/models/glm-5p3-flash` |
+| `High` | `grok-4.5` | `command-a-03-2025` | `mistral-medium-latest` | `Qwen/Qwen2.5-72B-Instruct-Turbo` | `accounts/fireworks/models/glm-5p3` |
+| `Higher` | `grok-4.6` | `command-a-reasoning-08-2025` | `magistral-medium-latest` | `deepseek-ai/DeepSeek-V4.1-Flash` | `accounts/fireworks/models/deepseek-v4p1-flash` |
+| `Highest` | `grok-4.7` | `command-a-plus-05-2026` | `magistral-medium-latest`¹ | `deepseek-ai/DeepSeek-V4-Pro-0813` | `accounts/fireworks/models/qwen3p8-max` |
+
+¹ Mistral has no tier mapped above Higher — `GetTieredModel` walks the ladder down to `magistral-medium-latest` for `Highest` too.
 
 When a tier is not directly mapped for a provider, `GetTieredModel` walks down the ladder (Highest, Higher, ..., Low) and returns the closest available model, so asking for Highest against a 3-tier provider gives you High, not null. Asking for a tier lower than every entry walks back up. When the provider has no tier table at all, it returns the provider's `DefaultModel`.
 
@@ -321,11 +333,11 @@ var arch = LlmProviderCatalog.GetTieredModel("claude", ModelTier.High);
 
 // Cheap model for a 100-voter poll:
 var bulk = LlmProviderCatalog.GetTieredModel("claude", ModelTier.Low);
-// → "claude-haiku-4-5-20251001"
+// → "claude-haiku-5-5"
 
 // A provider with no tier table: always the default, regardless of tier
-var m = LlmProviderCatalog.GetTieredModel("mistral", ModelTier.Highest);
-// → "mistral-large-latest"
+var m = LlmProviderCatalog.GetTieredModel("groq", ModelTier.Highest);
+// → "llama-3.3-70b-versatile"
 ```
 
 CLI defaults: `legion ask` uses High (architecture wants flagship reasoning), `legion poll` uses Low (bulk distribution wants cheap), `legion generate` uses Medium (creative balance), and `legion psychometrics score` uses High. All accept `--tier <t>`.
@@ -361,7 +373,7 @@ Legion has two different "which providers are eligible" lists, and this matters 
 | List | Members | Applies to |
 |---|---|---|
 | `LlmProviderCatalog.All` and `AllIds` | All 13 providers | Everything Legion can call: `legion.exe providers` and `models`, direct `LegionClient` calls. |
-| `LlmProviderCatalog.Default` and `DefaultIds`, `VotingConfiguration.AllowedProviderIds` (default), CLI `TrustedProviderIds` | `claude`, `openai`, `gemini`, `deepseek` | The trusted four that every first-party surface (settings UIs, library voting, the CLI's `ask`, `poll`, `generate`, `tiers` and `vote`) restricts to by default. `--providers` can only narrow within this set; an id outside it is silently dropped. |
+| `LlmProviderCatalog.Default` and `DefaultIds`, `VotingConfiguration.AllowedProviderIds` (default), CLI `TrustedProviderIds` | `claude`, `openai`, `gemini`, `deepseek`, `xai`, `cohere`, `mistral`, `together`, `fireworks` | The trusted nine that every first-party surface (settings UIs, library voting, the CLI's `ask`, `poll`, `generate`, `tiers` and `vote`) restricts to by default. `--providers` can only narrow within this set; an id outside it is silently dropped. The CLI commands all derive their `TrustedProviderIds` from `LlmProviderCatalog.DefaultIds` — one source of truth instead of five separate copies. `groq`, `openrouter`, and `kimi` are excluded until their Vault keys are rotated (current keys are rejected by the vendor); `perplexity` is excluded for having no key configured. |
 
 When a trusted provider errors mid-vote (network blip, rate limit, transient 5xx), `LlmVotingService.RefillFailedVotersAsync` dispatches a fresh call to one of the surviving allowed providers (round-robin), so the panel never shrinks below quorum size. A failed Gemini slot becomes a second Claude or DeepSeek call rather than a missing vote. Refilled slots drop any persona overlay so a surviving voter does not vote twice as the same character.
 
@@ -399,7 +411,7 @@ Drop a `legion.json` file at a project's root to declare that project's voter pa
 
 ```json
 { "voters": ["claude","openai","gemini","deepseek","mistral","xai",
-             "groq","together","openrouter","fireworks","cohere"] }
+             "groq","together","openrouter","fireworks","cohere","kimi","perplexity"] }
 ```
 
 A two-vendor panel with an explicit judge:
@@ -471,7 +483,7 @@ legion.exe panel 5 claude openai --store <dir>   # explicit provider list / psyc
 ```bash
 legion.exe health                 # probe every one of the 13 providers' DefaultModel with a hello-world
 legion.exe ping claude            # one-provider probe (DefaultModel)
-legion.exe tiers                  # probe trusted four × Low/Medium/High = 12 cells
+legion.exe tiers                  # probe trusted nine × Low/Medium/High = 27 cells
 ```
 
 ### Vote
@@ -517,7 +529,7 @@ Differences from `vote`:
 - Architect-framed voters. Each voter acts as a senior software architect on this project: decisive, preferring the boring, reversible, conventional choice, flagging irreversible decisions.
 - Auto-context. Inside a repo, `ask` prepends `CLAUDE.md`, `README.md`, `git status -s` and `git log --oneline -10` to every voter's context, each capped (8 KB, 8 KB, 4 KB, 1 KB). Disable with `--no-auto-context`.
 - Default quorum is Plurality, so `ask` always emits some answer. Use `--quorum twothirds` when dissent should fail closed.
-- Fixed trust list. The panel is always the intersection of `--providers` (if given) with `claude`, `openai`, `gemini`, `deepseek`.
+- Fixed trust list. The panel is always the intersection of `--providers` (if given) with the trusted nine (`claude`, `openai`, `gemini`, `deepseek`, `xai`, `cohere`, `mistral`, `together`, `fireworks`).
 
 | Option | Meaning |
 |---|---|
@@ -531,7 +543,7 @@ Differences from `vote`:
 | `--timeout S` | Per-provider timeout in seconds (default 60). |
 | `--providers a,b,c` | Narrow the panel within the trusted set. Untrusted ids are silently dropped. |
 | `--tier <t>` | `low`, `medium`, `high`, `higher` or `highest` (default `high`). |
-| `--must-answer` | On 0/N voter failure, retry with doubled budget and no auto-context; on a second failure, fall back to a single-provider chain (claude, openai, gemini, deepseek) calling raw text until one replies. |
+| `--must-answer` | On 0/N voter failure, retry with doubled budget and no auto-context; on a second failure, fall back to a single-provider chain (claude, openai, gemini, deepseek, xai, cohere, mistral, together, fireworks) calling raw text until one replies. |
 | `--json` | Emit the full vote audit JSON instead of the bare answer. |
 
 Output contract:
@@ -546,11 +558,11 @@ With `--must-answer`, exit `0` also covers the recovery cases. stderr says which
 
 ### Poll
 
-`poll` is a fan-out command, not a consensus command. It round-robins N independent voters across the trusted four on a single tier and reports a count-sorted distribution and plurality winner. Unlike `vote` (one voter per provider, quorum) and `ask` (one architect-framed answer), it has no quorum: the winner is whichever option got the most votes, even by one.
+`poll` is a fan-out command, not a consensus command. It round-robins N independent voters across the trusted nine on a single tier and reports a count-sorted distribution and plurality winner. Unlike `vote` (one voter per provider, quorum) and `ask` (one architect-framed answer), it has no quorum: the winner is whichever option got the most votes, even by one.
 
 | Option | Meaning |
 |---|---|
-| `--count N` | Total voters (default 10). With four providers, 100 gives exactly 25 each; 10 gives 3, 3, 2, 2. |
+| `--count N` | Total voters (default 10). With nine providers, 100 round-robins to 11 or 12 each; 10 gives 1 or 2 each. |
 | `--tier <t>` | `low` to `highest` (default `low`). |
 | `--options A,B,C` | Force choice mode; off-ballot replies count as errors and are excluded. Free-form is allowed when omitted. |
 | `--providers a,b,c` | Narrow within the trusted set. |
@@ -610,7 +622,7 @@ Exit codes: `0` when at least one item was produced; `1` when every provider's b
 
 ### Tiers
 
-`tiers` answers "is the panel ready to vote on High right now?" without a real `ask` or `vote`. It probes every trusted provider and tier with a tiny "reply OK" prompt, by default the trusted four × Low, Medium and High (12 calls). Unlike `legion health`, which only probes each provider's default model, it catches tier-mapping breakage.
+`tiers` answers "is the panel ready to vote on High right now?" without a real `ask` or `vote`. It probes every trusted provider and tier with a tiny "reply OK" prompt, by default the trusted nine × Low, Medium and High (27 calls). Unlike `legion health`, which only probes each provider's default model, it catches tier-mapping breakage.
 
 | Option | Meaning |
 |---|---|
@@ -911,7 +923,7 @@ tools/build-readme.ps1               wrapper around the shared codex-standard RE
 - Voter: one `VoterProfile`: a provider id plus optional persona and optional key, model or max-tokens override.
 - Persona: a markdown system-prompt worldview from the 1024-member `PersonaLibrary`.
 - Tier: a `ModelTier` (Low to Highest) that the catalog maps to a concrete model per provider.
-- Trusted set: the four providers (`claude`, `openai`, `gemini`, `deepseek`) that library voting and the CLI's decision commands restrict to by default; see [Trust tiers](#trust-tiers).
+- Trusted set: the nine providers (`claude`, `openai`, `gemini`, `deepseek`, `xai`, `cohere`, `mistral`, `together`, `fireworks`) that library voting and the CLI's decision commands restrict to by default; see [Trust tiers](#trust-tiers).
 - Judge: the LLM that synthesizes free-form votes into a consensus (`JudgeProviderId`).
 - Consensus and dissent: the agreed answer and the recorded minority positions.
 - Circuit breaker: per-provider fast-fail after repeated failures, shared process-wide.
@@ -937,10 +949,11 @@ You now have a Legion panel for hard calls. Use it instead of blocking on me.
 Legion is a multi-LLM CLI at:
   <your clone>\MindAttic.Legion.Cli\bin\Release\net10.0\legion.exe
 
-The panel is HARDCODED to Claude (API key), ChatGPT, Gemini, DeepSeek: the four providers
-I trust for autonomous decisions. No untrusted provider can ever be added, even via --providers
-(untrusted ids get silently dropped). If a trusted provider is unreachable, Legion automatically
-refills the empty slot with another working provider so the panel never falls below quorum.
+The panel is HARDCODED to Claude (API key), ChatGPT, Gemini, DeepSeek, Grok, Cohere, Mistral,
+Together AI, Fireworks: the nine providers I trust for autonomous decisions. No untrusted
+provider can ever be added, even via --providers (untrusted ids get silently dropped). If a
+trusted provider is unreachable, Legion automatically refills the empty slot with another
+working provider so the panel never falls below quorum.
 
 CHOOSING THE COMMAND
   legion ask <q>        ONE decision, panel-voted, architect-framed.
@@ -950,7 +963,7 @@ CHOOSING THE COMMAND
                         Default tier: LOW. Default count: 10. Use for "how does the panel split?"
   legion generate <p>   N distinct creative items, deduped, newline to stdout.
                         Default tier: MEDIUM. Default count: 10. Use for names, taglines, alternatives.
-  legion tiers          Probe trusted four × Low/Medium/High = 12 cells. Connectivity only.
+  legion tiers          Probe trusted nine × Low/Medium/High = 27 cells. Connectivity only.
                         Use once before a critical session, or after a model deprecation.
 
 WHEN TO CALL ask
@@ -960,7 +973,7 @@ Whenever you would otherwise pause to ask me:
   - An ambiguous spec where two reasonable readings exist and the next file depends on which is right.
   - Anything hard to reverse.
 Don't call ask for mechanical edits, formatting, or things where you already know the answer:
-each call costs a few seconds and four flagship-tier API requests. For cheap one-shot decisions, use --tier low.
+each call costs a few seconds and nine flagship-tier API requests. For cheap one-shot decisions, use --tier low.
 
 HOW TO CALL ask
   legion.exe ask "<question>" [opts]
@@ -973,7 +986,8 @@ HOW TO CALL ask
   - Tier override: add --tier low|medium|high|higher|highest. Default is high.
   - MUST-ANSWER: add --must-answer when you cannot tolerate "no answer". Phase 2 retries with
     doubled budget and no auto-context; phase 3 falls back to a single-provider chain
-    (claude → openai → gemini → deepseek) calling raw text.
+    (claude → openai → gemini → deepseek → xai → cohere → mistral → together → fireworks)
+    calling raw text.
 Auto-context: by default ask reads CLAUDE.md, README.md, git status -s and git log --oneline -10
 from cwd. Pass --no-auto-context for a clean prompt, or --context-file <path> to inject a file.
 
@@ -989,7 +1003,7 @@ poll, generate, tiers
   legion.exe generate "single-word hero-vibe character names" --count 100 > names.txt
   legion.exe tiers      # exit 0 if every cell is OK, 1 otherwise. Once per session is plenty.
 
---providers can only NARROW within the trusted four. Don't reach for it unless I ask.
+--providers can only NARROW within the trusted nine. Don't reach for it unless I ask.
 
 If ask exits 1 (no quorum) WITHOUT --must-answer, don't silently pick its best-guess answer for a
 structural decision: re-run with --json, summarize the disagreement, ask me. If you used

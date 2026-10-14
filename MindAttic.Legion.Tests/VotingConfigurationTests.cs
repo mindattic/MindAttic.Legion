@@ -92,9 +92,9 @@ public class VotingConfigurationTests
     [Test]
     public void ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders()
     {
-        // The default whitelist: claude, openai, gemini, deepseek.
+        // The default whitelist mirrors LlmProviderCatalog.DefaultIds.
         Assert.That(new VotingConfiguration().AllowedProviderIds,
-            Is.EquivalentTo(new[] { "claude", "openai", "gemini", "deepseek" }));
+            Is.EquivalentTo(LlmProviderCatalog.DefaultIds));
     }
 
     [Test]
@@ -107,7 +107,7 @@ public class VotingConfigurationTests
             ApiKeys              =
             {
                 ["claude"] = "k1",
-                ["mistral"]    = "k2", // untrusted; should not become active
+                ["groq"]       = "k2", // untrusted; should not become active
             },
         };
         Assert.That(cfg.ActiveProviderIds, Is.EquivalentTo(new[] { "claude" }));

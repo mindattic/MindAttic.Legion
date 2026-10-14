@@ -20,9 +20,8 @@ public class VotingConfiguration
 {
     /// <summary>
     /// Map of provider ID → API key. Explicit entries here win over the shared
-    /// credential store (useful for tests or app-specific overrides).
-    /// Supported provider IDs: claude, openai, gemini, deepseek, mistral,
-    ///   xai, groq, together, openrouter, fireworks, cohere.
+    /// credential store (useful for tests or app-specific overrides). See
+    /// <see cref="LlmProviderCatalog.AllIds"/> for every supported provider ID.
     /// </summary>
     public Dictionary<string, string> ApiKeys { get; set; } = new();
 
@@ -59,17 +58,15 @@ public class VotingConfiguration
 
     /// <summary>
     /// Whitelist of providers eligible for voting. Empty set = no restriction
-    /// (every provider with a key is active). Default restricts to the four
-    /// production providers the project trusts for autonomous decisions —
-    /// Claude, ChatGPT, Gemini, DeepSeek. Failed voters in this set are
-    /// refilled by <see cref="LlmVotingService"/> using additional instances
-    /// of the surviving allowed providers, so a Gemini outage doesn't shrink
-    /// the panel below quorum size.
+    /// (every provider with a key is active). Defaults to
+    /// <see cref="LlmProviderCatalog.DefaultIds"/> — the production providers
+    /// the project trusts for autonomous decisions. Failed voters in this set
+    /// are refilled by <see cref="LlmVotingService"/> using additional
+    /// instances of the surviving allowed providers, so a single outage
+    /// doesn't shrink the panel below quorum size.
     /// </summary>
-    public HashSet<string> AllowedProviderIds { get; set; } = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "claude", "openai", "gemini", "deepseek",
-    };
+    public HashSet<string> AllowedProviderIds { get; set; } =
+        new(LlmProviderCatalog.DefaultIds, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Optional cap on simultaneous ballot calls. <c>null</c> means "use the

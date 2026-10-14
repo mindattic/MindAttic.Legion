@@ -13,8 +13,8 @@ using MindAttic.Legion;
 ///
 /// <para><b>Strategy.</b></para>
 /// One HTTP call per provider produces a batch of items, not one item per
-/// call. With four trusted providers and N=100, generate fans out 4 calls
-/// (one per provider) each asking for 25 items, yielding ~100 candidates
+/// call. With nine trusted providers and N=100, generate fans out 9 calls
+/// (one per provider) each asking for ~11 items, yielding ~100 candidates
 /// in roughly the time of one round-trip rather than 100. Each provider
 /// is asked for an exact target count split round-robin from N. Items are
 /// extracted from each reply via simple line-splitting (numbered or bullet
@@ -37,8 +37,7 @@ using MindAttic.Legion;
 public static class GenerateCommand
 {
     /// <summary>Trust list — same as ask/poll/tiers; never widens here.</summary>
-    internal static readonly string[] TrustedProviderIds =
-        { "claude", "openai", "gemini", "deepseek" };
+    internal static readonly string[] TrustedProviderIds = LlmProviderCatalog.DefaultIds.ToArray();
 
     /// <summary>
     /// Default tier when <c>--tier</c> isn't passed. Medium (sonnet-class /
@@ -195,7 +194,7 @@ public static class GenerateCommand
     /// <summary>
     /// Fan out one HTTP call per provider, each asking for that provider's
     /// share of the total. All calls run in parallel — there's no concurrency
-    /// cap because the trusted set is at most four providers, well below any
+    /// cap because the trusted set is at most nine providers, well below any
     /// reasonable rate-limit budget. Returns one <see cref="ProviderBatch"/>
     /// per assignment in input order; never throws.
     /// </summary>
@@ -401,7 +400,8 @@ public static class GenerateCommand
         Console.WriteLine("Options:");
         Console.WriteLine("  --count N          Total distinct items (default 10).");
         Console.WriteLine("  --tier <t>         low | medium | high | higher | highest (default medium).");
-        Console.WriteLine("  --providers a,b,c  Narrow within trusted set (claude, openai, gemini, deepseek).");
+        Console.WriteLine("  --providers a,b,c  Narrow within trusted set (claude, openai, gemini, deepseek,");
+        Console.WriteLine("                     xai, cohere, mistral, together, fireworks).");
         Console.WriteLine("  --max-tokens N     Per-batch cap (default 1500 ≈ 50 short items).");
         Console.WriteLine("  --timeout S        Per-call timeout in seconds (default 60).");
         Console.WriteLine("  --temperature T    Sampling temperature (default 0.9 — favors creative variance).");

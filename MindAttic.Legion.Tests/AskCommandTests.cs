@@ -1,3 +1,4 @@
+using MindAttic.Legion;
 using MindAttic.Legion.Cli;
 using NUnit.Framework;
 
@@ -15,10 +16,9 @@ public class AskCommandTests
     // ── TrustedProviderIds / IntersectWithTrustedSet ───────────────────────
 
     [Test]
-    public void TrustedProviderIds_AreExactlyTheFourTrusted()
+    public void TrustedProviderIds_MatchesCatalogDefaultSet()
     {
-        Assert.That(AskCommand.TrustedProviderIds,
-            Is.EquivalentTo(new[] { "claude", "openai", "gemini", "deepseek" }));
+        Assert.That(AskCommand.TrustedProviderIds, Is.EquivalentTo(LlmProviderCatalog.DefaultIds));
     }
 
     [Test]
@@ -46,14 +46,14 @@ public class AskCommandTests
     public void IntersectWithTrustedSet_DropsUntrustedIds()
     {
         // The whole point: passing an untrusted id never adds it to the panel.
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude", "mistral", "ollama" });
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "claude", "kimi", "ollama" });
         Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
     }
 
     [Test]
     public void IntersectWithTrustedSet_AllUntrusted_ReturnsEmpty()
     {
-        var result = AskCommand.IntersectWithTrustedSet(new[] { "mistral", "groq", "xai" });
+        var result = AskCommand.IntersectWithTrustedSet(new[] { "kimi", "groq", "openrouter" });
         Assert.That(result, Is.Empty);
     }
 
@@ -126,20 +126,20 @@ public class AskCommandTests
     public void BuildTierModelOverrides_Low_PinsCheapModels()
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Low);
-        Assert.That(overrides["claude"], Is.EqualTo("claude-haiku-4-5-20251001"));
+        Assert.That(overrides["claude"], Is.EqualTo("claude-haiku-5-5"));
         Assert.That(overrides["openai"],     Is.EqualTo("gpt-4.1-nano"));
         Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-flash-lite"));
-        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-v4-flash"));
+        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-flash"));
     }
 
     [Test]
     public void BuildTierModelOverrides_Medium_PinsBalancedModels()
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Medium);
-        Assert.That(overrides["claude"], Is.EqualTo("claude-sonnet-5"));
+        Assert.That(overrides["claude"], Is.EqualTo("claude-sonnet-5-5"));
         Assert.That(overrides["openai"],     Is.EqualTo("gpt-5.4-mini"));
         Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-flash"));
-        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-v4-flash"));
+        Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-flash"));
     }
 
     [Test]
@@ -157,7 +157,7 @@ public class AskCommandTests
     public void BuildTierModelOverrides_Higher_PinsAboveHighTier()
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Higher);
-        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-4-8"));
+        Assert.That(overrides["claude"], Is.EqualTo("claude-opus-5-5"));
         Assert.That(overrides["openai"],     Is.EqualTo("gpt-5.5"));
     }
 

@@ -147,7 +147,12 @@ public class LlmHealthCheck
                 providerId: info.Id,
                 systemPrompt: "You are a status-check responder. Reply only with what the user asks. No commentary.",
                 userMessage: ProbePrompt,
-                maxTokens: 32,
+                // Reasoning-by-default models (DeepSeek's deepseek-flash, Fireworks'
+                // glm-5p3-flash, …) spend part of the budget on a hidden
+                // reasoning_content block before the visible reply — 32 tokens was
+                // entirely consumed by reasoning, leaving an empty "content" and a
+                // false WRONG REPLY. 200 leaves headroom for both.
+                maxTokens: 200,
                 temperature: 0.0,
                 ct: token);
 

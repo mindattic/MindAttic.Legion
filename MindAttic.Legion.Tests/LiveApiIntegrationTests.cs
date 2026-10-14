@@ -33,7 +33,7 @@ namespace MindAttic.Legion.Tests;
 /// </list>
 ///
 /// <para><b>Why these are explicit.</b></para>
-/// Two reasons: cost (every run pays the API for ~12 small calls plus
+/// Two reasons: cost (every run pays the API for ~27 small calls plus
 /// whatever a smoke-test of the bulk commands would consume), and
 /// flakiness (real APIs go down, deprecate models, or reject
 /// previously-OK params). Explicit + opt-in keeps CI green while still
@@ -68,7 +68,7 @@ public class LiveApiIntegrationTests
     // ── Whole-matrix sanity (use the TiersCommand probe machinery directly) ────
 
     [Test]
-    public async Task TrustedFour_AllThreeDefaultTiers_AllRespond()
+    public async Task TrustedPanel_AllThreeDefaultTiers_AllRespond()
     {
         // The single test that says "the panel is healthy". If this passes,
         // legion ask / poll / generate are all viable on every default tier.
@@ -82,8 +82,9 @@ public class LiveApiIntegrationTests
             maxTokens: PerCallMaxTokens,
             perCallTimeout: PerCallTimeout);
 
-        Assert.That(results, Has.Count.EqualTo(12),
-            "expected 4 providers × 3 default tiers = 12 probes");
+        var expectedCells = TiersCommand.TrustedProviderIds.Length * TiersCommand.DefaultTiers.Length;
+        Assert.That(results, Has.Count.EqualTo(expectedCells),
+            $"expected {TiersCommand.TrustedProviderIds.Length} providers × {TiersCommand.DefaultTiers.Length} default tiers = {expectedCells} probes");
         var failures = results.Where(r => !r.Ok)
             .Select(r => $"{r.ProviderId}/{r.Tier}: {r.Error}")
             .ToList();

@@ -111,7 +111,7 @@ These project laws are *in addition to* the house rules, which are INHERITED, no
 2. {#LEG-LAW-2} **Credentials flow through `MindAttic.Vault`.** Legion never invents its own secret storage. Resolution order is per-voter override → `VotingConfiguration.ApiKeys` → shared Vault store (User Secrets / App Service settings / Key Vault, with the legacy `%APPDATA%\MindAttic\LLM` file as fallback). `MindAtticCredentialStore` is a compatibility facade only.
 3. {#LEG-LAW-3} **Quorum thresholds are exact, computed with integer arithmetic.** `SimpleMajority` is strictly `agree*2 > total` (a 2-of-4 tie FAILS); `TwoThirds` is `agree*3 >= total*2` so a 2-of-3 panel clears it. Never approximate with a rounded float. *(verified by `SimpleMajority_RejectsExactTie`, `TwoThirds_IsSatisfiedBy_AdmitsTwoOfThree_RejectsOneOfTwo`, `TwoThirds_IsExactlyTwoThirds`.)*
 4. {#LEG-LAW-4} **Callers request tiers, never raw model ids.** The catalog maps `ModelTier` → a concrete model per provider so a vendor model-id rotation never breaks a caller. `GetTieredModel` climbs down to the nearest available tier when a provider lacks the requested one.
-5. {#LEG-LAW-5} **A provider is "active" only with a non-empty key AND membership in the allowed set.** The default allowed set is the trusted four (claude, openai, gemini, deepseek). Untrusted keys are filtered out of voting. *(verified by `ActiveProviderIds_*` tests.)*
+5. {#LEG-LAW-5} **A provider is "active" only with a non-empty key AND membership in the allowed set.** The default allowed set is `LlmProviderCatalog.DefaultIds` — the nine providers with a currently-working key and catalog entry (claude, openai, gemini, deepseek, xai, cohere, mistral, together, fireworks). Untrusted keys are filtered out of voting. *(verified by `ActiveProviderIds_*` tests.)*
 6. {#LEG-LAW-6} **Quorum failure returns empty, it does not guess.** When quorum isn't reached, `QuorumReached == false` and `Consensus == ""`; escalation/retry is the caller's decision. Legion never silently downgrades the quorum.
 7. {#LEG-LAW-7} **The breaker is shared and process-static.** "Claude is down" means the same thing to every `LegionClient` in the process; transient 5xx/429/network errors retry with backoff, then the per-provider breaker opens for a cooldown.
 8. {#LEG-LAW-8} **Psychometric scoring is deterministic in code; the model only answers items.** Profiles are computed from in-character item responses, not asked-for directly, and persisted as one faithful JSON profile per persona.
@@ -149,7 +149,7 @@ A feature is **done** only when:
 - **Voter** — one `VoterProfile`: a provider id + optional persona + optional key override.
 - **Persona** — a markdown system-prompt worldview from the 1024-member `PersonaLibrary`.
 - **Tier** — a `ModelTier` (Low…Highest) the catalog maps to a concrete model per provider.
-- **Trusted four** — claude, openai, gemini, deepseek; the default allowed/active set.
+- **Trusted set** (`LlmProviderCatalog.DefaultIds`) — claude, openai, gemini, deepseek, xai, cohere, mistral, together, fireworks; the default allowed/active set. Groq, OpenRouter, and Kimi are excluded pending key rotation; Perplexity is excluded for lacking a key.
 - **Judge** — the LLM that synthesizes free-form votes into a consensus (`JudgeProviderId`).
 - **Consensus / dissent** — the agreed answer and the recorded minority positions.
 - **Circuit breaker** — per-provider fast-fail after repeated failures, shared process-wide.

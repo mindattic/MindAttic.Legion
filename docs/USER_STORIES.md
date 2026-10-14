@@ -27,7 +27,7 @@ updated: 2026-10-03
 
 - **LEG-US-C1 ✅** As an integrator, I can request a model by tier and survive vendor model-id rotation, so my callers never name a drifting model id. *(verified by `BuildHighTierModelOverrides_*`, `BuildTierModelOverrides_*`, `BlankModel_FallsBackToProviderDefaultModel`.)* (See [LEG-LAW-4](BIBLE.md#LEG-LAW-4).)
 - **LEG-US-C2 ✅** As an integrator, I get a stable provider catalog with the expected provider count and known ids. *(verified by `All_HasExpectedProviderCount`, `All_KnownIds`.)*
-- **LEG-US-C3 ✅** As an integrator, a provider counts as active only with a non-empty key and membership in the allowed set (default trusted four). *(verified by `ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders`, `ActiveProviderIds_BlankKey_IsNotActive`, `ActiveProviderIds_KeyForUntrustedProvider_IsFilteredOut`, `ActiveProviderIds_NoKeys_ReturnsEmpty`.)* (See [LEG-LAW-5](BIBLE.md#LEG-LAW-5).)
+- **LEG-US-C3 ✅** As an integrator, a provider counts as active only with a non-empty key and membership in the allowed set (default: the nine-provider trusted set in `LlmProviderCatalog.DefaultIds`). *(verified by `ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders`, `ActiveProviderIds_BlankKey_IsNotActive`, `ActiveProviderIds_KeyForUntrustedProvider_IsFilteredOut`, `ActiveProviderIds_NoKeys_ReturnsEmpty`.)* (See [LEG-LAW-5](BIBLE.md#LEG-LAW-5).)
 - **LEG-US-C4 ✅** As an operator, I can discover a provider's live model list and parse vendor-specific shapes. *(verified by `LlmModelDiscoveryExtractTests` / `LlmModelDiscoveryTests`, e.g. `AnthropicShape_DataArrayWithIdProperty`, `CohereShape_ModelsArrayWithNameProperty`, `BareArray_OfStrings_Works`.)*
 
 ## Epic D — Transport & resilience
@@ -64,3 +64,13 @@ updated: 2026-10-03
 1. **LEG-US-B1** — add a dedicated offline `Decide*` test and promote to ✅.
 2. **LEG-US-B2** — add a dedicated offline `Score*` rubric test and promote to ✅.
 3. **LEG-US-A3 / F2** — wire a CI secret-bearing job (or documented local run) so the live categories can be exercised and reported, promoting these from 🟡.
+
+## Tickets
+> Permanent log of every change and fix — this repo's ticket system. Rows are append-only: never
+> delete or reword one; only move its Status (open → closed / wont-do) and fill in Ref. Status is
+> a word, not a glyph, so tickets don't count toward the story index. Keep this section last.
+
+| ID | Date | Type | Status | Summary | Ref |
+|---|---|---|---|---|---|
+| LEG-T1 | 2026-10-12 | docs | closed | Start the permanent ticket log in USER_STORIES.md | — |
+| LEG-T2 | 2026-10-13 | fix | closed | Restore LlmProviderCatalog to live-verified model ids (all 13 providers) and expand the default trusted/voting set from 4 to 9 providers | LEG-LAW-5, ActiveProviderIds_DefaultAllowedSet_IsTheTrustedProviders, AskCommandTests.TrustedProviderIds_MatchesCatalogDefaultSet |

@@ -62,14 +62,14 @@ public class TiersCommandTests
     {
         // Same security model as AskCommand: untrusted ids are silently
         // dropped, never widening the probe set.
-        var result = TiersCommand.ResolveProviders(new[] { "claude", "mistral", "ollama" });
+        var result = TiersCommand.ResolveProviders(new[] { "claude", "kimi", "ollama" });
         Assert.That(result, Is.EquivalentTo(new[] { "claude" }));
     }
 
     [Test]
     public void ResolveProviders_AllUntrusted_ReturnsEmpty()
     {
-        var result = TiersCommand.ResolveProviders(new[] { "mistral", "groq", "xai" });
+        var result = TiersCommand.ResolveProviders(new[] { "kimi", "groq", "openrouter" });
         Assert.That(result, Is.Empty);
     }
 
