@@ -1,7 +1,7 @@
 ---
 codex: 1
 project: MindAttic.Legion
-code: LEG
+code: M.LEGN
 layer: amendments
 status: living
 updated: 2026-10-03

@@ -174,7 +174,7 @@ summary: 12/12 ok</code></pre>
 <pre><code class="language-xml">&lt;ItemGroup&gt;
   &lt;ProjectReference Include="..\..\MindAttic.Legion\MindAttic.Legion\MindAttic.Legion.csproj" /&gt;
 &lt;/ItemGroup&gt;</code></pre>
-<p>The <code>MindAttic.Legion</code> package is also on nuget.org, but the newest published version there (2.6.0) is older than this repo's version (26.0.0), so use a project reference for the API described here. Target framework: net10.0. The library depends on <code>MindAttic.Vault</code> and <code>Microsoft.Extensions.DependencyInjection.Abstractions</code>, <code>Microsoft.Extensions.Http</code> and <code>Microsoft.Extensions.Logging.Abstractions</code> only (see <a href="docs/BIBLE.md#LEG-LAW-1">Law LEG-LAW-1</a>).</p>
+<p>The <code>MindAttic.Legion</code> package is also on nuget.org, but the newest published version there (2.6.0) is older than this repo's version (26.0.0), so use a project reference for the API described here. Target framework: net10.0. The library depends on <code>MindAttic.Vault</code> and <code>Microsoft.Extensions.DependencyInjection.Abstractions</code>, <code>Microsoft.Extensions.Http</code> and <code>Microsoft.Extensions.Logging.Abstractions</code> only (see <a href="docs/BIBLE.md#M.LEGN-LAW-1">Law M.LEGN-LAW-1</a>).</p>
 <p>Configure and vote:</p>
 <pre><code class="language-csharp">using MindAttic.Legion;
 using MindAttic.Legion.Providers;
@@ -224,7 +224,7 @@ MindAttic.Legion.Cli/bin/Release/net10.0/legion.exe health</code></pre>
 │                     └─ CircuitBreaker (process-static, per-provider)
 ├─ LegionConfig (legion.json: per-project voters/judge/models/apiKeys/maxConcurrency)
 └─ MindAtticCredentialStore (facade over MindAttic.Vault; shared keyring at %APPDATA%/MindAttic/LLM/)</code></pre>
-<p><code>LegionClient</code> owns the socket pool, retry policy and circuit breaker. <code>LlmVotingProvider</code> adds vote-specific shaping and per-voter key resolution. <code>LlmVotingService</code> is the public API; you almost never need to touch the lower layers. See <a href="docs/BIBLE.md#LEG-§4">BIBLE section 4</a> for the canonical architecture and <a href="docs/BIBLE.md#LEG-§5">section 5</a> for the Laws this design must never violate.</p>
+<p><code>LegionClient</code> owns the socket pool, retry policy and circuit breaker. <code>LlmVotingProvider</code> adds vote-specific shaping and per-voter key resolution. <code>LlmVotingService</code> is the public API; you almost never need to touch the lower layers. See <a href="docs/BIBLE.md#M.LEGN-§4">BIBLE section 4</a> for the canonical architecture and <a href="docs/BIBLE.md#M.LEGN-§5">section 5</a> for the Laws this design must never violate.</p>
 <h2 id="voting-modes">Voting modes</h2>
 <h3 id="open-ended-consensus">Open-ended consensus</h3>
 <p>The simplest call: ask a question, every voter writes a free-form answer, a judge LLM synthesizes the consensus.</p>
@@ -588,7 +588,7 @@ var m = LlmProviderCatalog.GetTieredModel("groq", ModelTier.Highest);
 <h2 id="configuration">Configuration</h2>
 <h3 id="credential-storage">Credential storage</h3>
 <p>Legion reads keys from the shared credential store at <code>%APPDATA%/MindAttic/LLM/</code> (backed by <code>MindAttic.Vault</code>) so every MindAttic app shares one keyring. <code>VotingConfiguration.UseSharedCredentials = true</code> (the default) opts in.</p>
-<p>Resolution order (see <a href="docs/BIBLE.md#LEG-LAW-2">Law LEG-LAW-2</a>):</p>
+<p>Resolution order (see <a href="docs/BIBLE.md#M.LEGN-LAW-2">Law M.LEGN-LAW-2</a>):</p>
 <ol>
 <li>A per-voter <code>VoterProfile.ApiKeyOverride</code>.</li>
 <li>An explicit entry in <code>VotingConfiguration.ApiKeys</code>.</li>
@@ -1149,7 +1149,7 @@ dotnet pack MindAttic.Legion/MindAttic.Legion.csproj -c Release -o pack-out
 # Build the CLI executable
 dotnet build MindAttic.Legion.Cli/MindAttic.Legion.Cli.csproj -c Release
 # → MindAttic.Legion.Cli/bin/Release/net10.0/legion.exe (also legion.dll, runnable via `dotnet legion.dll`)</code></pre>
-<p>Versioning is whole-number, major-only across every MindAttic project (inherited via <a href="docs/BIBLE.md#LEG-§5">BIBLE section 5</a>): the package <code>&lt;Version&gt;</code> bumps by a whole major number per release (<code>N.0.0</code>) and nothing else.</p>
+<p>Versioning is whole-number, major-only across every MindAttic project (inherited via <a href="docs/BIBLE.md#M.LEGN-§5">BIBLE section 5</a>): the package <code>&lt;Version&gt;</code> bumps by a whole major number per release (<code>N.0.0</code>) and nothing else.</p>
 <p>The <code>docs/</code> canon has its own tooling, unrelated to the library build:</p>
 <pre><code class="language-powershell">powershell -File tools/codex.ps1 digest   # regenerate docs/BIBLE.digest.md after editing BIBLE §1/§3/§5/§9 or docs/AMENDMENTS.md
 powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, cited tests/paths, digest freshness; must exit 0

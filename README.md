@@ -77,7 +77,7 @@ Reference the library from a sibling checkout:
 </ItemGroup>
 ```
 
-The `MindAttic.Legion` package is also on nuget.org, but the newest published version there (2.6.0) is older than this repo's version (26.0.0), so use a project reference for the API described here. Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law LEG-LAW-1](docs/BIBLE.md#LEG-LAW-1)).
+The `MindAttic.Legion` package is also on nuget.org, but the newest published version there (2.6.0) is older than this repo's version (26.0.0), so use a project reference for the API described here. Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law M.LEGN-LAW-1](docs/BIBLE.md#M.LEGN-LAW-1)).
 
 Configure and vote:
 
@@ -143,7 +143,7 @@ MindAttic.Legion.Cli/bin/Release/net10.0/legion.exe health
 └─ MindAtticCredentialStore (facade over MindAttic.Vault; shared keyring at %APPDATA%/MindAttic/LLM/)
 ```
 
-`LegionClient` owns the socket pool, retry policy and circuit breaker. `LlmVotingProvider` adds vote-specific shaping and per-voter key resolution. `LlmVotingService` is the public API; you almost never need to touch the lower layers. See [BIBLE section 4](docs/BIBLE.md#LEG-§4) for the canonical architecture and [section 5](docs/BIBLE.md#LEG-§5) for the Laws this design must never violate.
+`LegionClient` owns the socket pool, retry policy and circuit breaker. `LlmVotingProvider` adds vote-specific shaping and per-voter key resolution. `LlmVotingService` is the public API; you almost never need to touch the lower layers. See [BIBLE section 4](docs/BIBLE.md#M.LEGN-§4) for the canonical architecture and [section 5](docs/BIBLE.md#M.LEGN-§5) for the Laws this design must never violate.
 
 ## Voting modes
 
@@ -397,7 +397,7 @@ Set `AllowedProviderIds` to an empty set to disable filtering and let every prov
 
 Legion reads keys from the shared credential store at `%APPDATA%/MindAttic/LLM/` (backed by `MindAttic.Vault`) so every MindAttic app shares one keyring. `VotingConfiguration.UseSharedCredentials = true` (the default) opts in.
 
-Resolution order (see [Law LEG-LAW-2](docs/BIBLE.md#LEG-LAW-2)):
+Resolution order (see [Law M.LEGN-LAW-2](docs/BIBLE.md#M.LEGN-LAW-2)):
 
 1. A per-voter `VoterProfile.ApiKeyOverride`.
 2. An explicit entry in `VotingConfiguration.ApiKeys`.
@@ -877,7 +877,7 @@ dotnet build MindAttic.Legion.Cli/MindAttic.Legion.Cli.csproj -c Release
 # → MindAttic.Legion.Cli/bin/Release/net10.0/legion.exe (also legion.dll, runnable via `dotnet legion.dll`)
 ```
 
-Versioning is whole-number, major-only across every MindAttic project (inherited via [BIBLE section 5](docs/BIBLE.md#LEG-§5)): the package `<Version>` bumps by a whole major number per release (`N.0.0`) and nothing else.
+Versioning is whole-number, major-only across every MindAttic project (inherited via [BIBLE section 5](docs/BIBLE.md#M.LEGN-§5)): the package `<Version>` bumps by a whole major number per release (`N.0.0`) and nothing else.
 
 The `docs/` canon has its own tooling, unrelated to the library build:
 

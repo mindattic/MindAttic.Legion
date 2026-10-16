@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  Codex documentation tooling for MindAttic.Legion (CODE = LEG).
+  Codex documentation tooling for MindAttic.Legion (CODE = M.LEGN).
 .DESCRIPTION
   Subcommands:
     doctor  - validate the Codex docs (front-matter, IDs, cross-refs, data schemas,
@@ -35,7 +35,7 @@ $AmendPath = Join-Path $DocsDir 'AMENDMENTS.md'
 $StoriesPath = Join-Path $DocsDir 'USER_STORIES.md'
 $RfcDir    = Join-Path $DocsDir 'rfc'
 $DataDir   = Join-Path $DocsDir 'data'
-$CODE      = 'LEG'
+$CODE      = 'M.LEGN'
 
 # Status glyphs defined by codepoint so this script stays pure-ASCII on disk
 # (Windows PowerShell 5.1 mis-decodes UTF-8 literals under a Win-1252 console).
@@ -99,7 +99,7 @@ function Invoke-Digest {
         $cut     = ([regex]::Matches($stories, [regex]::Escape($GLYPH_CUT))).Count
     }
 
-    # Pending decision heads ('## LEG-A<n>' headings in AMENDMENTS.md; normally none)
+    # Pending decision heads ('## M.LEGN-A<n>' headings in AMENDMENTS.md; normally none)
     $pending = @()
     if (Test-Path -LiteralPath $AmendPath) {
         $amend = Read-Text $AmendPath

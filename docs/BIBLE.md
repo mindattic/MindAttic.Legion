@@ -1,7 +1,7 @@
 ---
 codex: 1
 project: MindAttic.Legion
-code: LEG
+code: M.LEGN
 layer: bible
 status: living
 updated: 2026-10-03
@@ -12,35 +12,35 @@ updated: 2026-10-03
 > Single source of truth for what MindAttic.Legion IS, is NOT, and the rules that keep it coherent.
 > README.md says how to build/run/call it; this says how to think about the system.
 
-## 1. The one sentence {#LEG-§1}
+## 1. The one sentence {#M.LEGN-§1}
 
 MindAttic.Legion is a portable .NET 10 library (plus a `legion.exe` CLI) that turns a panel of frontier LLMs across thirteen providers into one trustworthy answer — via voting, deciding, scoring, polling, generating, and persona-wearing, with quorum, failover, and confidence.
 
-## 2. The product promise {#LEG-§2}
+## 2. The product promise {#M.LEGN-§2}
 
 One LLM is one opinion; when a wrong answer is expensive you want a panel that votes, not a single model that bluffs. Legion delivers:
 
-- **Multi-provider transport** behind one [`LegionClient`](#LEG-§4) — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together, OpenRouter, Fireworks, Cohere, Kimi (Moonshot AI), Perplexity — plus an explicit-URL path for self-hosted OpenAI-compatible endpoints.
-- **Consensus voting** — call all active providers in parallel, tally answers, return the consensus with reasoning + dissent under a chosen [Quorum](#LEG-§9).
+- **Multi-provider transport** behind one [`LegionClient`](#M.LEGN-§4) — Claude, OpenAI, Gemini, DeepSeek, Mistral, xAI/Grok, Groq, Together, OpenRouter, Fireworks, Cohere, Kimi (Moonshot AI), Perplexity — plus an explicit-URL path for self-hosted OpenAI-compatible endpoints.
+- **Consensus voting** — call all active providers in parallel, tally answers, return the consensus with reasoning + dissent under a chosen [Quorum](#M.LEGN-§9).
 - **Decisions** — `DecideAsync(question, options)` picks one option with confidence and reasoning.
 - **Scoring** — multi-dimensional rubric evaluation (1–10/dimension) with aggregate scores, failing dimensions, and improvement directives.
 - **Personas** — a baked-in 1024-persona library (deterministically sampled from 40 archetypes × 16 worldviews × 16 cultural backgrounds, enriched with age/pronouns/quirk); build trait-diverse panels or vote *as* a character.
 - **Psychometric profiles** — score the persona library on five instruments (OCEAN/Big Five, HEXACO, MBTI-style, Enneagram-style, DISC-style); the model answers items in-character, scoring is deterministic in code, persisted as one JSON profile per persona.
-- **Tiered model selection** — every provider exposes Low/Medium/High/Higher/Highest; tier names hide drifting model ids ([Law LEG-LAW-4](#LEG-LAW-4)).
-- **Resilience** — per-provider retry with backoff and a process-wide [circuit breaker](#LEG-§4); `CallWithFallbackAsync` walks a provider chain until one succeeds.
+- **Tiered model selection** — every provider exposes Low/Medium/High/Higher/Highest; tier names hide drifting model ids ([Law M.LEGN-LAW-4](#M.LEGN-LAW-4)).
+- **Resilience** — per-provider retry with backoff and a process-wide [circuit breaker](#M.LEGN-§4); `CallWithFallbackAsync` walks a provider chain until one succeeds.
 - **CLI** — `legion.exe health | ping | status | providers | models | personas | panel | vote | ask | poll | generate | tiers | psychometrics`, the same engine with no .NET host required.
 - **Portable** — no dependency on any specific MindAttic app; register via DI, hand it keys (or rely on the shared Vault store), and you have the panel.
 
-## 3. What it is NOT {#LEG-§3}
+## 3. What it is NOT {#M.LEGN-§3}
 
 - **Not a single-model SDK.** Legion's value is the panel and the voting/quorum machinery; a one-provider call is a degenerate case, not the point.
 - **Not a prompt/business-logic framework.** Apps keep their own prompts, structured-reply parsing, and domain logic; Legion owns only "send prompt → get text/consensus" plus transport, credentials, retry, and circuit breaking.
 - **Not a model host or inference engine.** It calls vendor HTTP APIs; it does not run models locally.
-- **Not coupled to any MindAttic app.** It must not take a dependency on StreetSamurai, the Ideas library, or any sibling project ([Law LEG-LAW-1](#LEG-LAW-1)).
-- **Not a credential vault.** Credential storage/resolution is delegated to `MindAttic.Vault`; Legion only consumes it ([Law LEG-LAW-2](#LEG-LAW-2)).
+- **Not coupled to any MindAttic app.** It must not take a dependency on StreetSamurai, the Ideas library, or any sibling project ([Law M.LEGN-LAW-1](#M.LEGN-LAW-1)).
+- **Not a credential vault.** Credential storage/resolution is delegated to `MindAttic.Vault`; Legion only consumes it ([Law M.LEGN-LAW-2](#M.LEGN-LAW-2)).
 - **Not a long-running service.** It is a library + CLI; quorum failure returns an empty consensus for the caller to escalate, it does not retry forever.
 
-## 4. Architecture canon {#LEG-§4}
+## 4. Architecture canon {#M.LEGN-§4}
 
 ```
                           consumers
@@ -78,7 +78,7 @@ One LLM is one opinion; when a wrong answer is expensive you want a panel that v
 - **Docs canon** — `docs/` follows the MindAttic Codex standard (`BIBLE.md`, `AMENDMENTS.md`, `USER_STORIES.md`, `rfc/`, generated `BIBLE.digest.md`), maintained by `tools/codex.ps1` (`doctor`, `digest`) and injected at session start by `.claude/hooks/inject-digest.ps1`. There is no `docs/data/` canon-as-data: the provider catalog, persona library and psychometric instruments live in source/embedded resources and are covered by tests.
 
 ### 4.2 Domain model (NOUNS)
-- **Quorum** (`MindAttic.Legion/Models/Quorum.cs`) — `Plurality | SimpleMajority | TwoThirds | Unanimous`; `IsSatisfiedBy` uses exact integer arithmetic ([Law LEG-LAW-3](#LEG-LAW-3)).
+- **Quorum** (`MindAttic.Legion/Models/Quorum.cs`) — `Plurality | SimpleMajority | TwoThirds | Unanimous`; `IsSatisfiedBy` uses exact integer arithmetic ([Law M.LEGN-LAW-3](#M.LEGN-LAW-3)).
 - **ModelTier** (`Models/ModelTier.cs`) — `Low | Medium | High | Higher | Highest`.
 - **VoteRequest / VoteResult / VotingResult** (`Models/VoteRequest.cs`, `Models/VoteResult.cs`) — the question/options/dimensions in, consensus/strength/rationales/dissent out.
 - **DecisionResult** (`Models/DecisionResult.cs`) — `Choice`, `Reasoning`, `Confidence`, `QuorumReached`.
@@ -102,22 +102,22 @@ One LLM is one opinion; when a wrong answer is expensive you want a panel that v
 - **`ServiceCollectionExtensions`** (`Services/ServiceCollectionExtensions.cs`) — `AddLLMVoting`, `AddLegionClient` DI wiring.
 - **Psychometrics services** (`Services/Psychometrics/`) — administer instruments in-character and score deterministically.
 
-## 5. The Laws {#LEG-§5}
+## 5. The Laws {#M.LEGN-§5}
 
 These project laws are *in addition to* the house rules, which are INHERITED, not restated:
 **[MindAttic.HouseRules.md](../../MindAttic.HouseRules.md)** (shared across every MindAttic repo — versioning, tooling, conventions). The house rules apply in full; only Legion-specific laws live below.
 
-1. {#LEG-LAW-1} **Portability is non-negotiable.** The library takes no dependency on any specific MindAttic application. Allowed dependencies are the shared infrastructure packages (`MindAttic.Vault`) and `Microsoft.Extensions.*` only. *(Asserted by the namespace/portability note in `LlmVotingService.cs`.)*
-2. {#LEG-LAW-2} **Credentials flow through `MindAttic.Vault`.** Legion never invents its own secret storage. Resolution order is per-voter override → `VotingConfiguration.ApiKeys` → shared Vault store (User Secrets / App Service settings / Key Vault, with the legacy `%APPDATA%\MindAttic\LLM` file as fallback). `MindAtticCredentialStore` is a compatibility facade only.
-3. {#LEG-LAW-3} **Quorum thresholds are exact, computed with integer arithmetic.** `SimpleMajority` is strictly `agree*2 > total` (a 2-of-4 tie FAILS); `TwoThirds` is `agree*3 >= total*2` so a 2-of-3 panel clears it. Never approximate with a rounded float. *(verified by `SimpleMajority_RejectsExactTie`, `TwoThirds_IsSatisfiedBy_AdmitsTwoOfThree_RejectsOneOfTwo`, `TwoThirds_IsExactlyTwoThirds`.)*
-4. {#LEG-LAW-4} **Callers request tiers, never raw model ids.** The catalog maps `ModelTier` → a concrete model per provider so a vendor model-id rotation never breaks a caller. `GetTieredModel` climbs down to the nearest available tier when a provider lacks the requested one.
-5. {#LEG-LAW-5} **A provider is "active" only with a non-empty key AND membership in the allowed set.** The default allowed set is `LlmProviderCatalog.DefaultIds` — the nine providers with a currently-working key and catalog entry (claude, openai, gemini, deepseek, xai, cohere, mistral, together, fireworks). Untrusted keys are filtered out of voting. *(verified by `ActiveProviderIds_*` tests.)*
-6. {#LEG-LAW-6} **Quorum failure returns empty, it does not guess.** When quorum isn't reached, `QuorumReached == false` and `Consensus == ""`; escalation/retry is the caller's decision. Legion never silently downgrades the quorum.
-7. {#LEG-LAW-7} **The breaker is shared and process-static.** "Claude is down" means the same thing to every `LegionClient` in the process; transient 5xx/429/network errors retry with backoff, then the per-provider breaker opens for a cooldown.
-8. {#LEG-LAW-8} **Psychometric scoring is deterministic in code; the model only answers items.** Profiles are computed from in-character item responses, not asked-for directly, and persisted as one faithful JSON profile per persona.
-9. {#LEG-LAW-9} **Personas are unique within a panel.** `PersonaLibrary` holds exactly 1024 personas with unique ids and names; panels sample WITHOUT replacement so no voter repeats inside a batch. *(verified by `All_PersonasHaveUniqueIds`, `All_PersonasHaveUniqueNames`.)*
+1. {#M.LEGN-LAW-1} **Portability is non-negotiable.** The library takes no dependency on any specific MindAttic application. Allowed dependencies are the shared infrastructure packages (`MindAttic.Vault`) and `Microsoft.Extensions.*` only. *(Asserted by the namespace/portability note in `LlmVotingService.cs`.)*
+2. {#M.LEGN-LAW-2} **Credentials flow through `MindAttic.Vault`.** Legion never invents its own secret storage. Resolution order is per-voter override → `VotingConfiguration.ApiKeys` → shared Vault store (User Secrets / App Service settings / Key Vault, with the legacy `%APPDATA%\MindAttic\LLM` file as fallback). `MindAtticCredentialStore` is a compatibility facade only.
+3. {#M.LEGN-LAW-3} **Quorum thresholds are exact, computed with integer arithmetic.** `SimpleMajority` is strictly `agree*2 > total` (a 2-of-4 tie FAILS); `TwoThirds` is `agree*3 >= total*2` so a 2-of-3 panel clears it. Never approximate with a rounded float. *(verified by `SimpleMajority_RejectsExactTie`, `TwoThirds_IsSatisfiedBy_AdmitsTwoOfThree_RejectsOneOfTwo`, `TwoThirds_IsExactlyTwoThirds`.)*
+4. {#M.LEGN-LAW-4} **Callers request tiers, never raw model ids.** The catalog maps `ModelTier` → a concrete model per provider so a vendor model-id rotation never breaks a caller. `GetTieredModel` climbs down to the nearest available tier when a provider lacks the requested one.
+5. {#M.LEGN-LAW-5} **A provider is "active" only with a non-empty key AND membership in the allowed set.** The default allowed set is `LlmProviderCatalog.DefaultIds` — the nine providers with a currently-working key and catalog entry (claude, openai, gemini, deepseek, xai, cohere, mistral, together, fireworks). Untrusted keys are filtered out of voting. *(verified by `ActiveProviderIds_*` tests.)*
+6. {#M.LEGN-LAW-6} **Quorum failure returns empty, it does not guess.** When quorum isn't reached, `QuorumReached == false` and `Consensus == ""`; escalation/retry is the caller's decision. Legion never silently downgrades the quorum.
+7. {#M.LEGN-LAW-7} **The breaker is shared and process-static.** "Claude is down" means the same thing to every `LegionClient` in the process; transient 5xx/429/network errors retry with backoff, then the per-provider breaker opens for a cooldown.
+8. {#M.LEGN-LAW-8} **Psychometric scoring is deterministic in code; the model only answers items.** Profiles are computed from in-character item responses, not asked-for directly, and persisted as one faithful JSON profile per persona.
+9. {#M.LEGN-LAW-9} **Personas are unique within a panel.** `PersonaLibrary` holds exactly 1024 personas with unique ids and names; panels sample WITHOUT replacement so no voter repeats inside a batch. *(verified by `All_PersonasHaveUniqueIds`, `All_PersonasHaveUniqueNames`.)*
 
-## 6. Verified state {#LEG-§6}
+## 6. Verified state {#M.LEGN-§6}
 
 Build: `dotnet build MindAttic.Legion.slnx -c Release` — ✅ **builds** (target `net10.0`; verified 2026-10-03 as part of the offline test run).
 Tests: `dotnet test MindAttic.Legion.Tests` (NUnit 4). Offline run ✅ **466 passed / 0 failed / 0 skipped** (verified 2026-10-03, ~5s). The suite separates **offline** tests (default) from **live** tests gated by category (`LiveKeys`, `LiveKeysTrusted`, `LiveApi`, `LivePsychometrics`) that require real provider keys + network. Offline run command:
@@ -127,12 +127,12 @@ Proven-working units (offline, fakes via `TestSupport/FakeLlmHandlers.cs`): quor
 
 The live categories (real keys) cover end-to-end consensus, key validation, and live psychometrics; their status is environment-dependent and therefore **not asserted ✅ here** — see [USER_STORIES](USER_STORIES.md) statuses.
 
-## 7. Active frontier {#LEG-§7}
+## 7. Active frontier {#M.LEGN-§7}
 
 - Open design notes live in `docs/rfc/` (none are open right now).
 - Backlog and epic status: `docs/USER_STORIES.md`.
 
-## 8. Quality bar {#LEG-§8}
+## 8. Quality bar {#M.LEGN-§8}
 
 A feature is **done** only when:
 1. It has NUnit coverage; offline behavior is proven with `TestSupport` fakes (no live keys required to prove the logic).
@@ -142,7 +142,7 @@ A feature is **done** only when:
 5. `dotnet build -c Release` is clean and the offline test filter passes.
 6. `pwsh tools/codex.ps1 doctor` passes.
 
-## 9. Glossary {#LEG-§9}
+## 9. Glossary {#M.LEGN-§9}
 
 - **Panel** — the set of active voters (provider × persona) participating in a vote.
 - **Quorum** — agreement threshold: `Plurality` (any winner) · `SimpleMajority` (>50%) · `TwoThirds` (≥66.7%) · `Unanimous` (100%).
