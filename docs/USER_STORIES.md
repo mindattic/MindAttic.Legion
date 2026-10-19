@@ -95,3 +95,19 @@ updated: 2026-10-03
 | M.LEGN-T20 | 2026-10-16 | docs | open | Bring README.md up to date with the code as it is now (what it is, setup, usage, commands, current state), following codex-standard/README-STYLE.md; README.htm regenerated if the repo has one | user request 2026-10-16: approved repo sweep |
 | M.LEGN-T21 | 2026-10-16 | feature | open | Log to MindAttic.Log (3.0.0): every app/CLI entry point writes to the standalone MindAttic.Log.db Vault assigns this app (VaultPaths.LoggingDbPath, MindAttic.Vault 6.0.0) through Serilog's WriteToMindAtticLog, tagged with its Component; log startup, user actions that change data, failures and unhandled exceptions (UI thread, AppDomain, unobserved tasks); tests point the log at a temp file. Pattern: MindAttic.Workflow WorkflowLog (M.FLOW-T92), MindAttic.Orchestrator OrchestratorLog | M.FLOW-T92 |
 | M.LEGN-T22 | 2026-10-16 | docs | closed | Update USER_STORIES.md | — |
+| M.LEGN-T23 | 2026-10-17 | fix | open | Renew Groq API key: legion health returns 401 Invalid API Key against api.groq.com/openai/v1 as of 2026-10-17 | legion health |
+| M.LEGN-T24 | 2026-10-17 | fix | open | Renew OpenRouter API key: legion health returns 401 User not found against openrouter.ai/api/v1 as of 2026-10-17 | legion health |
+| M.LEGN-T25 | 2026-10-17 | fix | open | Renew Kimi (Moonshot AI) API key: legion health returns 401 Invalid Authentication against api.moonshot.cn/v1 as of 2026-10-17 | legion health |
+| M.LEGN-T26 | 2026-10-17 | fix | open | Investigate Mistral API key: legion health returns 429 rate_limited (not 401) on every call as of 2026-10-17, check console.mistral.ai for plan/quota status or renew if key is dead | legion health |
+| M.LEGN-T27 | 2026-10-17 | chore | open | Add a Perplexity API key to the shared credential store: legion health reports missing-key, never configured | legion health |
+| M.LEGN-T28 | 2026-10-17 | feature | open | Add Cerebras Cloud as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T29 | 2026-10-17 | feature | open | Add SambaNova Cloud as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T30 | 2026-10-17 | feature | open | Add DeepInfra as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T31 | 2026-10-17 | feature | open | Add Hyperbolic as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T32 | 2026-10-17 | feature | open | Add Novita AI as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T33 | 2026-10-17 | feature | open | Add AI21 Labs (Jamba) as a Legion provider: OpenAI-compatible chat API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T34 | 2026-10-17 | feature | open | Add Zhipu AI / GLM direct API as a Legion provider: OpenAI-compatible endpoint, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T35 | 2026-10-17 | feature | open | Add Alibaba Qwen (DashScope International) as a Legion provider: OpenAI-compatible endpoint, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T36 | 2026-10-17 | feature | open | Add Nebius AI Studio as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T37 | 2026-10-17 | feature | open | Add Reka AI as a Legion provider: own chat-completions API, add to LlmProviderCatalog + credential store + health check | — |
+| M.LEGN-T38 | 2026-10-18 | docs | closed | Update USER_STORIES.md | — |
