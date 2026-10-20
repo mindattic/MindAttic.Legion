@@ -77,7 +77,7 @@ Reference the library from a sibling checkout:
 </ItemGroup>
 ```
 
-The `MindAttic.Legion` package is also on nuget.org, but the newest published version there (2.6.0) is older than this repo's version (26.0.0), so use a project reference for the API described here. Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law M.LEGN-LAW-1](docs/BIBLE.md#M.LEGN-LAW-1)).
+The `MindAttic.Legion` package on nuget.org tracks this repo's version (26.0.0). Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law M.LEGN-LAW-1](docs/BIBLE.md#M.LEGN-LAW-1)).
 
 Configure and vote:
 
