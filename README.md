@@ -884,10 +884,12 @@ The `docs/` canon has its own tooling, unrelated to the library build:
 ```powershell
 powershell -File tools/codex.ps1 digest   # regenerate docs/BIBLE.digest.md after editing BIBLE §1/§3/§5/§9 or docs/AMENDMENTS.md
 powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, cited tests/paths, digest freshness; must exit 0
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-readme.ps1   # regenerate README.htm from this file
 ```
 
-The project page is this README on GitHub; there is no web deploy.
+The project page is this README. It is also the home page of the docs site at
+https://mindattic.github.io/MindAttic.Legion/ (with `docs/` and a generated API reference), which
+`.github/workflows/docs.yml` publishes on every push to `main` through the shared MindAttic.Toolkit
+DocFX pipeline. There is no other web deploy.
 
 ## Project layout
 
@@ -913,7 +915,7 @@ MindAttic.Legion.Tests/              NUnit 4 tests (offline unit suite + explici
 docs/                                Codex canon: BIBLE.md, AMENDMENTS.md, USER_STORIES.md, rfc/,
                                       generated BIBLE.digest.md
 tools/codex.ps1                      digest + doctor tooling for docs/
-tools/build-readme.ps1               wrapper around the shared codex-standard README → HTML engine
+.github/workflows/docs.yml           publishes the docs site to GitHub Pages
 ```
 
 ## Glossary

@@ -111,3 +111,5 @@ updated: 2026-10-03
 | M.LEGN-T36 | 2026-10-17 | feature | open | Add Nebius AI Studio as a Legion provider: OpenAI-compatible API, add to LlmProviderCatalog + credential store + health check | — |
 | M.LEGN-T37 | 2026-10-17 | feature | open | Add Reka AI as a Legion provider: own chat-completions API, add to LlmProviderCatalog + credential store + health check | — |
 | M.LEGN-T38 | 2026-10-18 | docs | closed | Update USER_STORIES.md | — |
+| M.LEGN-T39 | 2026-10-19 | chore | open | Convert tracked source files to LF line endings via .gitattributes, per HOUSE-LAW-13 (low priority) | — |
+| M.LEGN-T40 | 2026-10-20 | docs | open | Publish MindAttic.Legion docs to GitHub Pages via the shared Toolkit DocFX pipeline: run adopt-docs-site.ps1 (README.md as home page, docs/*.md as articles, API reference only where the code builds in CI), enable Pages with build_type=workflow, set the repo homepage URL, retire tools/build-readme.ps1 and README.htm, confirm the docs Actions run is green and https://mindattic.github.io/MindAttic.Legion/ returns 200. Depends on MAT-T8. | — |
