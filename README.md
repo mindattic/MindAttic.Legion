@@ -888,7 +888,7 @@ powershell -File tools/codex.ps1 doctor   # validate IDs, links, front-matter, c
 
 The project page is this README. It is also the home page of the docs site at
 https://mindattic.github.io/MindAttic.Legion/ (with `docs/` and a generated API reference), which
-`.github/workflows/docs.yml` publishes on every push to `main` through the shared MindAttic.Toolkit
+`.github/workflows/docs.yml` publishes on every push to `main` through the shared MindAttic.Agency
 DocFX pipeline. There is no other web deploy.
 
 ## Project layout
