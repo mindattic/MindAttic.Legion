@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Legion</AssemblyName>
     <!-- Whole-number versioning: major-only bumps (3.0.0 â†’ 4.0.0 â†’ 5.0.0). Minor/patch stay 0. -->
-    <Version>26.0.0</Version>
+    <Version>27.0.0</Version>
     <PackageId>MindAttic.Legion</PackageId>
     <Title>MindAttic.Legion</Title>
     <Authors>MindAttic</Authors>
@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MindAttic.Vault" Version="5.0.0" />
+    <PackageReference Include="MindAttic.Vault" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />

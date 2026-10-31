@@ -1,4 +1,5 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+using MindAttic.Vault.Configuration;
 using MindAttic.Vault.Credentials;
 using MindAttic.Vault.Paths;
 
@@ -34,6 +35,56 @@ public static class MindAtticCredentialStore
     private static IConfiguration? configuration;
 
     /// <summary>
+    /// The host app's MindAttic Vault id (its <c>[SettingsApp]</c> id, e.g. <c>"ThinkTank"</c>). Keys are then taken in the
+    /// order that app's assignment on its Vault tab gives; null uses the shared order.
+    /// </summary>
+    public static string? AppId { get; set; }
+
+    // The MINDATTIC_LLM_CREDENTIALS override points at a bare key folder (tests); everything else reads Vault's named keys.
+    private static bool UsesOverrideFolder =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(LlmCredentialStore.DirectoryEnvVar));
+
+    private static KeySelector Selector()
+    {
+        var file = new FileKeySource(NamedKeyStore.ForRoamingRoot());
+        IKeySource source = configuration is { } cfg ? new CompositeKeySource(new ConfigurationKeySource(cfg), file) : file;
+        return new KeySelector(source, KeyHealthStore.ForLocalRoot());
+    }
+
+    /// <summary>
+    /// The usable named keys for a provider, in failover order: the host's assignment (<see cref="AppId"/>) or the
+    /// shared order, aliases merged (<c>xai</c>/<c>grok</c>, <c>anthropic</c>/<c>claude</c>), disabled and failed keys skipped.
+    /// </summary>
+    public static IReadOnlyList<NamedKey> GetNamedKeys(string providerId) =>
+        UsesOverrideFolder
+            ? GetKeysFromOverride(providerId).Select((e, i) => new NamedKey(string.IsNullOrWhiteSpace(e.Label) ? $"key{i + 1}" : e.Label!, e.Key, e.Disabled)).Where(k => !k.Disabled).ToList()
+            : Selector().Plan(providerId, AppId).Usable;
+
+    /// <summary>Records how a call with <paramref name="keyValue"/> went, in Vault's shared key health (never the key itself).</summary>
+    public static void ReportOutcome(string providerId, string keyValue, Exception? failure)
+    {
+        if (UsesOverrideFolder || string.IsNullOrEmpty(keyValue)) return;
+        try
+        {
+            var selector = Selector();
+            if (Selector().Plan(providerId, AppId).Usable.FirstOrDefault(k => k.Value == keyValue) is not { } key) return;
+            if (failure is null) { selector.ReportSuccess(providerId, key.Name); return; }
+            var kind = failure switch
+            {
+                KeyFailureException kfe => kfe.Kind,
+                HttpRequestException { StatusCode: { } status } => KeySelector.Classify(status),
+                _ => null,
+            };
+            if (kind is { } k) selector.ReportFailure(providerId, key.Name, k);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static List<CredentialPoolEntry> GetKeysFromOverride(string providerId) =>
+        Resolve() is IRotatingKeyStore rotating ? rotating.GetKeys(providerId).ToList() : [];
+
+    /// <summary>
     /// Register an <see cref="IConfiguration"/> as the highest-priority credential
     /// source. Pass <c>null</c> to clear (e.g. between tests). Idempotent and
     /// safe to call from a host's startup (<c>Program.cs</c>, <c>LegionCli</c>, etc.).
@@ -67,7 +118,8 @@ public static class MindAtticCredentialStore
     public static bool   ProvidersFileExists() => Resolve().ProvidersFileExists();
 
     /// <summary>Returns the key for a provider, or null if no credential is registered.</summary>
-    public static string?                    GetKey(string providerId)             => Resolve().GetKey(providerId);
+    public static string?                    GetKey(string providerId)             =>
+        UsesOverrideFolder ? Resolve().GetKey(providerId) : GetNamedKeys(providerId).FirstOrDefault()?.Value;
 
     /// <summary>
     /// Returns every key configured for a provider, in priority order (empty when
@@ -76,7 +128,9 @@ public static class MindAtticCredentialStore
     /// a provider with a single plain key yields a one-element list.
     /// </summary>
     public static IReadOnlyList<CredentialPoolEntry> GetKeys(string providerId) =>
-        Resolve() is IRotatingKeyStore rotating ? rotating.GetKeys(providerId) : Array.Empty<CredentialPoolEntry>();
+        UsesOverrideFolder
+            ? GetKeysFromOverride(providerId)
+            : GetNamedKeys(providerId).Select(k => new CredentialPoolEntry(k.Value, k.Name)).ToList();
 
     /// <summary>Writes a key for a provider, preserving any existing type/model/maxTokens fields. Lands in the writable file store.</summary>
     public static void                       SetKey(string providerId, string key) => Resolve().SetKey(providerId, key);

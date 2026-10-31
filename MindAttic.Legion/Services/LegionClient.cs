@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -220,7 +220,7 @@ public class LegionClient
             ? (Func<string, string?>)(key => KeyBreakerKey(providerId, key))
             : _ => null;
 
-        return await CallThroughKeyPoolAsync(keys, key =>
+        return await CallThroughKeyPoolAsync(providerId, keys, key =>
             CallAsync(providerId, key, model!, systemPrompt, userMessage, maxTokens, temperature, ct,
                 cachedSystemPrefix, cacheUserMessage, userCancelToken: null, breakerKey: breakerKeyFor(key)));
     }
@@ -291,7 +291,7 @@ public class LegionClient
             ? (Func<string, string?>)(key => KeyBreakerKey(providerId, key))
             : _ => null;
 
-        return await CallThroughKeyPoolAsync(keys, key =>
+        return await CallThroughKeyPoolAsync(providerId, keys, key =>
             CallChatAsync(providerId, key, model!, messages, systemPrompt, maxTokens, temperature, ct,
                 breakerKey: breakerKeyFor(key)));
     }
@@ -799,15 +799,17 @@ public class LegionClient
     /// still runs its own full retry+backoff cycle (via <see cref="ExecuteWithResilienceAsync{T}"/>,
     /// inside <paramref name="callWithKey"/>) before being considered "failed".
     /// </summary>
-    private static async Task<string> CallThroughKeyPoolAsync(IReadOnlyList<string> keys, Func<string, Task<string>> callWithKey)
+    private static async Task<string> CallThroughKeyPoolAsync(string providerId, IReadOnlyList<string> keys, Func<string, Task<string>> callWithKey)
     {
         for (var i = 0; i < keys.Count; i++)
         {
             try
             {
-                return await callWithKey(keys[i]);
+                var result = await callWithKey(keys[i]);
+                MindAtticCredentialStore.ReportOutcome(providerId, keys[i], null);
+                return result;
             }
-            catch (Exception ex) when (i < keys.Count - 1 && IsKeyLevelFailure(ex))
+            catch (Exception ex) when (IsKeyLevelFailure(ex) && Report(providerId, keys[i], ex) && i < keys.Count - 1)
             {
                 // More keys remain and this one looks bad — fall through to try the next.
             }
@@ -823,6 +825,14 @@ public class LegionClient
     /// circuit breaker is open) rather than a client-side bug that a different
     /// key wouldn't fix.
     /// </summary>
+    // Records a key's failure in MindAttic Vault's shared key health (401/403 failed, 429 cooling down) so every app
+    // skips it; always true so it can sit in an exception filter.
+    private static bool Report(string providerId, string key, Exception ex)
+    {
+        MindAtticCredentialStore.ReportOutcome(providerId, key, ex);
+        return true;
+    }
+
     private static bool IsKeyLevelFailure(Exception ex)
     {
         if (ex is CircuitBreakerOpenException) return true;
