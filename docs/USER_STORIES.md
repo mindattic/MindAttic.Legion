@@ -116,3 +116,5 @@ updated: 2026-10-03
 | M.LEGN-T41 | 2026-10-20 | chore | closed | Republish MindAttic.Legion to nuget.org: api.nuget.org/v3-flatcontainer showed a stale minor-version lineage (2.1.0, 2.2.0, 2.4.0, 2.5.0, 2.6.0) predating the repo's whole-number versioning switch, never republished at the current major (26.0.0 in MindAttic.Legion/MindAttic.Legion.csproj). Not a '26 parsed as 2.6' bug -- five sequential minor releases rule that out. | Pushed MindAttic.Legion.26.0.0.nupkg + .snupkg to nuget.org via dotnet nuget push (Created 201 for both package and symbolpackage endpoints) |
 | M.LEGN-T42 | 2026-10-20 | chore | closed | Update docs pipeline reference from MindAttic.Toolkit to its new name MindAttic.Agency | — |
 | M.LEGN-T43 | 2026-10-22 | docs | closed | Update USER_STORIES.md | — |
+| M.LEGN-T44 | 2026-10-31 | feature | closed | LAMP: move MindAttic.Legion's app-level settings and keys to MindAttic.Vault.Desktop (manifest, LoadOrSeed, shared named keys, cog opens Vault) | e918147 LampKeyTests (suite 495/495, live tests excluded) |
+| M.LEGN-T45 | 2026-10-31 | docs | closed | Update USER_STORIES.md | — |
