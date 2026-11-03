@@ -294,7 +294,8 @@ public static class AskCommand
                 quorum:             quorum,
                 originalMaxTokens:  maxTokens,
                 originalTimeoutSec: timeoutSeconds,
-                tier:               tier);
+                tier:               tier,
+                allowedProviderIds: config.AllowedProviderIds);
         }
 
         return emitJson
@@ -321,8 +322,16 @@ public static class AskCommand
         Quorum quorum,
         int originalMaxTokens,
         double originalTimeoutSec,
-        ModelTier tier)
+        ModelTier tier,
+        IReadOnlySet<string> allowedProviderIds)
     {
+        // Every phase stays inside the panel's own allowed set (the trusted set narrowed by
+        // --providers): a fallback must never widen to providers the caller excluded.
+        var allowed = new HashSet<string>(
+            TrustedProviderIds.Where(id => allowedProviderIds.Contains(id)),
+            StringComparer.OrdinalIgnoreCase);
+        var chain = TrustedProviderIds.Where(allowed.Contains).ToList();
+
         // ── Phase 2: relaxed-budget retry ───────────────────────────────────
         Console.Error.WriteLine(
             "ask: panel returned 0 voters; retrying with doubled budget and no auto-context.");
@@ -333,7 +342,7 @@ public static class AskCommand
         {
             ProviderTimeout    = TimeSpan.FromSeconds(phase2TimeoutSec),
             DefaultMaxTokens   = phase2MaxTokens,
-            AllowedProviderIds = new HashSet<string>(TrustedProviderIds, StringComparer.OrdinalIgnoreCase),
+            AllowedProviderIds = allowed,
             ModelOverrides     = BuildTierModelOverrides(tier),
         };
 
@@ -370,7 +379,7 @@ public static class AskCommand
         // ── Phase 3: single-provider chain, raw text, trusted order ────────
         Console.Error.WriteLine(
             "ask: phase 2 still empty; falling back to single-provider chain ("
-            + string.Join(" → ", TrustedProviderIds) + ").");
+            + string.Join(" → ", chain) + ").");
 
         var systemPrompt = options.Count > 0
             ? "You are a senior software architect. Pick exactly one of these options and reply with ONLY that option's exact text, nothing else: "
@@ -384,7 +393,7 @@ public static class AskCommand
         using var http3 = new HttpClient { Timeout = TimeSpan.FromSeconds(phase2TimeoutSec) };
         var directClient = new LegionClient(http3);
 
-        foreach (var providerId in TrustedProviderIds)
+        foreach (var providerId in chain)
         {
             try
             {
@@ -746,7 +755,8 @@ public static class AskCommand
         Console.WriteLine("  --must-answer          On 0/N voter failure, retry with doubled budget and no auto-context;");
         Console.WriteLine("                         on second failure, single-provider chain (claude → openai → gemini →");
         Console.WriteLine("                         deepseek → xai → cohere → mistral → together → fireworks) until one");
-        Console.WriteLine("                         replies. Always emit an answer if any provider works.");
+        Console.WriteLine("                         replies. Every phase stays within --providers. Always emit an answer");
+        Console.WriteLine("                         if any allowed provider works.");
         Console.WriteLine("  --json                 Emit full vote audit JSON instead of bare answer.");
         Console.WriteLine();
         Console.WriteLine("Exit codes:");

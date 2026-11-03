@@ -96,7 +96,7 @@ public class LegionCli
         Console.WriteLine("  providers                    List supported providers + dashboard URLs");
         Console.WriteLine("  models <provider>            Show known models for a provider");
         Console.WriteLine("  personas <count>             Sample N personas from the 1024-persona library");
-        Console.WriteLine("  panel <count> [provider...]  Build a voter panel: spread across providers, backfill claude.");
+        Console.WriteLine("  panel <count> [provider...]  Build a voter panel: spread across providers (default: trusted set), backfill claude.");
         Console.WriteLine("                               --diverse picks personas that maximize psychometric spread.");
         Console.WriteLine("  vote <question> [opts]       Multi-LLM consensus vote on a question; outputs JSON.");
         Console.WriteLine("                               Opts: --context <text>, --quorum plurality|simplemajority|twothirds|unanimous,");
@@ -483,15 +483,18 @@ public class LegionCli
 
     /// <summary>
     /// Build a voter panel via <see cref="VoterFactory.GenerateUniqueVoters"/>:
-    /// spread voters across the supplied providers (or every provider with a
-    /// configured key) and backfill with <c>claude</c>. Prints provider, name,
+    /// spread voters across the supplied providers (or, by default, every provider
+    /// in the trusted set <see cref="LlmProviderCatalog.DefaultIds"/> with a configured
+    /// key, per M.LEGN-LAW-5; naming providers explicitly, positionally or via
+    /// <c>--providers a,b</c>, opts in others) and backfill with <c>claude</c>. Prints provider, name,
     /// and a one-line persona preview per voter.
     /// </summary>
     private static int Panel(string[] args)
     {
         if (args.Length == 0 || !int.TryParse(args[0], out var count))
         {
-            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...] [--diverse] [--store <dir>]");
+            Console.Error.WriteLine("usage: legion panel <count> [provider1 provider2 ...] [--providers a,b,c] [--diverse] [--store <dir>]");
+            Console.Error.WriteLine("  default panel: the trusted providers with a key; naming providers opts in others.");
             Console.Error.WriteLine("  --diverse  pick personas that maximize psychometric spread (needs scored profiles).");
             return 1;
         }
@@ -506,13 +509,17 @@ public class LegionCli
             {
                 case "--diverse": diverse = true; break;
                 case "--store": if (i + 1 < args.Length) storeDir = args[++i]; break;
+                case "--providers":
+                    if (i + 1 < args.Length)
+                        providerList.AddRange(args[++i].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+                    break;
                 default: providerList.Add(args[i]); break;
             }
         }
 
         var providers = providerList.Count > 0
             ? providerList.ToArray()
-            : LlmProviderCatalog.AllIds
+            : LlmProviderCatalog.DefaultIds
                 .Where(id => !string.IsNullOrEmpty(MindAtticCredentialStore.GetKey(id)))
                 .ToArray();
 

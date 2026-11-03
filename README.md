@@ -446,7 +446,7 @@ Commands:
   providers                    List supported providers + dashboard URLs
   models <provider>            Show known models for a provider
   personas <count>             Sample N personas from the 1024-persona library
-  panel <count> [provider...]  Build a voter panel: spread across providers, backfill claude.
+  panel <count> [provider...]  Build a voter panel: spread across providers (default: trusted set; naming providers opts in others), backfill claude.
                                 --diverse picks personas that maximize psychometric spread.
   vote <question> [opts]       Multi-LLM consensus vote on a question; outputs JSON.
   ask <question> [opts]        Architect-framed decision; stdout = bare answer (or --json).
