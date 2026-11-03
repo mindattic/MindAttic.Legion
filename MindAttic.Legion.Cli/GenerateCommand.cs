@@ -105,11 +105,13 @@ public static class GenerateCommand
                         maxTokens = mt;
                     break;
                 case "--timeout":
-                    if (i + 1 < args.Length && double.TryParse(args[++i], out var ts) && ts > 0)
+                    if (i + 1 < args.Length && double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts > 0)
                         timeoutSec = ts;
                     break;
                 case "--temperature":
-                    if (i + 1 < args.Length && double.TryParse(args[++i], out var temp))
+                    // Invariant culture: on a comma-decimal host "0.7" would otherwise
+                    // parse as 7 ('.' is the group separator) and every call would 400.
+                    if (i + 1 < args.Length && double.TryParse(args[++i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var temp))
                         temperature = temp;
                     break;
                 case "--no-dedup":

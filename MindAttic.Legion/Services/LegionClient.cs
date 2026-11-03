@@ -637,8 +637,20 @@ public class LegionClient
         var apiMessages = new[] { new { role = "user", content = userContent } };
         var omitTemperature = ClaudeModelDeprecatesTemperature(model);
 
+        // Same adaptive-thinking guard as CallClaudeChatAsync: Sonnet/Haiku 5+ (incl. the
+        // default claude-sonnet-5-5) think by default when no `thinking` field is sent,
+        // spend the whole budget on thinking blocks and return no text.
+        var disableThinking = ClaudeModelDefaultsAdaptiveThinking(model);
+
         object payload;
-        if (omitTemperature)
+        if (omitTemperature && disableThinking)
+        {
+            var th = new { type = ClaudeModelRequiresBetweenToolsThinking(model) ? "between_tools" : "disabled" };
+            payload = string.IsNullOrWhiteSpace(systemPrompt)
+                ? new { model, max_tokens = maxTokens, thinking = th, messages = apiMessages } as object
+                : new { model, max_tokens = maxTokens, thinking = th, system = systemPrompt, messages = apiMessages };
+        }
+        else if (omitTemperature)
         {
             payload = string.IsNullOrWhiteSpace(systemPrompt)
                 ? new { model, max_tokens = maxTokens, messages = apiMessages } as object
@@ -840,7 +852,10 @@ public class LegionClient
         {
             if (hre.StatusCode is null) return true; // network error — worth trying another key
             var code = (int)hre.StatusCode;
-            return code == 401 || code == 408 || code == 429 || code >= 500;
+            // 401/402/403/429 are what MindAttic Vault's KeySelector classifies as key
+            // failures (revoked, out of credit, forbidden, rate-limited) — another key
+            // can fix them, and Report() must see them so Vault's shared health skips the key.
+            return code == 401 || code == 402 || code == 403 || code == 408 || code == 429 || code >= 500;
         }
         return ex is TaskCanceledException;
     }
@@ -1254,8 +1269,12 @@ public class LegionClient
         // Only 2.5+ models support/need thinkingConfig; omit it for older models
         // (e.g. gemini-2.0-flash, gemini-2.0-flash-lite) which don't have thinking.
         var supportsThinking = model.Contains("2.5", StringComparison.OrdinalIgnoreCase);
+        // Gemini 2.5 Pro cannot turn thinking off: thinkingBudget=0 is rejected with
+        // 400 "Budget 0 is invalid. This model only works in thinking mode." Send its
+        // minimum budget (128) instead so the output budget stays as large as possible.
+        var thinkingBudget = model.Contains("2.5-pro", StringComparison.OrdinalIgnoreCase) ? 128 : 0;
         object generationConfig = supportsThinking
-            ? (object)new { maxOutputTokens = maxTokens, temperature, thinkingConfig = new { thinkingBudget = 0 } }
+            ? (object)new { maxOutputTokens = maxTokens, temperature, thinkingConfig = new { thinkingBudget } }
             : new { maxOutputTokens = maxTokens, temperature };
         object payload = string.IsNullOrWhiteSpace(systemPrompt)
             ? new { contents, generationConfig }

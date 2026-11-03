@@ -169,7 +169,10 @@ public class LlmVotingService
         return new DecisionResult
         {
             Question         = question,
-            Choice           = vr.Consensus ?? "",
+            // EmptyResult (no voters / every voter failed) carries its reason in
+            // Consensus; that text is not one of the options and must never be
+            // handed back as the Choice (Law M.LEGN-LAW-6: no quorum → empty).
+            Choice           = vr.QuorumReached ? vr.Consensus ?? "" : "",
             Reasoning        = vr.NarrativeSummary ?? "",
             Confidence       = vr.ConsensusStrength,
             QuorumReached    = vr.QuorumReached,
@@ -706,6 +709,13 @@ public class LlmVotingService
             using var jdoc = JsonDocument.Parse(json);
             var doc = jdoc.RootElement;
 
+            // Free-form reply with no ballot object (ExtractJson's "{}" sentinel for
+            // plain prose, or an object without a "decision" field): take the raw-text
+            // fallback below instead of recording a successful vote with an empty
+            // Decision that the judge / first-answer pick would then treat as an answer.
+            if (!isChoice && !doc.TryGetProperty("decision", out _))
+                throw new FormatException("Free-form reply has no 'decision' field.");
+
             var decision   = doc.TryGetProperty("decision",   out var d) ? d.GetString() ?? "" : "";
             var reasoning  = doc.TryGetProperty("reasoning",  out var r) ? r.GetString() ?? "" : "";
             var confidence = doc.TryGetProperty("confidence", out var c) && TryReadInt(c, out var ci) ? ci : 5;
@@ -747,13 +757,15 @@ public class LlmVotingService
         }
         catch
         {
-            var trimmed = raw.Trim();
+            var trimmed = (raw ?? "").Trim();
 
             // Choice votes need to land on one of the supplied options.
             // Returning raw text would silently lose the vote (no exact-match
             // grouping is possible) and skew the tally — surface it as an
             // error instead, so RefillFailedVotersAsync can reissue the slot.
-            if (isChoice)
+            // An empty free-form reply (e.g. the budget went to thinking) has no
+            // answer to keep either.
+            if (isChoice || trimmed.Length == 0)
             {
                 return new VoteResult
                 {
@@ -761,7 +773,9 @@ public class LlmVotingService
                     VoterName    = voter.Name,
                     ProviderId   = voter.ProviderId,
                     IsError      = true,
-                    ErrorMessage = "Response parsing failed for choice vote — could not extract a decision.",
+                    ErrorMessage = isChoice
+                        ? "Response parsing failed for choice vote — could not extract a decision."
+                        : "Free-form reply was empty.",
                 };
             }
 
@@ -828,6 +842,12 @@ public class LlmVotingService
                         scores[dim] = Math.Clamp(score, 1, 10);
                 }
             }
+
+            // No requested dimension scored (plain prose → ExtractJson's "{}" sentinel,
+            // or a reply missing "scores"): the ballot carries no data. Counting it as a
+            // success would let an all-prose panel report "quorum reached, 0.0/10".
+            if (scores.Count == 0)
+                throw new FormatException("Scored reply has no dimension scores.");
 
             var reasoning   = doc.TryGetProperty("reasoning",            out var r)  ? r.GetString()  ?? "" : "";
             var directive   = doc.TryGetProperty("improvement_directive", out var id) ? id.GetString() ?? "" : "";

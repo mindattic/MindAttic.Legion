@@ -140,7 +140,15 @@ public sealed class LlmPsychometricAssessor : IPsychometricAssessor
                     {
                         if (idx >= items.Count) break;
                         if (el.ValueKind is JsonValueKind.Object)
-                            ReadAnswers(el, result); // [{id,value}, ...]
+                        {
+                            // [{id,value}, ...] — ReadAnswers only understands an
+                            // {"<id>":value} map for a lone object, so read the pair here.
+                            if (el.TryGetProperty("id", out var idEl) && TryReadInt(idEl, out var id)
+                                && el.TryGetProperty("value", out var valEl) && TryReadInt(valEl, out var val))
+                                result[id] = val;
+                            else
+                                ReadAnswers(el, result);
+                        }
                         else if (TryReadInt(el, out var v))
                             result[items[idx].Id] = v; // positional [4,2,...]
                         idx++;

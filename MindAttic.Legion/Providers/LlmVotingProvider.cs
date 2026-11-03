@@ -46,6 +46,10 @@ public class LlmVotingProvider
         if (string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException($"No API key configured for provider '{providerId}'.");
 
+        // Honour the documented per-voter VoterProfile.MaxTokensOverride (it was never read).
+        if (voterOverrides?.MaxTokensOverride is int maxOverride && maxOverride > 0)
+            maxTokens = maxOverride;
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(config.ProviderTimeout);
         // Pass the original user token as userCancelToken so the resilience layer
