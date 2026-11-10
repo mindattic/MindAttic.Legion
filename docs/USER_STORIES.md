@@ -118,3 +118,7 @@ updated: 2026-10-03
 | M.LEGN-T43 | 2026-10-22 | docs | closed | Update USER_STORIES.md | — |
 | M.LEGN-T44 | 2026-10-31 | feature | closed | LAMP: move MindAttic.Legion's app-level settings and keys to MindAttic.Vault.Desktop (manifest, LoadOrSeed, shared named keys, cog opens Vault) | e918147 LampKeyTests (suite 495/495, live tests excluded) |
 | M.LEGN-T45 | 2026-10-31 | docs | closed | Update USER_STORIES.md | — |
+| M.LEGN-T46 | 2026-11-02 | fix | closed | Bughunt sweep, two passes: find and fix real bugs across tracked source (user request 2026-11-02) | — |
+| M.LEGN-T47 | 2026-11-02 | fix | closed | Command pointer in .agent/commands said a literal $source instead of its legacy path (install.ps1 escaping bug fixed in MAT-T84); point it at the real source, or the global command when the project copy is gone | — |
+| M.LEGN-T48 | 2026-11-02 | fix | closed | Fix the open items the 2026-11-02 bughunt left for decision (legion panel defaults to the trusted set, must-answer fallbacks honour --providers) | — |
+| M.LEGN-T49 | 2026-11-10 | chore | closed | Crash recovery: commit the command-catalog sync (.agent/commands/*.md) and regenerated docs/USER_STORIES.md left uncommitted by the session crash | — |
