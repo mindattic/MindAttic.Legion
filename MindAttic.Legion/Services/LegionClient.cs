@@ -673,6 +673,7 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
+        LegionUsage.ReportClaude(doc.RootElement, model, "document");
         return ExtractClaudeText(doc);
     }
 
@@ -1043,6 +1044,7 @@ public class LegionClient
         await EnsureSuccessAsync(res, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
+        LegionUsage.ReportClaude(doc.RootElement, model, "chat");
         return ExtractClaudeText(doc);
     }
 
@@ -1294,6 +1296,7 @@ public class LegionClient
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        LegionUsage.ReportGemini(root, model, "chat");
         // A safety-blocked or MAX_TOKENS candidate legitimately carries no
         // content/parts on a 200 response. Navigate defensively and return ""
         // rather than letting GetProperty/[0] throw — those raw element-access
@@ -1351,6 +1354,7 @@ public class LegionClient
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        LegionUsage.ReportCohere(root, model, "chat");
         if (root.TryGetProperty("message", out var message)
             && message.TryGetProperty("content", out var content)
             && content.ValueKind == JsonValueKind.Array && content.GetArrayLength() > 0
@@ -1408,6 +1412,7 @@ public class LegionClient
         var json = await res.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        LegionUsage.ReportOpenAiCompatible(root, providerId, model, "chat");
         if (root.TryGetProperty("choices", out var choices)
             && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0
             && choices[0].TryGetProperty("message", out var message)

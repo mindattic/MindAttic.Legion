@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -32,7 +32,7 @@ namespace MindAttic.Legion;
 /// other MindAttic project. Configure it with a <see cref="VotingConfiguration"/>
 /// at startup.
 /// </summary>
-public class LlmVotingService
+public partial class LlmVotingService
 {
     private readonly LlmVotingProvider provider;
     private readonly VotingConfiguration config;
@@ -298,7 +298,8 @@ public class LlmVotingService
     private async Task<ScoredVotingResult> RunScoredVoteAsync(
         ScoredVoteRequest request,
         List<VoterProfile> voters,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<VoterProfile, CancellationToken, Task<VoteResult>>? voterCall = null)
     {
         // Enforced here (not just in ScoreAsync) so the ScoreWithProfilesAsync
         // entry point can't slip through with an empty schema and return a
@@ -322,7 +323,7 @@ public class LlmVotingService
             };
         }
 
-        var tasks = voters.Select(v => CallScoredVoterAsync(v, request, ct)).ToList();
+        var tasks = voters.Select(v => voterCall is null ? CallScoredVoterAsync(v, request, ct) : voterCall(v, ct)).ToList();
         var individualVotes = await Task.WhenAll(tasks);
         var successful = individualVotes.Where(v => !v.IsError).ToList();
 

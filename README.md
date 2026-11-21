@@ -77,7 +77,7 @@ Reference the library from a sibling checkout:
 </ItemGroup>
 ```
 
-The `MindAttic.Legion` package on nuget.org tracks this repo's version (26.0.0). Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law M.LEGN-LAW-1](docs/BIBLE.md#M.LEGN-LAW-1)).
+The `MindAttic.Legion` package on nuget.org tracks this repo's version (28.0.0). Target framework: net10.0. The library depends on `MindAttic.Vault` and `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http` and `Microsoft.Extensions.Logging.Abstractions` only (see [Law M.LEGN-LAW-1](docs/BIBLE.md#M.LEGN-LAW-1)).
 
 Configure and vote:
 
@@ -216,6 +216,50 @@ foreach (var directive in r.ImprovementDirectives)
 ```
 
 A dimension that every voter omitted has no aggregate entry at all (never a phantom `0.0`), so it cannot wrongly be flagged as failing or drag the average down. `ConsensusStrengths` and `ConsensusFailures` surface flags that at least half the panel raised.
+
+### Judge (grounded, with citations)
+
+`JudgeAsync` grades a free-text answer against rubric criteria and numbered evidence passages. Every judge scores each criterion 1 to 10 (reported normalized to 0..1 as `(s-1)/9`), writes a rationale and cites the passage ids that support the score. Replies are validated strictly (exact criterion set, integer score 1..10, non-empty rationale, cited ids that exist in the evidence); a malformed reply is retried once with the validation error, and a judge that still fails is reported in `FailedVoters` rather than dropped silently. It runs on the same scored-vote pipeline as `ScoreAsync`, which is unchanged.
+
+```csharp
+var result = await voting.JudgeAsync(new JudgeRequest
+{
+    Question     = "Why did the Roman Republic fall?",
+    Answer       = studentAnswer,
+    PriorContext = earlierTurns,                       // optional
+    Criteria     = new()
+    {
+        new("accuracy",  "Claims agree with the evidence.", Weight: 2),
+        new("coverage",  "Addresses the main causes."),
+    },
+    Evidence     = new() { new("1", passageOne), new("2", passageTwo) },
+});
+
+Console.WriteLine($"overall {result.Overall:P0}, agreement {result.Agreement:P0}");
+foreach (var c in result.Criteria)
+    Console.WriteLine($"{c.Name}: {c.Score:0.00} cites [{string.Join(",", c.CitedPassageIds)}] {c.Rationale}");
+foreach (var f in result.FailedVoters) Console.WriteLine($"failed: {f.VoterName}: {f.Error}");
+```
+
+`Overall` is the weight-averaged mean across judges. `Agreement` is `1 - 2 * mean(per-criterion standard deviation)` clamped to 0..1 (1.0 when judges agree exactly, and for a single judge). `Verdicts` holds each judge's own per-criterion scores, rationales and citations. `JudgeWithProfilesAsync` takes explicit `VoterProfile`s.
+
+### Token usage metering
+
+Every successful provider call reports the provider's own token counts (Claude `usage`, Gemini `usageMetadata`, Cohere `usage.tokens`, OpenAI-compatible `usage`, and the Claude document call) to the ambient sink opened by `LegionUsage.Track`. Scopes flow across `await`s and spawned tasks, nest, and are free when no scope is open.
+
+```csharp
+var prices = new LlmPriceTable()                       // optional; Legion ships no prices
+    .Set("claude", "claude-sonnet-5", new ModelPrice(InputPerMillion: 3m, OutputPerMillion: 15m));
+
+using (LegionUsage.Track(new DelegateUsageSink(u =>
+    Console.WriteLine($"{u.Provider}/{u.Model} in={u.InputTokens} out={u.OutputTokens} ${u.EstimatedCostUsd}")),
+    prices, tag: "tenant-42"))
+{
+    await voting.JudgeAsync(request);
+}
+```
+
+`LlmUsage` carries provider, model, non-cached input, output, cache-read and cache-write tokens, `EstimatedCostUsd` (null when the table has no price for the model), the `Tag` and the `Operation` (`chat` or `document`). Cached input is never double counted: OpenAI/Gemini cached tokens are subtracted from the input bucket. Gemini output includes thinking tokens. Retried or failed attempts that return no response report nothing. Implement `IUsageSink` for a custom sink; exceptions thrown by a sink are swallowed so metering can never fail a call.
 
 ### Persona voices
 
@@ -771,6 +815,13 @@ Task<DecisionResult> DecideAsync(string question, IEnumerable<string> options, s
 // Scoring
 Task<ScoredVotingResult> ScoreAsync(ScoredVoteRequest, CT)
 Task<ScoredVotingResult> ScoreWithProfilesAsync(ScoredVoteRequest, IEnumerable<VoterProfile>, CT)
+
+// Grounded judging
+Task<JudgeResult> JudgeAsync(JudgeRequest, CT)
+Task<JudgeResult> JudgeWithProfilesAsync(JudgeRequest, IEnumerable<VoterProfile>, CT)
+
+// Usage metering (static)
+IDisposable LegionUsage.Track(IUsageSink, LlmPriceTable? = null, string? tag = null)
 
 // Panel construction
 List<string>                     GetActiveProviderIds()
