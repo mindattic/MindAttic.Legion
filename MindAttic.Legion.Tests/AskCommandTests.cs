@@ -127,7 +127,7 @@ public class AskCommandTests
     {
         var overrides = AskCommand.BuildTierModelOverrides(ModelTier.Low);
         Assert.That(overrides["claude"], Is.EqualTo("claude-haiku-5-5"));
-        Assert.That(overrides["openai"],     Is.EqualTo("gpt-4.1-nano"));
+        Assert.That(overrides["openai"],     Is.EqualTo("gpt-6-luna"));
         Assert.That(overrides["gemini"],     Is.EqualTo("gemini-2.5-flash-lite"));
         Assert.That(overrides["deepseek"],   Is.EqualTo("deepseek-flash"));
     }

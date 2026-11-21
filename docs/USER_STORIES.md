@@ -66,6 +66,10 @@ updated: 2026-10-03
 2. **M.LEGN-US-B2** — add a dedicated offline `Score*` rubric test and promote to ✅.
 3. **M.LEGN-US-A3 / F2** — wire a CI secret-bearing job (or documented local run) so the live categories can be exercised and reported, promoting these from 🟡.
 
+
+## Epic J — Grounded judging
+- **M.LEGN-US-J1 ⬜** As an app grading free-text answers, I get per-criterion scores that cite the evidence they used, every voter's verdict, an agreement measure and the call's token usage.
+
 ## Tickets
 > Permanent log of every change and fix — this repo's ticket system. Rows are append-only: never
 > delete or reword one; only move its Status (open → closed / wont-do) and fill in Ref. Status is
@@ -122,3 +126,5 @@ updated: 2026-10-03
 | M.LEGN-T47 | 2026-11-02 | fix | closed | Command pointer in .agent/commands said a literal $source instead of its legacy path (install.ps1 escaping bug fixed in MAT-T84); point it at the real source, or the global command when the project copy is gone | — |
 | M.LEGN-T48 | 2026-11-02 | fix | closed | Fix the open items the 2026-11-02 bughunt left for decision (legion panel defaults to the trusted set, must-answer fallbacks honour --providers) | — |
 | M.LEGN-T49 | 2026-11-10 | chore | closed | Crash recovery: commit the command-catalog sync (.agent/commands/*.md) and regenerated docs/USER_STORIES.md left uncommitted by the session crash | — |
+| M.LEGN-T50 | 2026-11-20 | feature | open | Legion grounded judging: rubric scoring that takes evidence passages, returns per-criterion scores with cited passage ids, per-voter verdicts, an agreement measure and token usage | GAD-T25 |
+| M.LEGN-T51 | 2026-11-20 | fix | open | OpenAI's Low tier resolves to gpt-4.1-nano, which OpenAI has retired (400 model_not_found: 'The model gpt-4.1-nano has been deprecated'); every Low-tier call to openai fails. Found running gadfly exam --single-voter openai --tier low (GAD-T38). | — |

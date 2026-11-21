@@ -308,7 +308,7 @@ var reply = await client.CallAsync(
 
 | Tier | `claude` | `openai` | `gemini` | `deepseek` |
 |---|---|---|---|---|
-| `Low` | `claude-haiku-5-5` | `gpt-4.1-nano` | `gemini-2.5-flash-lite` | `deepseek-flash` |
+| `Low` | `claude-haiku-5-5` | `gpt-6-luna` | `gemini-2.5-flash-lite` | `deepseek-flash` |
 | `Medium` | `claude-sonnet-5-5` | `gpt-5.4-mini` | `gemini-2.5-flash` | `deepseek-flash` |
 | `High` | `claude-opus-4-7` | `gpt-5.4` | `gemini-2.5-pro` | `deepseek-v4-pro` |
 | `Higher` | `claude-opus-5-5` | `gpt-5.5` | `gemini-3.5-flash` | `deepseek-v4-pro` |
