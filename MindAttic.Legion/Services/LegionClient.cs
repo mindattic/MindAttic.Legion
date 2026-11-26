@@ -1160,6 +1160,8 @@ public class LegionClient
                 var after = rest.Substring(dash + 1);            // "8", "7[1m]", "0-2026…"
                 var j = 0;
                 while (j < after.Length && char.IsDigit(after[j])) j++;
+                // A run of 4+ digits is a dated snapshot ("claude-opus-4-20250514"), not a minor.
+                if (j >= 4) return major > 4;
                 if (j > 0 && int.TryParse(after.Substring(0, j), out var minor))
                     return major > 4 || (major == 4 && minor >= 7);
             }
@@ -1232,6 +1234,7 @@ public class LegionClient
             var minorPart = rest.Substring(dash + 1);
             var nk = 0;
             while (nk < minorPart.Length && char.IsDigit(minorPart[nk])) nk++;
+            if (nk >= 4) return major > 5;               // dated snapshot of a bare major, not a minor.
             if (nk == 0 || !int.TryParse(minorPart.Substring(0, nk), out var minor)) return false;
 
             return major > 5 || (major == 5 && minor >= 5);
